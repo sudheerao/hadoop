@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.azure;
 import com.microsoft.azure.storage.*;
 import com.microsoft.azure.storage.blob.*;
 import com.microsoft.azure.storage.core.Base64;
+import org.junit.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +32,6 @@ import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
-import org.apache.hadoop.fs.azure.integration.ITestAzureInputStreamPerformance;
 import org.apache.hadoop.fs.azure.metrics.AzureFileSystemInstrumentation;
 import org.apache.hadoop.fs.azure.metrics.AzureFileSystemMetricsSystem;
 import org.apache.hadoop.metrics2.AbstractMetric;
@@ -40,6 +40,8 @@ import org.apache.hadoop.metrics2.MetricsSink;
 import org.apache.hadoop.metrics2.MetricsTag;
 import org.apache.hadoop.metrics2.impl.TestMetricsConfig;
 
+import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
@@ -206,6 +208,9 @@ public final class AzureBlobStorageTestAccount implements AutoCloseable,
    * @return
    */
   private boolean wasGeneratedByMe(MetricsRecord currentRecord) {
+    Assert.assertNotNull("null filesystem", fs);
+    Assert.assertNotNull("null filesystemn instance ID",
+        fs.getInstrumentation().getFileSystemInstanceId());
     String myFsId = fs.getInstrumentation().getFileSystemInstanceId().toString();
     for (MetricsTag currentTag : currentRecord.tags()) {
       if (currentTag.name().equalsIgnoreCase("wasbFileSystemId")) {
@@ -252,13 +257,16 @@ public final class AzureBlobStorageTestAccount implements AutoCloseable,
     getBlobReference(blobKey).releaseLease(accessCondition);
   }
 
-  private static void saveMetricsConfigFile() {
+  private static void saveMetricsConfigFile() throws IOException {
     if (!metricsConfigSaved) {
+      String testFilename = TestMetricsConfig.getTestFilename(
+          "hadoop-metrics2-azure-file-system");
+      File dest = new File(testFilename).getCanonicalFile();
+      dest.getParentFile().mkdirs();
       new org.apache.hadoop.metrics2.impl.ConfigBuilder()
       .add("azure-file-system.sink.azuretestcollector.class",
           StandardCollector.class.getName())
-      .save(TestMetricsConfig.getTestFilename(
-          "hadoop-metrics2-azure-file-system.properties"));
+      .save(testFilename);
       metricsConfigSaved = true;
     }
   }
@@ -845,12 +853,14 @@ public final class AzureBlobStorageTestAccount implements AutoCloseable,
   public void closeFileSystem() throws Exception {
     if (fs != null) {
       fs.close();
-      fs = null;
     }
   }
 
   public void cleanup() throws Exception {
-    closeFileSystem();
+    if (fs != null) {
+      fs.close();
+      fs = null;
+    }
     if (!skipContainerDelete && container != null) {
       container.deleteIfExists();
       container = null;
