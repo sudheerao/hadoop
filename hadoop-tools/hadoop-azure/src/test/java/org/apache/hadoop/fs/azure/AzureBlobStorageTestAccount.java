@@ -21,12 +21,17 @@ package org.apache.hadoop.fs.azure;
 import com.microsoft.azure.storage.*;
 import com.microsoft.azure.storage.blob.*;
 import com.microsoft.azure.storage.core.Base64;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.commons.configuration2.SubsetConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
+import org.apache.hadoop.fs.azure.integration.ITestAzureInputStreamPerformance;
 import org.apache.hadoop.fs.azure.metrics.AzureFileSystemInstrumentation;
 import org.apache.hadoop.fs.azure.metrics.AzureFileSystemMetricsSystem;
 import org.apache.hadoop.metrics2.AbstractMetric;
@@ -46,10 +51,10 @@ import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.KEY_USE_SECU
 
 /**
  * Helper class to create WASB file systems backed by either a mock in-memory
- * implementation or a real Azure Storage account. See RunningLiveWasbTests.txt
- * for instructions on how to connect to a real Azure Storage account.
+ * implementation or a real Azure Storage account.
  */
-public final class AzureBlobStorageTestAccount {
+public final class AzureBlobStorageTestAccount implements AutoCloseable,
+    AzureTestConstants {
   private static final Logger LOG = LoggerFactory.getLogger(
       AzureBlobStorageTestAccount.class);
 
@@ -314,9 +319,8 @@ public final class AzureBlobStorageTestAccount {
     Configuration conf = createTestConfiguration();
     if (!conf.getBoolean(USE_EMULATOR_PROPERTY_NAME, false)) {
       // Not configured to test against the storage emulator.
-      LOG.warn("Skipping emulator Azure test because configuration doesn't "
-          + "indicate that it's running. Please see RunningLiveWasbTests.txt "
-          + "for guidance.");
+      LOG.warn("Skipping emulator Azure test because configuration " +
+          "doesn't indicate that it's running.");
       return null;
     }
     CloudStorageAccount account =
@@ -517,8 +521,7 @@ public final class AzureBlobStorageTestAccount {
       throws URISyntaxException, KeyProviderException {
     String testAccountName = conf.get(TEST_ACCOUNT_NAME_PROPERTY_NAME);
     if (testAccountName == null) {
-      LOG.warn("Skipping live Azure test because of missing test account. "
-          + "Please see RunningLiveWasbTests.txt for guidance.");
+      LOG.warn("Skipping live Azure test because of missing test account");
       return null;
     }
     return createStorageAccount(testAccountName, conf, false);
@@ -842,14 +845,12 @@ public final class AzureBlobStorageTestAccount {
   public void closeFileSystem() throws Exception {
     if (fs != null) {
       fs.close();
+      fs = null;
     }
   }
 
   public void cleanup() throws Exception {
-    if (fs != null) {
-      fs.close();
-      fs = null;
-    }
+    closeFileSystem();
     if (!skipContainerDelete && container != null) {
       container.deleteIfExists();
       container = null;
@@ -861,6 +862,11 @@ public final class AzureBlobStorageTestAccount {
       blob.delete();
       blob = null;
     }
+  }
+
+  @Override
+  public void close() throws Exception {
+    cleanup();
   }
 
   public NativeAzureFileSystem getFileSystem() {

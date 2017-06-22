@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -16,22 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hadoop.fs.azure.contract;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.contract.AbstractBondedFSContract;
+package org.apache.hadoop.fs.azure.integration;
 
-public class NativeAzureFileSystemContract extends AbstractBondedFSContract {
+/**
+ * Sizes of data.
+ * Checkstyle doesn't like the formatting here.
+ */
+public interface Sizes {
 
-  public static final String CONTRACT_XML = "wasb.xml";
-
-  public NativeAzureFileSystemContract(Configuration conf) {
-    super(conf);
-    //insert the base features
-    addConfResource(CONTRACT_XML);
-  }
-
-  @Override
-  public String getScheme() {
-    return "wasb";
-  }
+  int _1KB = 1024;
+  int _4KB = 4 * _1KB;
+  int _8KB = 8 * _1KB;
+  int _16KB = 16 * _1KB;
+  int _32KB = 32 * _1KB;
+  int _64KB = 64 * _1KB;
+  int _128KB = 128 * _1KB;
+  int _256KB = 256 * _1KB;
+  int _1MB = _1KB * _1KB;
+  int _2MB = 2 * _1MB;
+  int _5MB = 5 * _1MB;
+  int _10MB = 10* _1MB;
 }
