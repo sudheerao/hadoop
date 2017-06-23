@@ -18,6 +18,8 @@
 
 package org.apache.hadoop.fs.azure.integration;
 
+import org.apache.hadoop.fs.Path;
+
 /**
  * Constants for the Azure tests.
  */
@@ -130,7 +132,7 @@ public interface AzureTestConstants {
   /**
    * Timeout in Milliseconds for standard tests: {@value}.
    */
-  int WASB_TEST_TIMEOUT = 10 * 60 * 1000;
+  int AZURE_TEST_TIMEOUT = 10 * 60 * 1000;
 
   /**
    * Timeout in Seconds for Scale Tests: {@value}.
@@ -138,6 +140,8 @@ public interface AzureTestConstants {
   int SCALE_TEST_TIMEOUT_SECONDS = 30 * 60;
 
   int SCALE_TEST_TIMEOUT_MILLIS = SCALE_TEST_TIMEOUT_SECONDS * 1000;
+
+
 
   String ACCOUNT_KEY_PROPERTY_NAME
       = "fs.azure.account.key.";
@@ -161,9 +165,16 @@ public interface AzureTestConstants {
       = "fs.azure.disable.bandwidth.throttling";
   String KEY_READ_TOLERATE_CONCURRENT_APPEND
       = "fs.azure.io.read.tolerate.concurrent.append";
+  /**
+   * Path for page blobs: {@value}.
+   */
   String DEFAULT_PAGE_BLOB_DIRECTORY = "pageBlobs";
+
   String DEFAULT_ATOMIC_RENAME_DIRECTORIES
       = "/atomicRenameDir1,/atomicRenameDir2";
 
-
+  /**
+   * Base directory for page blobs.
+   */
+  Path PAGE_BLOB_DIR = new Path("/" + DEFAULT_PAGE_BLOB_DIRECTORY);
 }

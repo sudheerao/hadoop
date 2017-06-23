@@ -31,7 +31,9 @@ import org.slf4j.LoggerFactory;
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileContext;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azure.AzureBlobStorageTestAccount;
 import org.apache.hadoop.fs.azure.NativeAzureFileSystem;
 import org.apache.hadoop.fs.azure.metrics.AzureFileSystemInstrumentation;
 
@@ -275,6 +277,21 @@ public final class AzureTestUtils extends Assert {
   }
 
   /**
+   * Create a test page blob path using the value of
+   * {@link AzureTestUtils#TEST_UNIQUE_FORK_ID} if it is set.
+   * @param filename filename at the end of the path
+   * @return an absolute path
+   */
+  public static Path createBlobPath(String filename) {
+    String testUniqueForkId = System.getProperty(
+        AzureTestConstants.TEST_UNIQUE_FORK_ID);
+    return new Path(PAGE_BLOB_DIR,
+        testUniqueForkId == null ?
+        filename :
+        testUniqueForkId + "/" + filename);
+  }
+
+  /**
    * Asserts that {@code obj} is an instance of {@code expectedClass} using a
    * descriptive assertion message.
    * @param expectedClass class
@@ -356,5 +373,41 @@ public final class AzureTestUtils extends Assert {
     return getLongCounter(counterName, getMetrics(fs.getInstrumentation()));
   }
 
+
+  /**
+   * Delete a path, catching any exception and downgrading to a log message.
+   * @param fs filesystem
+   * @param path path to delete
+   * @param recursive recursive delete?
+   * @throws IOException IO failure.
+   */
+  public static void deleteQuietly(FileSystem fs,
+      Path path,
+      boolean recursive) throws IOException {
+    if (fs != null && path != null) {
+      try {
+        fs.delete(path, recursive);
+      } catch (IOException e) {
+        LOG.warn("When deleting {}", path, e);
+      }
+    }
+  }
+
+
+  /**
+   * Clean up the test account if non-null; return null to put in the
+   * field.
+   * @param testAccount test account to clean up
+   * @return null
+   * @throws Execption cleanup problems
+   */
+  public static AzureBlobStorageTestAccount cleanup(
+      AzureBlobStorageTestAccount testAccount) throws Exception {
+    if (testAccount != null) {
+      testAccount.cleanup();
+      testAccount = null;
+    }
+    return null;
+  }
 
 }

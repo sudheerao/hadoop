@@ -18,10 +18,6 @@
 
 package org.apache.hadoop.fs.azure;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assume.assumeNotNull;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
@@ -34,21 +30,20 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.azure.AzureException;
+import org.apache.hadoop.fs.azure.integration.AbstractAzureScaleTest;
 import org.apache.hadoop.util.Time;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
+
+import static org.apache.hadoop.fs.azure.integration.AzureTestUtils .*;
 
 /**
  * Write data into a page blob and verify you can read back all of it
  * or just a part of it.
  */
-public class TestReadAndSeekPageBlobAfterWrite {
-  private static final Log LOG = LogFactory.getLog(TestReadAndSeekPageBlobAfterWrite.class);
+public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
+  private static final Log LOG = LogFactory.getLog(ITestReadAndSeekPageBlobAfterWrite.class);
 
   private FileSystem fs;
-  private AzureBlobStorageTestAccount testAccount;
   private byte[] randomData;
 
   // Page blob physical page size
@@ -63,35 +58,32 @@ public class TestReadAndSeekPageBlobAfterWrite {
   // A key with a prefix under /pageBlobs, which for the test file system will
   // force use of a page blob.
   private static final String KEY = "/pageBlobs/file.dat";
-  private static final Path PATH = new Path(KEY); // path of page blob file to read and write
+
+  // path of page blob file to read and write
+  private Path blobPath;
 
   protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
     return AzureBlobStorageTestAccount.create();
   }
 
-  @Before
-  public void setUp() throws Exception {
-    testAccount = createTestAccount();
-    if (testAccount != null) {
-      fs = testAccount.getFileSystem();
-    }
-    assumeNotNull(testAccount);
-
+  @Override
+  public void setup() throws Exception {
+    super.setup();
+    fs = getTestAccount().getFileSystem();
     // Make sure we are using an integral number of pages.
     assertEquals(0, MAX_BYTES % PAGE_SIZE);
 
     // load an in-memory array of random data
     randomData = new byte[PAGE_SIZE * MAX_PAGES];
     rand.nextBytes(randomData);
+
+    blobPath = createBlobPath("ITestReadAndSeekPageBlobAfterWrite");
   }
 
-  @After
-  public void tearDown() throws Exception {
-    if (testAccount != null) {
-      testAccount.cleanup();
-      testAccount = null;
-      fs = null;
-    }
+  @Override
+  public void teardown() throws Exception {
+    deleteQuietly(fs, blobPath, true);
+    super.teardown();
   }
 
   /**
@@ -101,9 +93,9 @@ public class TestReadAndSeekPageBlobAfterWrite {
   @Test
   public void testIsPageBlobFileName() {
     AzureNativeFileSystemStore store = ((NativeAzureFileSystem) fs).getStore();
-    String[] a = KEY.split("/");
+    String[] a = blobPath.toUri().getPath().split("/");
     String key2 = a[1] + "/";
-    assertTrue(store.isPageBlobKey(key2));
+    assertTrue("Not a page blob: " + blobPath, store.isPageBlobKey(key2));
   }
 
   /**
@@ -152,7 +144,7 @@ public class TestReadAndSeekPageBlobAfterWrite {
    */
   private void readRandomDataAndVerify(int size) throws AzureException, IOException {
     byte[] b = new byte[size];
-    FSDataInputStream stream = fs.open(PATH);
+    FSDataInputStream stream = fs.open(blobPath);
     int bytesRead = stream.read(b);
     stream.close();
     assertEquals(bytesRead, size);
@@ -176,7 +168,7 @@ public class TestReadAndSeekPageBlobAfterWrite {
 
   // Write a specified amount of random data to the file path for this test class.
   private void writeRandomData(int size) throws IOException {
-    OutputStream output = fs.create(PATH);
+    OutputStream output = fs.create(blobPath);
     output.write(randomData, 0, size);
     output.close();
   }
@@ -190,43 +182,45 @@ public class TestReadAndSeekPageBlobAfterWrite {
     writeRandomData(PAGE_SIZE * MAX_PAGES);
     int recordSize = 100;
     byte[] b = new byte[recordSize];
-    FSDataInputStream stream = fs.open(PATH);
 
-    // Seek to a boundary around the middle of the 6th page
-    int seekPosition = 5 * PAGE_SIZE + 250;
-    stream.seek(seekPosition);
 
-    // Read a record's worth of bytes and verify results
-    int bytesRead = stream.read(b);
-    verifyReadRandomData(b, bytesRead, seekPosition, recordSize);
+    try(FSDataInputStream stream = fs.open(blobPath)) {
+      // Seek to a boundary around the middle of the 6th page
+      int seekPosition = 5 * PAGE_SIZE + 250;
+      stream.seek(seekPosition);
 
-    // Seek to another spot and read a record greater than a page
-    seekPosition = 10 * PAGE_SIZE + 250;
-    stream.seek(seekPosition);
-    recordSize = 1000;
-    b = new byte[recordSize];
-    bytesRead = stream.read(b);
-    verifyReadRandomData(b, bytesRead, seekPosition, recordSize);
+      // Read a record's worth of bytes and verify results
+      int bytesRead = stream.read(b);
+      verifyReadRandomData(b, bytesRead, seekPosition, recordSize);
 
-    // Read the last 100 bytes of the file
-    recordSize = 100;
-    seekPosition = PAGE_SIZE * MAX_PAGES - recordSize;
-    stream.seek(seekPosition);
-    b = new byte[recordSize];
-    bytesRead = stream.read(b);
-    verifyReadRandomData(b, bytesRead, seekPosition, recordSize);
+      // Seek to another spot and read a record greater than a page
+      seekPosition = 10 * PAGE_SIZE + 250;
+      stream.seek(seekPosition);
+      recordSize = 1000;
+      b = new byte[recordSize];
+      bytesRead = stream.read(b);
+      verifyReadRandomData(b, bytesRead, seekPosition, recordSize);
 
-    // Read past the end of the file and we should get only partial data.
-    recordSize = 100;
-    seekPosition = PAGE_SIZE * MAX_PAGES - recordSize + 50;
-    stream.seek(seekPosition);
-    b = new byte[recordSize];
-    bytesRead = stream.read(b);
-    assertEquals(50, bytesRead);
+      // Read the last 100 bytes of the file
+      recordSize = 100;
+      seekPosition = PAGE_SIZE * MAX_PAGES - recordSize;
+      stream.seek(seekPosition);
+      b = new byte[recordSize];
+      bytesRead = stream.read(b);
+      verifyReadRandomData(b, bytesRead, seekPosition, recordSize);
 
-    // compare last 50 bytes written with those read
-    byte[] tail = Arrays.copyOfRange(randomData, seekPosition, randomData.length);
-    assertTrue(comparePrefix(tail, b, 50));
+      // Read past the end of the file and we should get only partial data.
+      recordSize = 100;
+      seekPosition = PAGE_SIZE * MAX_PAGES - recordSize + 50;
+      stream.seek(seekPosition);
+      b = new byte[recordSize];
+      bytesRead = stream.read(b);
+      assertEquals(50, bytesRead);
+
+      // compare last 50 bytes written with those read
+      byte[] tail = Arrays.copyOfRange(randomData, seekPosition, randomData.length);
+      assertTrue(comparePrefix(tail, b, 50));
+    }
   }
 
   // Verify that reading a record of data after seeking gives the expected data.
@@ -261,8 +255,8 @@ public class TestReadAndSeekPageBlobAfterWrite {
     // A lower bound on the minimum time we think it will take to do
     // a write to Azure storage.
     final long MINIMUM_EXPECTED_TIME = 20;
-    LOG.info("Writing " + NUM_WRITES * RECORD_LENGTH + " bytes to " + PATH.getName());
-    FSDataOutputStream output = fs.create(PATH);
+    LOG.info("Writing " + NUM_WRITES * RECORD_LENGTH + " bytes to " + blobPath.getName());
+    FSDataOutputStream output = fs.create(blobPath);
     int writesSinceHFlush = 0;
     try {
 
@@ -293,7 +287,7 @@ public class TestReadAndSeekPageBlobAfterWrite {
     }
 
     // Read the data back and check it.
-    FSDataInputStream stream = fs.open(PATH);
+    FSDataInputStream stream = fs.open(blobPath);
     int SIZE = NUM_WRITES * RECORD_LENGTH;
     byte[] b = new byte[SIZE];
     try {
@@ -305,7 +299,7 @@ public class TestReadAndSeekPageBlobAfterWrite {
     }
 
     // delete the file
-    fs.delete(PATH, false);
+    fs.delete(blobPath, false);
   }
 
   // Test writing to a large file repeatedly as a stress test.
@@ -324,32 +318,29 @@ public class TestReadAndSeekPageBlobAfterWrite {
   
   // Write to a file repeatedly to verify that it extends.
   // The page blob file should start out at 128MB and finish at 256MB.
-  @Test(timeout=300000)
   public void testFileSizeExtension() throws IOException {
     final int writeSize = 1024 * 1024;
     final int numWrites = 129;
     final byte dataByte = 5;
     byte[] data = new byte[writeSize];
     Arrays.fill(data, dataByte);
-    FSDataOutputStream output = fs.create(PATH);
-    try {
+    try (FSDataOutputStream output = fs.create(blobPath)) {
       for (int i = 0; i < numWrites; i++) {
         output.write(data);
         output.hflush();
         LOG.debug("total writes = " + (i + 1));
       }
-    } finally {
-      output.close();
     }
 
     // Show that we wrote more than the default page blob file size.
     assertTrue(numWrites * writeSize > PageBlobOutputStream.PAGE_BLOB_MIN_SIZE);
 
     // Verify we can list the new size. That will prove we expanded the file.
-    FileStatus[] status = fs.listStatus(PATH);
-    assertTrue(status[0].getLen() == numWrites * writeSize);
-    LOG.debug("Total bytes written to " + PATH + " = " + status[0].getLen());
-    fs.delete(PATH, false);
+    FileStatus[] status = fs.listStatus(blobPath);
+    assertEquals("File size hasn't changed " + status,
+        numWrites * writeSize, status[0].getLen());
+    LOG.debug("Total bytes written to " + blobPath + " = " + status[0].getLen());
+    fs.delete(blobPath, false);
   }
 
 }

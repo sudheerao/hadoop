@@ -20,15 +20,27 @@ package org.apache.hadoop.fs.azure;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystemContractBaseTest;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
+
 import org.junit.After;
 import static org.junit.Assume.assumeNotNull;
 import org.junit.Before;
 import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestName;
 
-public class TestNativeAzureFileSystemContractPageBlobLive extends
+public class ITestNativeAzureFileSystemContractPageBlobLive extends
     FileSystemContractBaseTest {
   private AzureBlobStorageTestAccount testAccount;
+  private Path basePath;
+  @Rule
+  public TestName methodName = new TestName();
+
+  private void nameThread() {
+    Thread.currentThread().setName("JUnit-" + methodName.getMethodName());
+  }
 
   private AzureBlobStorageTestAccount createTestAccount()
       throws Exception {
@@ -46,19 +58,21 @@ public class TestNativeAzureFileSystemContractPageBlobLive extends
   @Before
   public void setUp() throws Exception {
     testAccount = createTestAccount();
-    if (testAccount != null) {
-      fs = testAccount.getFileSystem();
-    }
-    assumeNotNull(fs);
+    assumeNotNull(testAccount);
+    fs = testAccount.getFileSystem();
+    basePath = fs.makeQualified(
+        AzureTestUtils.createTestPath(new Path("filesystemcontractpageblob")));
   }
 
   @After
   public void tearDown() throws Exception {
-    if (testAccount != null) {
-      testAccount.cleanup();
-      testAccount = null;
-      fs = null;
-    }
+    testAccount = AzureTestUtils.cleanup(testAccount);
+    fs = null;
+  }
+
+  @Override
+  public Path getTestBaseDir() {
+    return basePath;
   }
 
   /**

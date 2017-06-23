@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -16,11 +16,16 @@
  * limitations under the License.
  */
 
-package org.apache.hadoop.fs.azure;
+package org.apache.hadoop.fs.azure.integration;
+
 import java.net.URI;
 import java.util.UUID;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.test.GenericTestUtils;
+import org.apache.hadoop.fs.azure.AzureBlobStorageTestAccount;
+import org.apache.hadoop.fs.azure.AzureException;
+import org.apache.hadoop.fs.azure.NativeAzureFileSystem;
 import org.apache.hadoop.test.GenericTestUtils;
 
 import org.junit.Assert;
@@ -28,52 +33,41 @@ import org.junit.Test;
 
 import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO_CONTAINER_MSG;
 
-
-public class TestFileSystemOperationExceptionMessage extends
-  NativeAzureFileSystemBaseTest {
+public class ITestFileSystemOperationExceptionMessage
+    extends AbstractAzureIntegrationTest {
 
   @Test
-  public void testAnonymouseCredentialExceptionMessage() throws Throwable{
+  public void testAnonymouseCredentialExceptionMessage() throws Throwable {
 
     Configuration conf = AzureBlobStorageTestAccount.createTestConfiguration();
     String testStorageAccount = conf.get("fs.azure.test.account.name");
     conf = new Configuration();
-    conf.set("fs.AbstractFileSystem.wasb.impl", "org.apache.hadoop.fs.azure.Wasb");
+    conf.set("fs.AbstractFileSystem.wasb.impl",
+        "org.apache.hadoop.fs.azure.Wasb");
     conf.set("fs.azure.skip.metrics", "true");
 
     String testContainer = UUID.randomUUID().toString();
     String wasbUri = String.format("wasb://%s@%s",
         testContainer, testStorageAccount);
 
-    fs = new NativeAzureFileSystem();
-    try {
+    try(NativeAzureFileSystem fs = new NativeAzureFileSystem()) {
       fs.initialize(new URI(wasbUri), conf);
+      fail("Expected an exception, got " + fs);
     } catch (Exception ex) {
 
       Throwable innerException = ex.getCause();
       while (innerException != null
-             && !(innerException instanceof AzureException)) {
+          && !(innerException instanceof AzureException)) {
         innerException = innerException.getCause();
       }
 
       if (innerException != null) {
-        String exceptionMessage = innerException.getMessage();
-        if (exceptionMessage == null
-            || exceptionMessage.length() == 0) {
-          Assert.fail();}
-        else {
-          GenericTestUtils.assertExceptionContains(String.format(
-              NO_ACCESS_TO_CONTAINER_MSG, testStorageAccount, testContainer),
-              ex);
-        }
+        GenericTestUtils.assertExceptionContains(String.format(
+            NO_ACCESS_TO_CONTAINER_MSG, testStorageAccount, testContainer),
+            ex);
       } else {
-        Assert.fail();
+        Assert.fail("No inner azure exception");
       }
     }
-  }
-
-  @Override
-  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
-    return AzureBlobStorageTestAccount.create();
   }
 }

@@ -206,6 +206,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
 
     ContractTestUtils.NanoTimer timer = new ContractTestUtils.NanoTimer();
     long blocksPer10MB = blocksPerMB * 10;
+    fs.mkdirs(hugefile.getParent());
     try (FSDataOutputStream out = fs.create(hugefile,
         true,
         uploadBlockSize,

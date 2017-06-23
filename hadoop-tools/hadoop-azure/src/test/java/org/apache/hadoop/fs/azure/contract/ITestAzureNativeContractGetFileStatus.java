@@ -19,15 +19,12 @@
 package org.apache.hadoop.fs.azure.contract;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.tools.contract.AbstractContractDistCpTest;
+import org.apache.hadoop.fs.contract.AbstractContractGetFileStatusTest;
+import org.apache.hadoop.fs.contract.AbstractFSContract;
 
-/**
- * Contract test suite covering WASB integration with DistCp.
- */
-public class TestAzureNativeContractDistCp extends AbstractContractDistCpTest {
-
+public class ITestAzureNativeContractGetFileStatus extends AbstractContractGetFileStatusTest {
   @Override
-  protected NativeAzureFileSystemContract createContract(Configuration conf) {
+  protected AbstractFSContract createContract(Configuration conf) {
     return new NativeAzureFileSystemContract(conf);
   }
 }

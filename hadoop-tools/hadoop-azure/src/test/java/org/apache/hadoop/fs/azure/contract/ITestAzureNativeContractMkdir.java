@@ -19,10 +19,10 @@
 package org.apache.hadoop.fs.azure.contract;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.contract.AbstractContractCreateTest;
+import org.apache.hadoop.fs.contract.AbstractContractMkdirTest;
 import org.apache.hadoop.fs.contract.AbstractFSContract;
 
-public class TestAzureNativeContractCreate extends AbstractContractCreateTest{
+public class ITestAzureNativeContractMkdir extends AbstractContractMkdirTest {
   @Override
   protected AbstractFSContract createContract(Configuration conf) {
     return new NativeAzureFileSystemContract(conf);

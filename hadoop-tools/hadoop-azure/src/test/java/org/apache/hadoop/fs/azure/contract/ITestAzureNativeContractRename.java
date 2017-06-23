@@ -19,10 +19,10 @@
 package org.apache.hadoop.fs.azure.contract;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.contract.AbstractContractMkdirTest;
+import org.apache.hadoop.fs.contract.AbstractContractRenameTest;
 import org.apache.hadoop.fs.contract.AbstractFSContract;
 
-public class TestAzureNativeContractMkdir extends AbstractContractMkdirTest {
+public class ITestAzureNativeContractRename extends AbstractContractRenameTest {
   @Override
   protected AbstractFSContract createContract(Configuration conf) {
     return new NativeAzureFileSystemContract(conf);

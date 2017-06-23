@@ -19,12 +19,15 @@
 package org.apache.hadoop.fs.azure.contract;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.contract.AbstractContractDeleteTest;
-import org.apache.hadoop.fs.contract.AbstractFSContract;
+import org.apache.hadoop.tools.contract.AbstractContractDistCpTest;
 
-public class TestAzureNativeContractDelete extends AbstractContractDeleteTest {
+/**
+ * Contract test suite covering WASB integration with DistCp.
+ */
+public class ITestAzureNativeContractDistCp extends AbstractContractDistCpTest {
+
   @Override
-  protected AbstractFSContract createContract(Configuration conf) {
+  protected NativeAzureFileSystemContract createContract(Configuration conf) {
     return new NativeAzureFileSystemContract(conf);
   }
 }

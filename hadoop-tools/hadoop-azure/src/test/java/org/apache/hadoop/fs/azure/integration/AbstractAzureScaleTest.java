@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.*;
+
 /**
  * Scale tests are only executed if the scale profile
  * is set; the setup method will check this and skip
@@ -38,6 +39,10 @@ public abstract class AbstractAzureScaleTest
       LoggerFactory.getLogger(AbstractAzureScaleTest.class);
   private boolean enabled;
 
+  @Override
+  protected int getTestTimeoutMillis() {
+    return AzureTestConstants.SCALE_TEST_TIMEOUT_MILLIS;
+  }
 
   @Override
   public void setup() throws Exception {

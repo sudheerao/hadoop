@@ -48,6 +48,10 @@ public abstract class AbstractAzureIntegrationTest
   protected static final Logger LOG =
       LoggerFactory.getLogger(AbstractAzureIntegrationTest.class);
 
+  /**
+   * The test account. Test methods can be confident that tee account is never
+   * null.
+   */
   private AzureBlobStorageTestAccount testAccount;
 
   @Override
@@ -67,9 +71,7 @@ public abstract class AbstractAzureIntegrationTest
     super.teardown();
     describe("closing file system");
     IOUtils.closeStream(getFileSystem());
-    if (testAccount != null) {
-      testAccount.cleanup();
-    }
+    testAccount = AzureTestUtils.cleanup(testAccount);
   }
 
   @Before
@@ -79,9 +81,23 @@ public abstract class AbstractAzureIntegrationTest
 
   @Override
   protected int getTestTimeoutMillis() {
-    return WASB_TEST_TIMEOUT;
+    return AZURE_TEST_TIMEOUT;
   }
 
+  /**
+   * Return a path to a blob which will be unique for this fork
+   * @param filepath filepath
+   * @return
+   * @throws IOException
+   */
+  protected Path blobPath(String filepath) throws IOException {
+    return AzureTestUtils.createBlobPath(filepath);
+  }
+
+  /**
+   * Get the configuration used to create the filesystem
+   * @return the configuration loaded through the contract test mechanism.
+   */
   protected Configuration getConfiguration() {
     return getContract().getConf();
   }
@@ -96,6 +112,12 @@ public abstract class AbstractAzureIntegrationTest
     return Boolean.getBoolean(KEY_PARALLEL_TEST_EXECUTION);
   }
 
+  /**
+   /**
+   * The test account. Test methods can be confident that tge account is never
+   * null.
+   * @return the non-null test account.
+   */
   public AzureBlobStorageTestAccount getTestAccount() {
     return testAccount;
   }

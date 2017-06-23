@@ -19,10 +19,10 @@
 package org.apache.hadoop.fs.azure.contract;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.contract.AbstractContractGetFileStatusTest;
+import org.apache.hadoop.fs.contract.AbstractContractOpenTest;
 import org.apache.hadoop.fs.contract.AbstractFSContract;
 
-public class TestAzureNativeContractGetFileStatus extends AbstractContractGetFileStatusTest {
+public class ITestAzureNativeContractOpen extends AbstractContractOpenTest {
   @Override
   protected AbstractFSContract createContract(Configuration conf) {
     return new NativeAzureFileSystemContract(conf);
