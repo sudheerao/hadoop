@@ -20,7 +20,7 @@ package org.apache.hadoop.fs.azure.integration;
 
 /**
  * Sizes of data.
- * Checkstyle doesn't like the formatting here.
+ * Checkstyle doesn't like the naming scheme or the fact its an interface.
  */
 public interface Sizes {
 

@@ -31,6 +31,11 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
+/**
+ * Run the {@link FileSystemContractBaseTest} test suite against azure
+ * storage, after switching the FS using page blobs everywhere.
+ */
+
 public class ITestNativeAzureFileSystemContractPageBlobLive extends
     FileSystemContractBaseTest {
   private AzureBlobStorageTestAccount testAccount;

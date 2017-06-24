@@ -52,8 +52,8 @@ public abstract class AbstractAzureScaleTest
         getConfiguration(),
         KEY_SCALE_TESTS_ENABLED,
         DEFAULT_SCALE_TESTS_ENABLED);
-    assume("Scale test disabled: to enable set property " +
-            KEY_SCALE_TESTS_ENABLED,
+    assume("Scale test disabled: to enable set property "
+            + KEY_SCALE_TESTS_ENABLED,
         isEnabled());
   }
 

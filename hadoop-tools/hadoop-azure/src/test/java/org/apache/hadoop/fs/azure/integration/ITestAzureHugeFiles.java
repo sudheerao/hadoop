@@ -64,7 +64,6 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
   private static final Logger LOG = LoggerFactory.getLogger(
       ITestAzureHugeFiles.class);
 
-  public static final int DEFAULT_UPLOAD_BLOCKSIZE = 64 * _1KB;
   public static final String DEFAULT_PARTITION_SIZE = "8M";
   public static final int BLOCK_SIZE = _32KB;
   public static final int BIG_BLOCK_SIZE = _256KB;
@@ -73,11 +72,11 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
   private Path hugefile;
   private Path hugefileRenamed;
 
-  private static final int uploadBlockSize = DEFAULT_UPLOAD_BLOCKSIZE;
-  private static final byte[] sourceData;
+  private static final int UPLOAD_BLOCKSIZE = 64 * _1KB;
+  private static final byte[] SOURCE_DATA;
 
   static {
-    sourceData = dataset(uploadBlockSize, 0, 256);
+    SOURCE_DATA = dataset(UPLOAD_BLOCKSIZE, 0, 256);
   }
 
   private int partitionSize;
@@ -171,8 +170,8 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     // clean up from any previous attempts
     deleteHugeFile();
 
-    describe("Creating file %s of size %d MB" +
-            " with partition size %d",
+    describe("Creating file %s of size %d MB"
+            + " with partition size %d",
         hugefile, filesizeMB, partitionSize);
 
     // now do a check of available upload time, with a pessimistic bandwidth
@@ -191,13 +190,13 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
         uploadTime < timeout);
 */
     assertEquals("File size set in " + KEY_HUGE_FILESIZE + " = " + filesize
-            + " is not a multiple of " + uploadBlockSize,
-        0, filesize % uploadBlockSize);
+            + " is not a multiple of " + UPLOAD_BLOCKSIZE,
+        0, filesize % UPLOAD_BLOCKSIZE);
 
-    byte[] data = sourceData;
+    byte[] data = SOURCE_DATA;
 
-    long blocks = filesize / uploadBlockSize;
-    long blocksPerMB = _1MB / uploadBlockSize;
+    long blocks = filesize / UPLOAD_BLOCKSIZE;
+    long blocksPerMB = _1MB / UPLOAD_BLOCKSIZE;
 
     // perform the upload.
     // there's lots of logging here, so that a tail -f on the output log
@@ -209,18 +208,18 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     fs.mkdirs(hugefile.getParent());
     try (FSDataOutputStream out = fs.create(hugefile,
         true,
-        uploadBlockSize,
+        UPLOAD_BLOCKSIZE,
         null)) {
       for (long block = 1; block <= blocks; block++) {
         out.write(data);
-        long written = block * uploadBlockSize;
+        long written = block * UPLOAD_BLOCKSIZE;
         // every 10 MB and on file upload @ 100%, print some stats
         if (block % blocksPer10MB == 0 || written == filesize) {
           long percentage = written * 100 / filesize;
           double elapsedTime = timer.elapsedTime() / 1.0e9;
           double writtenMB = 1.0 * written / _1MB;
-          LOG.info(String.format("[%02d%%] Buffered %.2f MB out of %d MB;" +
-                  " elapsedTime=%.2fs; write to buffer bandwidth=%.2f MB/s",
+          LOG.info(String.format("[%02d%%] Buffered %.2f MB out of %d MB;"
+                  + " elapsedTime=%.2fs; write to buffer bandwidth=%.2f MB/s",
               percentage,
               writtenMB,
               filesizeMB,
@@ -237,7 +236,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     }
 
     timer.end("time to write %d MB in blocks of %d",
-        filesizeMB, uploadBlockSize);
+        filesizeMB, UPLOAD_BLOCKSIZE);
     logFSState();
     bandwidth(timer, filesize);
     ContractTestUtils.assertPathExists(fs, "Huge file", hugefile);
@@ -287,7 +286,8 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
 
   protected FSDataInputStream openDataFile() throws IOException {
     NanoTimer openTimer = new NanoTimer();
-    FSDataInputStream inputStream = getFileSystem().open(hugefile, uploadBlockSize);
+    FSDataInputStream inputStream = getFileSystem().open(hugefile,
+        UPLOAD_BLOCKSIZE);
     openTimer.end("open data file");
     return inputStream;
   }
@@ -310,8 +310,8 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     NativeAzureFileSystem fs = getFileSystem();
     FileStatus status = fs.getFileStatus(hugefile);
     long filesize = status.getLen();
-    long blocks = filesize / uploadBlockSize;
-    byte[] data = new byte[uploadBlockSize];
+    long blocks = filesize / UPLOAD_BLOCKSIZE;
+    byte[] data = new byte[UPLOAD_BLOCKSIZE];
 
     ContractTestUtils.NanoTimer timer = new ContractTestUtils.NanoTimer();
     try (FSDataInputStream in = openDataFile()) {
@@ -369,9 +369,9 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
           count += bytesRead;
           readTimer.end();
           if (bytesRead != 0) {
-            LOG.debug("Bytes in read #{}: {} , block bytes: {}," +
-                    " remaining in block: {}" +
-                    " duration={} nS; ns/byte: {}, bandwidth={} MB/s",
+            LOG.debug("Bytes in read #{}: {} , block bytes: {},"
+                    + " remaining in block: {}"
+                    + " duration={} nS; ns/byte: {}, bandwidth={} MB/s",
                 reads, bytesRead, blockSize - remaining, remaining,
                 readTimer.duration(),
                 readTimer.nanosPerOperation(bytesRead),
@@ -386,7 +386,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
         if (bandwidthInBytes(blockTimer, blockSize) < minimumBandwidth) {
           LOG.warn("Bandwidth {} too low on block {}: resetting connection",
               bw, blockId);
-          Assert.assertTrue("Bandwidth of " + bw + " too low after  "
+          Assert.assertTrue("Bandwidth of " + bw + " too low after "
               + resetCount + " attempts", resetCount <= maxResetCount);
           resetCount++;
           // reset the connection

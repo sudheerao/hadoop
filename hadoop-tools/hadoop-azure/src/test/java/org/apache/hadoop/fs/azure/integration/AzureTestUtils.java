@@ -35,7 +35,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.AzureBlobStorageTestAccount;
 import org.apache.hadoop.fs.azure.NativeAzureFileSystem;
-import org.apache.hadoop.fs.azure.metrics.AzureFileSystemInstrumentation;
 
 import static org.apache.hadoop.fs.azure.integration.AzureTestConstants.*;
 import static org.apache.hadoop.test.MetricsAsserts.getLongCounter;
@@ -272,8 +271,9 @@ public final class AzureTestUtils extends Assert {
   public static Path createTestPath(Path defVal) {
     String testUniqueForkId = System.getProperty(
         AzureTestConstants.TEST_UNIQUE_FORK_ID);
-    return testUniqueForkId == null ? defVal :
-        new Path("/" + testUniqueForkId, "test");
+    return testUniqueForkId == null
+           ? defVal
+           : new Path("/" + testUniqueForkId, "test");
   }
 
   /**
@@ -286,9 +286,9 @@ public final class AzureTestUtils extends Assert {
     String testUniqueForkId = System.getProperty(
         AzureTestConstants.TEST_UNIQUE_FORK_ID);
     return new Path(PAGE_BLOB_DIR,
-        testUniqueForkId == null ?
-        filename :
-        testUniqueForkId + "/" + filename);
+        testUniqueForkId == null
+        ? filename
+        : (testUniqueForkId + "/" + filename));
   }
 
   /**

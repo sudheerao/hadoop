@@ -31,6 +31,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
+/**
+ * Run the {@link FileSystemContractBaseTest} test suite against azure storage.
+ */
 public class ITestNativeAzureFileSystemContractLive extends
     FileSystemContractBaseTest {
   private AzureBlobStorageTestAccount testAccount;

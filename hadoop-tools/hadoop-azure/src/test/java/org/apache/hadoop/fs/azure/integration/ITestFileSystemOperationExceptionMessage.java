@@ -33,6 +33,9 @@ import org.junit.Test;
 
 import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO_CONTAINER_MSG;
 
+/**
+ * Test for error messages coming from SDK.
+ */
 public class ITestFileSystemOperationExceptionMessage
     extends AbstractAzureIntegrationTest {
 

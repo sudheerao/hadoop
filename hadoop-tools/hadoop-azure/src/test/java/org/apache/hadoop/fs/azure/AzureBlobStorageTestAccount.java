@@ -327,8 +327,8 @@ public final class AzureBlobStorageTestAccount implements AutoCloseable,
     Configuration conf = createTestConfiguration();
     if (!conf.getBoolean(USE_EMULATOR_PROPERTY_NAME, false)) {
       // Not configured to test against the storage emulator.
-      LOG.warn("Skipping emulator Azure test because configuration " +
-          "doesn't indicate that it's running.");
+      LOG.warn("Skipping emulator Azure test because configuration "
+          + "doesn't indicate that it's running.");
       return null;
     }
     CloudStorageAccount account =
