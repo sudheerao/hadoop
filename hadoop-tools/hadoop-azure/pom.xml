@@ -368,12 +368,12 @@
                     <include>**/ITest*.java</include>
                   </includes>
                   <excludes>
+                    <exclude>**/ITestAzureNativeContractDistCp.java</exclude>
                   </excludes>
                 </configuration>
               </execution>
               <!-- Do a sequential run for tests that cannot handle -->
               <!-- parallel execution. -->
-<!--
               <execution>
                 <id>sequential-integration-tests</id>
                 <goals>
@@ -389,16 +389,14 @@
                     <fs.azure.scale.test.huge.huge.partitionsize>${fs.azure.scale.test.huge.partitionsize}</fs.azure.scale.test.huge.huge.partitionsize>
                     <fs.azure.scale.test.timeout>${fs.azure.scale.test.timeout}</fs.azure.scale.test.timeout>
                   </systemPropertyVariables>
-                  <includes>
-                  </includes>
                   <excludes>
                     <exclude>**/ITest*.java</exclude>
                   </excludes>
                   <includes>
+                    <include>**/ITestAzureNativeContractDistCp.java</include>
                   </includes>
                 </configuration>
               </execution>
--->
             </executions>
           </plugin>
         </plugins>
