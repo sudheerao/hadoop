@@ -41,7 +41,8 @@ import static org.apache.hadoop.fs.azure.integration.AzureTestUtils .*;
  * or just a part of it.
  */
 public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
-  private static final Log LOG = LogFactory.getLog(ITestReadAndSeekPageBlobAfterWrite.class);
+  private static final Log LOG =
+      LogFactory.getLog(ITestReadAndSeekPageBlobAfterWrite.class);
 
   private FileSystem fs;
   private byte[] randomData;

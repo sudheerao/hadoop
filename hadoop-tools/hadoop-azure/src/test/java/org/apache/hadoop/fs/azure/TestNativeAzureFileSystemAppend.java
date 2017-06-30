@@ -34,21 +34,17 @@ import org.junit.Test;
 
 public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
 
-  private static final String TEST_FILE = "test.dat";
   private Path testPath;
-
-  private AzureBlobStorageTestAccount testAccount = null;
 
   @Before
   public void setUp() throws Exception {
     super.setUp();
-    testAccount = createTestAccount();
-    fs = testAccount.getFileSystem();
+    fs = getTestAccount().getFileSystem();
     Configuration conf = fs.getConf();
     conf.setBoolean(NativeAzureFileSystem.APPEND_SUPPORT_ENABLE_PROPERTY_NAME, true);
     URI uri = fs.getUri();
     fs.initialize(uri, conf);
-    testPath = path(TEST_FILE);
+    testPath = methodPath();
   }
 
   /*
@@ -64,9 +60,7 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
   // Helper method to create file and write fileSize bytes of data on it.
   private byte[] createBaseFileWithData(int fileSize, Path testPath) throws Throwable {
 
-    FSDataOutputStream createStream = null;
-    try {
-      createStream = fs.create(testPath);
+    try(FSDataOutputStream createStream = fs.create(testPath)) {
       byte[] fileData = null;
 
       if (fileSize != 0) {
@@ -74,10 +68,6 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
         createStream.write(fileData);
       }
       return fileData;
-    } finally {
-      if (createStream != null) {
-        createStream.close();
-      }
     }
   }
 
@@ -117,10 +107,8 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
    */
   private boolean verifyAppend(byte[] testData, Path testFile) {
 
-    FSDataInputStream srcStream = null;
-    try {
+    try(FSDataInputStream srcStream = fs.open(testFile)) {
 
-      srcStream = fs.open(testFile);
       int baseBufferSize = 2048;
       int testDataSize = testData.length;
       int testDataIndex = 0;
@@ -141,14 +129,6 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
       return true;
     } catch(Exception ex) {
       return false;
-    } finally {
-      if (srcStream != null) {
-        try {
-          srcStream.close();
-        } catch(IOException ioe) {
-          // Swallowing
-        }
-      }
     }
   }
 
