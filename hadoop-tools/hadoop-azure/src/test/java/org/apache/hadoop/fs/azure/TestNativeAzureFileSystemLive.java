@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.azure;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNotNull;
 
 import java.util.concurrent.CountDownLatch;
 
@@ -50,10 +51,10 @@ public class TestNativeAzureFileSystemLive extends
     throws Exception {
     final String SRC_FILE_KEY = "srcFile";
     final String DST_FILE_KEY = "dstFile";
-    Path srcPath = new Path(SRC_FILE_KEY);
+    Path srcPath = path(SRC_FILE_KEY);
     FSDataOutputStream srcStream = fs.create(srcPath);
     assertTrue(fs.exists(srcPath));
-    Path dstPath = new Path(DST_FILE_KEY);
+    Path dstPath = path(DST_FILE_KEY);
     FSDataOutputStream dstStream = fs.create(dstPath);
     assertTrue(fs.exists(dstPath));
     NativeAzureFileSystem nfs = (NativeAzureFileSystem)fs;
@@ -77,12 +78,11 @@ public class TestNativeAzureFileSystemLive extends
   public void testDeleteThrowsExceptionWithLeaseExistsErrorMessage()
       throws Exception {
     LOG.info("Starting test");
-    final String FILE_KEY = "fileWithLease";
     // Create the file
-    Path path = new Path(FILE_KEY);
+    Path path = methodPath();
     fs.create(path);
-    assertTrue(fs.exists(path));
-    NativeAzureFileSystem nfs = (NativeAzureFileSystem)fs;
+    assertPathExists("test filke", path);
+    NativeAzureFileSystem nfs = fs;
     final String fullKey = nfs.pathToKey(nfs.makeAbsolute(path));
     final AzureNativeFileSystemStore store = nfs.getStore();
 
@@ -142,7 +142,7 @@ public class TestNativeAzureFileSystemLive extends
     store.delete(fullKey);
 
     // At this point file SHOULD BE DELETED
-    assertFalse(fs.exists(path));
+    assertPathDoesNotExist("Leased path", path);
   }
 
   /**
@@ -153,7 +153,7 @@ public class TestNativeAzureFileSystemLive extends
    */
   @Test
   public void testIsPageBlobKey() {
-    AzureNativeFileSystemStore store = ((NativeAzureFileSystem) fs).getStore();
+    AzureNativeFileSystemStore store = fs.getStore();
 
     // Use literal strings so it's easier to understand the tests.
     // In case the constant changes, we want to know about it so we can update this test.
@@ -184,7 +184,7 @@ public class TestNativeAzureFileSystemLive extends
   @Test
   public void testIsAtomicRenameKey() {
 
-    AzureNativeFileSystemStore store = ((NativeAzureFileSystem) fs).getStore();
+    AzureNativeFileSystemStore store = fs.getStore();
 
     // We want to know if the default configuration changes so we can fix
     // this test.
@@ -225,15 +225,15 @@ public class TestNativeAzureFileSystemLive extends
   @Test
   public void testMkdirOnExistingFolderWithLease() throws Exception {
     SelfRenewingLease lease;
-    final String FILE_KEY = "folderWithLease";
     // Create the folder
-    fs.mkdirs(new Path(FILE_KEY));
-    NativeAzureFileSystem nfs = (NativeAzureFileSystem) fs;
-    String fullKey = nfs.pathToKey(nfs.makeAbsolute(new Path(FILE_KEY)));
+    Path path = methodPath();
+    fs.mkdirs(path);
+    NativeAzureFileSystem nfs = fs;
+    String fullKey = nfs.pathToKey(nfs.makeAbsolute(path));
     AzureNativeFileSystemStore store = nfs.getStore();
     // Acquire the lease on the folder
     lease = store.acquireLease(fullKey);
-    assertTrue(lease.getLeaseID() != null);
+    assertNotNull("lease ID", lease.getLeaseID() != null);
     // Try to create the same folder
     store.storeEmptyFolder(fullKey,
       nfs.createPermissionStatus(FsPermission.getDirDefault()));
