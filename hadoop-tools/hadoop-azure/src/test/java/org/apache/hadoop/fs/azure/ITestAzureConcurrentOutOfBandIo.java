@@ -18,21 +18,30 @@
 
 package org.apache.hadoop.fs.azure;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeNotNull;
-
-import java.io.*;
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 
-import org.apache.hadoop.fs.azure.AzureException;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.permission.PermissionStatus;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
 
-public class TestAzureConcurrentOutOfBandIo extends AbstractWasbTestBase {
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
+/**
+ * Handle OOB IO into a shared container.
+ */
+public class ITestAzureConcurrentOutOfBandIo extends AbstractWasbTestBase {
+
+  private static final Logger LOG =
+      LoggerFactory.getLogger(ITestAzureConcurrentOutOfBandIo.class);
 
   // Class constants.
   static final int DOWNLOAD_BLOCK_SIZE = 8 * 1024 * 1024;
@@ -106,13 +115,11 @@ public class TestAzureConcurrentOutOfBandIo extends AbstractWasbTestBase {
           outputStream.close();
         }
       } catch (AzureException e) {
-        System.out
-            .println("DatablockWriter thread encountered a storage exception."
-                + e.getMessage());
+        LOG.error("DatablockWriter thread encountered a storage exception."
+            + e.getMessage(), e);
       } catch (IOException e) {
-        System.out
-            .println("DatablockWriter thread encountered an I/O exception."
-            + e.getMessage());
+        LOG.error("DatablockWriter thread encountered an I/O exception."
+            + e.getMessage(), e);
       }
     }
   }
@@ -127,9 +134,9 @@ public class TestAzureConcurrentOutOfBandIo extends AbstractWasbTestBase {
     //
    // Write five 4 MB blocks to the blob. To ensure there is data in the blob before
    // reading.  This eliminates the race between the reader and writer threads.
-   OutputStream outputStream = testAccount.getStore().storefile(
-       "WASB_String.txt",
-       new PermissionStatus("", "", FsPermission.getDefault()));
+    String key = "WASB_String" + AzureTestUtils.getForkID() + ".txt";
+    OutputStream outputStream = testAccount.getStore().storefile(key,
+        new PermissionStatus("", "", FsPermission.getDefault()));
    Arrays.fill(dataBlockWrite, (byte) 255);
    for (int i = 0; i < NUMBER_OF_BLOCKS; i++) {
      outputStream.write(dataBlockWrite);
@@ -139,15 +146,12 @@ public class TestAzureConcurrentOutOfBandIo extends AbstractWasbTestBase {
    outputStream.close();
 
    // Start writing blocks to Azure store using the DataBlockWriter thread.
-    DataBlockWriter writeBlockTask = new DataBlockWriter(testAccount,
-        "WASB_String.txt");
-   writeBlockTask.startWriting();
+    DataBlockWriter writeBlockTask = new DataBlockWriter(testAccount, key);
+    writeBlockTask.startWriting();
    int count = 0;
-   InputStream inputStream = null;
 
    for (int i = 0; i < 5; i++) {
-     try {
-        inputStream = testAccount.getStore().retrieve("WASB_String.txt");
+     try(InputStream inputStream = testAccount.getStore().retrieve(key)) {
         count = 0;
         int c = 0;
 
@@ -164,11 +168,6 @@ public class TestAzureConcurrentOutOfBandIo extends AbstractWasbTestBase {
        System.out.println(e.getCause().toString());
        e.printStackTrace();
        fail();
-     }
-
-     // Close the stream.
-     if (null != inputStream){
-       inputStream.close();
      }
    }
 

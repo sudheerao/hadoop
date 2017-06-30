@@ -117,9 +117,9 @@ public class TestNativeAzureFileSystemUploadLogic extends AbstractWasbTestBase {
    * @param expectedSize The expected size of the data in there.
    */
   private void assertDataInFile(Path file, int expectedSize) throws Exception {
-    InputStream inStream = getFileSystem().open(file);
-    assertDataInStream(inStream, expectedSize);
-    inStream.close();
+    try(InputStream inStream = getFileSystem().open(file)) {
+      assertDataInStream(inStream, expectedSize);
+    }
   }
 
   /**
@@ -140,9 +140,10 @@ public class TestNativeAzureFileSystemUploadLogic extends AbstractWasbTestBase {
       }
     }
     assertNotNull(tempKey);
-    InputStream inStream = new ByteArrayInputStream(backingStore.getContent(tempKey));
-    assertDataInStream(inStream, expectedSize);
-    inStream.close();
+    try (InputStream inStream = new ByteArrayInputStream(
+        backingStore.getContent(tempKey))) {
+      assertDataInStream(inStream, expectedSize);
+    }
   }
 
   /**
@@ -153,25 +154,30 @@ public class TestNativeAzureFileSystemUploadLogic extends AbstractWasbTestBase {
    */
   private void testConsistencyAfterManyFlushes(FlushFrequencyVariation variation)
       throws Exception {
-    Path uploadedFile = new Path("/uploadedFile");
-    OutputStream outStream = getFileSystem().create(uploadedFile);
-    final int totalSize = 9123;
-    int flushPeriod;
-    switch (variation) {
-      case BeforeSingleBufferFull: flushPeriod = 300; break;
-      case AfterSingleBufferFull: flushPeriod = 600; break;
-      case AfterAllRingBufferFull: flushPeriod = 1600; break;
-      default:
-        throw new IllegalArgumentException("Unknown variation: " + variation);
-    }
-    for (int i = 0; i < totalSize; i++) {
-      outStream.write(i % byteValuePeriod);
-      if ((i + 1) % flushPeriod == 0) {
-        outStream.flush();
-        assertDataInTempBlob(i + 1);
+    Path uploadedFile = methodPath();
+    try {
+      OutputStream outStream = getFileSystem().create(uploadedFile);
+      final int totalSize = 9123;
+      int flushPeriod;
+      switch (variation) {
+        case BeforeSingleBufferFull: flushPeriod = 300; break;
+        case AfterSingleBufferFull: flushPeriod = 600; break;
+        case AfterAllRingBufferFull: flushPeriod = 1600; break;
+        default:
+          throw new IllegalArgumentException("Unknown variation: " + variation);
       }
+      for (int i = 0; i < totalSize; i++) {
+        outStream.write(i % byteValuePeriod);
+        if ((i + 1) % flushPeriod == 0) {
+          outStream.flush();
+          assertDataInTempBlob(i + 1);
+        }
+      }
+      outStream.close();
+      assertDataInFile(uploadedFile, totalSize);
+    } finally {
+      getFileSystem().delete(uploadedFile, false);
+
     }
-    outStream.close();
-    assertDataInFile(uploadedFile, totalSize);
   }
 }

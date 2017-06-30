@@ -32,7 +32,10 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
+/**
+ * Test append operations.
+ */
+public class ITestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
 
   private Path testPath;
 

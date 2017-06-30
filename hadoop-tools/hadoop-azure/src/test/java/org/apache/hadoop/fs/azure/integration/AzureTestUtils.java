@@ -229,7 +229,9 @@ public final class AzureTestUtils extends Assert {
   public static String getTestProperty(Configuration conf,
       String key,
       String defVal) {
-    String confVal = conf != null ? conf.getTrimmed(key, defVal) : defVal;
+    String confVal = conf != null
+        ? conf.getTrimmed(key, defVal)
+        : defVal;
     String propval = System.getProperty(key);
     return StringUtils.isNotEmpty(propval) && !UNSET_PROPERTY.equals(propval)
         ? propval : confVal;
@@ -272,13 +274,13 @@ public final class AzureTestUtils extends Assert {
     String testUniqueForkId = System.getProperty(
         AzureTestConstants.TEST_UNIQUE_FORK_ID);
     return testUniqueForkId == null
-           ? defVal
-           : new Path("/" + testUniqueForkId, "test");
+        ? defVal
+        : new Path("/" + testUniqueForkId, "test");
   }
 
   /**
    * Create a test page blob path using the value of
-   * {@link AzureTestUtils#TEST_UNIQUE_FORK_ID} if it is set.
+   * {@link AzureTestConstants#TEST_UNIQUE_FORK_ID} if it is set.
    * @param filename filename at the end of the path
    * @return an absolute path
    */
@@ -287,12 +289,13 @@ public final class AzureTestUtils extends Assert {
         AzureTestConstants.TEST_UNIQUE_FORK_ID);
     return fs.makeQualified(new Path(PAGE_BLOB_DIR,
         testUniqueForkId == null
-        ? filename
-        : (testUniqueForkId + "/" + filename)));
+            ? filename
+            : (testUniqueForkId + "/" + filename)));
   }
+
   /**
    * Create a test path using the value of
-   * {@link AzureTestUtils#TEST_UNIQUE_FORK_ID} if it is set.
+   * {@link AzureTestConstants#TEST_UNIQUE_FORK_ID} if it is set.
    * @param filename filename at the end of the path
    * @return an absolute path
    */
@@ -301,8 +304,18 @@ public final class AzureTestUtils extends Assert {
         AzureTestConstants.TEST_UNIQUE_FORK_ID);
     return fs.makeQualified(new Path(
         testUniqueForkId == null
-        ? ("/test/" + filename)
-        : (testUniqueForkId + "/" + filename)));
+            ? ("/test/" + filename)
+            : (testUniqueForkId + "/" + filename)));
+  }
+
+  /**
+   * Get a unique fork ID.
+   * Returns a default value for non-parallel tests.
+   * @return a string unique for all test VMs running in this maven build.
+   */
+  public static String getForkID() {
+    return System.getProperty(
+        AzureTestConstants.TEST_UNIQUE_FORK_ID, "fork-1");
   }
 
   /**
@@ -364,8 +377,8 @@ public final class AzureTestUtils extends Assert {
   /**
    * Assume that a condition is met. If not: log at WARN and
    * then throw an {@link AssumptionViolatedException}.
-   * @param message
-   * @param condition
+   * @param message message in an assumption
+   * @param condition condition to probe
    */
   public static void assume(String message, boolean condition) {
     if (!condition) {

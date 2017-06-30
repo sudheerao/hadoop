@@ -29,6 +29,9 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TestName;
 
+/**
+ * Run the {@code FileSystemContractBaseTest} tests against the emulator
+ */
 public class ITestNativeAzureFileSystemContractEmulator extends
     FileSystemContractBaseTest {
   private AzureBlobStorageTestAccount testAccount;

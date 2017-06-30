@@ -23,6 +23,10 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
+/**
+ * Mocked testing of FileSystemContractBaseTest.
+ * This isn't an IT, but making it so makes it a lot faster for now.
+ */
 public class ITestNativeAzureFileSystemContractMocked extends
     FileSystemContractBaseTest {
 

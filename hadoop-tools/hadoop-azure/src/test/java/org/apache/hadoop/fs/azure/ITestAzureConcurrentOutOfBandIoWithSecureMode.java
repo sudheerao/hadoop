@@ -18,26 +18,12 @@
 
 package org.apache.hadoop.fs.azure;
 
-import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.fs.permission.PermissionStatus;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.Arrays;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeNotNull;
-
 /**
- * Extends TestAzureConcurrentOutOfBandIo in order to run testReadOOBWrites with secure mode
+ * Extends ITestAzureConcurrentOutOfBandIo in order to run testReadOOBWrites with secure mode
  * (fs.azure.secure.mode) both enabled and disabled.
  */
-public class TestAzureConcurrentOutOfBandIoWithSecureMode extends  TestAzureConcurrentOutOfBandIo {
+public class ITestAzureConcurrentOutOfBandIoWithSecureMode
+    extends ITestAzureConcurrentOutOfBandIo {
 
   @Override
   protected AzureBlobStorageTestAccount createTestAccount() throws Exception {

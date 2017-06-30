@@ -198,13 +198,22 @@ mvn -T 1C clean verify -Dtest=none -Dit.test=ITest*
 
 ```
 
-Note that when running a specific subset of tests, the patterns passed in `test`
+Note
+ 
+1. When running a specific subset of tests, the patterns passed in `test`
 and `it.test` override the configuration of which tests need to run in isolation
 in a separate serial phase (mentioned above).  This can cause unpredictable
 results, so the recommendation is to avoid passing `parallel-tests` in
 combination with `test` or `it.test`.  If you know that you are specifying only
 tests that can run safely in parallel, then it will work.  For wide patterns,
 like `ITest*` shown above, it may cause unpredictable test failures.
+
+2. The command line shell may try to expand the "*" and sometimes the "#" symbols
+in test patterns. In such situations, escape the character it with a "\\" prefix.
+Example:
+
+          mvn -T 1C clean verify -Dtest=none -Dit.test=ITest\*
+
 
 ## Viewing the results
 
@@ -370,8 +379,6 @@ following failure message:
 To resolve this, restart the Azure Emulator.  Ensure it is v3.2 or later.
 
 
-
-
 ## Debugging Test failures
 
 Logging at debug level is the standard way to provide more diagnostics output;
@@ -531,7 +538,7 @@ using an absolute XInclude reference to it.
 <configuration>
 
   <include xmlns="http://www.w3.org/2001/XInclude"
-    href="file:///users/ubuntu/.auth-keys.xml" />
+    href="file:///users/qe/.auth-keys.xml" />
 
 </configuration>
 ```
