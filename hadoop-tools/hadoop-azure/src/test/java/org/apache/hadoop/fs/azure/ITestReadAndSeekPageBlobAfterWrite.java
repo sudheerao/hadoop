@@ -62,10 +62,6 @@ public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
   // path of page blob file to read and write
   private Path blobPath;
 
-  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
-    return AzureBlobStorageTestAccount.create();
-  }
-
   @Override
   public void setup() throws Exception {
     super.setup();
@@ -77,7 +73,7 @@ public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
     randomData = new byte[PAGE_SIZE * MAX_PAGES];
     rand.nextBytes(randomData);
 
-    blobPath = createBlobPath("ITestReadAndSeekPageBlobAfterWrite");
+    blobPath = testBlobPath(fs, "ITestReadAndSeekPageBlobAfterWrite");
   }
 
   @Override

@@ -494,8 +494,7 @@ public final class AzureBlobStorageTestAccount implements AutoCloseable,
         credentials = StorageCredentialsAnonymous.ANONYMOUS;
       } else {
         LOG.warn("Skipping live Azure test because of missing key for"
-            + " account '" + accountName + "'. "
-            + "Please see RunningLiveWasbTests.txt for guidance.");
+            + " account '" + accountName + "'.");
         return null;
       }
     } else {

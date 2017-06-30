@@ -65,8 +65,7 @@ public class ITestNativeAzureFileSystemContractPageBlobLive extends
     testAccount = createTestAccount();
     assumeNotNull(testAccount);
     fs = testAccount.getFileSystem();
-    basePath = fs.makeQualified(
-        AzureTestUtils.createTestPath(new Path("filesystemcontractpageblob")));
+    basePath = AzureTestUtils.testPath(fs, "filesystemcontractpageblob");
   }
 
   @After

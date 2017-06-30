@@ -18,14 +18,25 @@
 
 package org.apache.hadoop.fs.azure;
 
+import java.io.IOException;
+
+import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.testBlobPath;
+import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.testPath;
 import static org.junit.Assume.assumeNotNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Rule;
+import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
 
 /**
  * Abstract test class that provides basic setup and teardown of testing Azure
@@ -41,7 +52,7 @@ public abstract class AbstractWasbTestBase {
 
   @VisibleForTesting
   protected NativeAzureFileSystem fs;
-  private AzureBlobStorageTestAccount testAccount;
+  protected AzureBlobStorageTestAccount testAccount;
 
   @Before
   public void setUp() throws Exception {
@@ -70,5 +81,64 @@ public abstract class AbstractWasbTestBase {
 
   protected AzureBlobStorageTestAccount getTestAccount() {
     return testAccount;
+  }
+
+  protected NativeAzureFileSystem getFileSystem() {
+    return fs;
+  }
+
+  /**
+   * Return a path to a blob which will be unique for this fork.
+   * @param filepath filepath
+   * @return a path under the default blob directory
+   * @throws IOException
+   */
+  protected Path blobPath(String filepath) throws IOException {
+    return testBlobPath(getFileSystem(), filepath);
+  }
+
+
+  /**
+   * Create a path under the test path provided by
+   * the FS contract.
+   * @param filepath path string in
+   * @return a path qualified by the test filesystem
+   * @throws IOException IO problems
+   */
+  protected Path path(String filepath) throws IOException {
+    return testPath(getFileSystem(), filepath);
+  }
+
+  /**
+   * Return a path bonded to this method name, unique to this fork during
+   * parallel execution.
+   * @return a method name unique to (fork, method).
+   * @throws IOException IO problems
+   */
+  protected Path methodPath() throws IOException {
+    return path(methodName.getMethodName());
+  }
+
+  @Rule
+  public TestName methodName = new TestName();
+
+
+  @BeforeClass
+  public static void nameTestThread() {
+    Thread.currentThread().setName("JUnit");
+  }
+  /**
+   * Set the timeout for every test.
+   */
+  @Rule
+  public Timeout testTimeout = new Timeout(getTestTimeoutMillis());
+
+  @Before
+  public void nameThread() {
+    Thread.currentThread().setName("JUnit-" + methodName.getMethodName());
+  }
+
+  protected int getTestTimeoutMillis() {
+    return AzureTestConstants.AZURE_TEST_TIMEOUT;
   }
 }

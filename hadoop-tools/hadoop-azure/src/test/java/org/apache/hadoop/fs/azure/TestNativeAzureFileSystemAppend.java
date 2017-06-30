@@ -35,7 +35,7 @@ import org.junit.Test;
 public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
 
   private static final String TEST_FILE = "test.dat";
-  private static final Path TEST_PATH = new Path(TEST_FILE);
+  private Path testPath;
 
   private AzureBlobStorageTestAccount testAccount = null;
 
@@ -48,6 +48,7 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
     conf.setBoolean(NativeAzureFileSystem.APPEND_SUPPORT_ENABLE_PROPERTY_NAME, true);
     URI uri = fs.getUri();
     fs.initialize(uri, conf);
+    testPath = path(TEST_FILE);
   }
 
   /*
@@ -161,18 +162,18 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
     FSDataOutputStream appendStream = null;
     try {
       int baseDataSize = 50;
-      byte[] baseDataBuffer = createBaseFileWithData(baseDataSize, TEST_PATH);
+      byte[] baseDataBuffer = createBaseFileWithData(baseDataSize, testPath);
 
       int appendDataSize = 20;
       byte[] appendDataBuffer = getTestData(appendDataSize);
-      appendStream = fs.append(TEST_PATH, 10);
+      appendStream = fs.append(testPath, 10);
       appendStream.write(appendDataBuffer);
       appendStream.close();
       byte[] testData = new byte[baseDataSize + appendDataSize];
       System.arraycopy(baseDataBuffer, 0, testData, 0, baseDataSize);
       System.arraycopy(appendDataBuffer, 0, testData, baseDataSize, appendDataSize);
 
-      Assert.assertTrue(verifyAppend(testData, TEST_PATH));
+      Assert.assertTrue(verifyAppend(testData, testPath));
     } finally {
       if (appendStream != null) {
         appendStream.close();
@@ -189,15 +190,15 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
     FSDataOutputStream appendStream = null;
 
     try {
-      createBaseFileWithData(0, TEST_PATH);
+      createBaseFileWithData(0, testPath);
 
       int appendDataSize = 20;
       byte[] appendDataBuffer = getTestData(appendDataSize);
-      appendStream = fs.append(TEST_PATH, 10);
+      appendStream = fs.append(testPath, 10);
       appendStream.write(appendDataBuffer);
       appendStream.close();
 
-      Assert.assertTrue(verifyAppend(appendDataBuffer, TEST_PATH));
+      Assert.assertTrue(verifyAppend(appendDataBuffer, testPath));
     } finally {
       if (appendStream != null) {
         appendStream.close();
@@ -215,11 +216,11 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
     FSDataOutputStream appendStream2 = null;
     IOException ioe = null;
     try {
-      createBaseFileWithData(0, TEST_PATH);
-      appendStream1 = fs.append(TEST_PATH, 10);
+      createBaseFileWithData(0, testPath);
+      appendStream1 = fs.append(testPath, 10);
       boolean encounteredException = false;
       try {
-        appendStream2 = fs.append(TEST_PATH, 10);
+        appendStream2 = fs.append(testPath, 10);
       } catch(IOException ex) {
         encounteredException = true;
         ioe = ex;
@@ -247,7 +248,7 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
   public void testMultipleAppends() throws Throwable {
 
     int baseDataSize = 50;
-    byte[] baseDataBuffer = createBaseFileWithData(baseDataSize, TEST_PATH);
+    byte[] baseDataBuffer = createBaseFileWithData(baseDataSize, testPath);
 
     int appendDataSize = 100;
     int targetAppendCount = 50;
@@ -264,7 +265,7 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
       while (appendCount < targetAppendCount) {
 
         byte[] appendDataBuffer = getTestData(appendDataSize);
-        appendStream = fs.append(TEST_PATH, 30);
+        appendStream = fs.append(testPath, 30);
         appendStream.write(appendDataBuffer);
         appendStream.close();
 
@@ -273,7 +274,7 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
         appendCount++;
       }
 
-      Assert.assertTrue(verifyAppend(testData, TEST_PATH));
+      Assert.assertTrue(verifyAppend(testData, testPath));
 
     } finally {
       if (appendStream != null) {
@@ -289,7 +290,7 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
   public void testMultipleAppendsOnSameStream() throws Throwable {
 
     int baseDataSize = 50;
-    byte[] baseDataBuffer = createBaseFileWithData(baseDataSize, TEST_PATH);
+    byte[] baseDataBuffer = createBaseFileWithData(baseDataSize, testPath);
     int appendDataSize = 100;
     int targetAppendCount = 50;
     byte[] testData = new byte[baseDataSize + (appendDataSize*targetAppendCount)];
@@ -304,7 +305,7 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
 
       while (appendCount < targetAppendCount) {
 
-        appendStream = fs.append(TEST_PATH, 50);
+        appendStream = fs.append(testPath, 50);
 
         int singleAppendChunkSize = 20;
         int appendRunSize = 0;
@@ -323,7 +324,7 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
         appendCount++;
       }
 
-      Assert.assertTrue(verifyAppend(testData, TEST_PATH));
+      Assert.assertTrue(verifyAppend(testData, testPath));
     } finally {
       if (appendStream != null) {
         appendStream.close();
@@ -346,8 +347,8 @@ public class TestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
     FSDataOutputStream appendStream = null;
 
     try {
-      createBaseFileWithData(0, TEST_PATH);
-      appendStream = fs.append(TEST_PATH, 10);
+      createBaseFileWithData(0, testPath);
+      appendStream = fs.append(testPath, 10);
     } finally {
       if (appendStream != null) {
         appendStream.close();

@@ -35,6 +35,7 @@ import org.apache.hadoop.io.IOUtils;
 
 import static org.apache.hadoop.fs.contract.ContractTestUtils.dataset;
 import static org.apache.hadoop.fs.contract.ContractTestUtils.writeDataset;
+import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.*;
 
 /**
  * An extension of the contract test base set up for WASB tests.
@@ -61,9 +62,19 @@ public abstract class AbstractAzureIntegrationTest
 
   @Override
   public void setup() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.create();
+    testAccount = createTestAccount();
     assertNotNull("No Azure account", testAccount);
     super.setup();
+  }
+
+  /**
+   * Create the test account.
+   * Called from {@link AbstractAzureIntegrationTest#setup()}.
+   * @return a test account
+   * @throws Exception on any failure to create the account.
+   */
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.create();
   }
 
   @Override
@@ -85,13 +96,23 @@ public abstract class AbstractAzureIntegrationTest
   }
 
   /**
-   * Return a path to a blob which will be unique for this fork
+   * Return a path to a blob which will be unique for this fork.
    * @param filepath filepath
-   * @return
+   * @return a path under the default blob directory
    * @throws IOException
    */
   protected Path blobPath(String filepath) throws IOException {
-    return AzureTestUtils.createBlobPath(filepath);
+    return testBlobPath(getFileSystem(), filepath);
+  }
+
+  /**
+   * Return a path bonded to this method name, unique to this fork during
+   * parallel execution.
+   * @return a method name unique to (fork, method).
+   * @throws IOException IO problems
+   */
+  protected Path methodPath() throws IOException {
+    return path(methodName.getMethodName());
   }
 
   /**
@@ -100,16 +121,6 @@ public abstract class AbstractAzureIntegrationTest
    */
   protected Configuration getConfiguration() {
     return getContract().getConf();
-  }
-
-
-  /**
-   * Flag to indicate that this test is being executed in parallel.
-   * This is used by some of the scale tests to validate test time expectations.
-   * @return true if the build indicates this test is being run in parallel.
-   */
-  protected boolean isParallelExecution() {
-    return Boolean.getBoolean(KEY_PARALLEL_TEST_EXECUTION);
   }
 
   /**

@@ -40,23 +40,27 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-public class TestNativeAzureFileSystemConcurrency {
-  private AzureBlobStorageTestAccount testAccount;
+public class TestNativeAzureFileSystemConcurrency extends AbstractWasbTestBase {
   private FileSystem fs;
   private InMemoryBlockBlobStore backingStore;
 
   @Before
   public void setUp() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.createMock();
-    fs = testAccount.getFileSystem();
-    backingStore = testAccount.getMockStorage().getBackingStore();
+    super.setUp();
+    fs = getTestAccount().getFileSystem();
+    backingStore = getTestAccount().getMockStorage().getBackingStore();
   }
 
   @After
   public void tearDown() throws Exception {
-    testAccount.cleanup();
+    super.tearDown();
     fs = null;
     backingStore = null;
+  }
+
+  @Override
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.createMock();
   }
 
   @Test

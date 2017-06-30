@@ -34,7 +34,13 @@ import org.junit.Test;
  * A simple benchmark to find out the difference in speed between block
  * and page blobs.
  */
-public class TestBlobTypeSpeedDifference extends TestCase {
+public class TestBlobTypeSpeedDifference extends AbstractWasbTestBase {
+
+  @Override
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.create();
+  }
+
   /**
    * Writes data to the given stream of the given size, flushing every
    * x bytes.
@@ -111,16 +117,7 @@ public class TestBlobTypeSpeedDifference extends TestCase {
    */
   @Test
   public void testTenKbFileFrequentFlush() throws Exception {
-    AzureBlobStorageTestAccount testAccount =
-        AzureBlobStorageTestAccount.create();
-    if (testAccount == null) {
-      return;
-    }
-    try {
-      testForSizeAndFlushInterval(testAccount.getFileSystem(), 10 * 1000, 500);
-    } finally {
-      testAccount.cleanup();
-    }
+    testForSizeAndFlushInterval(getFileSystem(), 10 * 1000, 500);
   }
 
   /**

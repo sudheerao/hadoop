@@ -32,26 +32,20 @@ import org.junit.Test;
 import com.microsoft.azure.storage.blob.BlobOutputStream;
 import com.microsoft.azure.storage.blob.CloudBlockBlob;
 
-public class TestOutOfBandAzureBlobOperationsLive {
+public class TestOutOfBandAzureBlobOperationsLive extends AbstractWasbTestBase {
   private FileSystem fs;
   private AzureBlobStorageTestAccount testAccount;
 
   @Before
   public void setUp() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.create();
-    if (testAccount != null) {
-      fs = testAccount.getFileSystem();
-    }
-    assumeNotNull(testAccount);
+    super.setUp();
+    fs = getFileSystem();
+    testAccount = getTestAccount();
   }
 
-  @After
-  public void tearDown() throws Exception {
-    if (testAccount != null) {
-      testAccount.cleanup();
-      testAccount = null;
-      fs = null;
-    }
+  @Override
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.create();
   }
 
   // scenario for this particular test described at MONARCH-HADOOP-764

@@ -74,10 +74,6 @@ public class TestWasbRemoteCallHelper
     boolean useAuthorization = fs.getConf().getBoolean(NativeAzureFileSystem.KEY_AZURE_AUTHORIZATION, false);
     Assume.assumeTrue("Test valid when both SecureMode and Authorization are enabled .. skipping",
         useSecureMode && useAuthorization);
-
-    Assume.assumeTrue(
-        useSecureMode && useAuthorization
-    );
   }
 
   @Rule

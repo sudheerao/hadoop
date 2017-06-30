@@ -26,15 +26,14 @@ import org.junit.Test;
 
 public class TestNativeAzureFileSystemAtomicRenameDirList
     extends AbstractWasbTestBase {
-  private AzureBlobStorageTestAccount testAccount;
 
   // HBase-site config controlling HBase root dir
   private static final String HBASE_ROOT_DIR_CONF_STRING = "hbase.rootdir";
   private static final String HBASE_ROOT_DIR_VALUE_ON_DIFFERENT_FS = "wasb://somedifferentfilesystem.blob.core.windows.net/hbase";
+
   @Override
   protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.create();
-    return testAccount;
+    return AzureBlobStorageTestAccount.create();
   }
 
   @Test

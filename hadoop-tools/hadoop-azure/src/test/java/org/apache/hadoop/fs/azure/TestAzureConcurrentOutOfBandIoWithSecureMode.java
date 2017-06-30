@@ -39,12 +39,9 @@ import static org.junit.Assume.assumeNotNull;
  */
 public class TestAzureConcurrentOutOfBandIoWithSecureMode extends  TestAzureConcurrentOutOfBandIo {
 
-  // Overridden TestCase methods.
-  @Before
   @Override
-  public void setUp() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.createOutOfBandStore(
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.createOutOfBandStore(
         UPLOAD_BLOCK_SIZE, DOWNLOAD_BLOCK_SIZE, true);
-    assumeNotNull(testAccount);
   }
 }

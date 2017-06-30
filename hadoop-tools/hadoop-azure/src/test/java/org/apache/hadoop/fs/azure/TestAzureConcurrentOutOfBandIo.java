@@ -32,7 +32,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-public class TestAzureConcurrentOutOfBandIo {
+public class TestAzureConcurrentOutOfBandIo extends AbstractWasbTestBase {
 
   // Class constants.
   static final int DOWNLOAD_BLOCK_SIZE = 8 * 1024 * 1024;
@@ -42,22 +42,10 @@ public class TestAzureConcurrentOutOfBandIo {
   // Number of blocks to be written before flush.
   static final int NUMBER_OF_BLOCKS = 2;
 
-  protected AzureBlobStorageTestAccount testAccount;
-
-  // Overridden TestCase methods.
-  @Before
-  public void setUp() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.createOutOfBandStore(
+  @Override
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.createOutOfBandStore(
         UPLOAD_BLOCK_SIZE, DOWNLOAD_BLOCK_SIZE);
-    assumeNotNull(testAccount);
-  }
-
-  @After
-  public void tearDown() throws Exception {
-    if (testAccount != null) {
-      testAccount.cleanup();
-      testAccount = null;
-    }
   }
 
   class DataBlockWriter implements Runnable {

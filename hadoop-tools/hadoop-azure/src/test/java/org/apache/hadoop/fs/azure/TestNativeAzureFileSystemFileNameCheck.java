@@ -38,24 +38,22 @@ import org.junit.Test;
  * creation/rename of files/directories through WASB that have colons in the
  * names.
  */
-public class TestNativeAzureFileSystemFileNameCheck {
+public class TestNativeAzureFileSystemFileNameCheck extends AbstractWasbTestBase {
   private FileSystem fs = null;
   private AzureBlobStorageTestAccount testAccount = null;
   private String root = null;
 
   @Before
   public void setUp() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.createMock();
-    fs = testAccount.getFileSystem();
+    super.setUp();
+    testAccount = getTestAccount();
+    fs = getFileSystem();
     root = fs.getUri().toString();
   }
 
-  @After
-  public void tearDown() throws Exception {
-    testAccount.cleanup();
-    root = null;
-    fs = null;
-    testAccount = null;
+  @Override
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.createMock();
   }
 
   @Test

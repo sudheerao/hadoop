@@ -55,11 +55,13 @@ public class ITestNativeAzureFileSystemContractLive extends
     }
     assumeNotNull(fs);
     basePath = fs.makeQualified(
-        AzureTestUtils.createTestPath(new Path("filesystemcontract")));
+        AzureTestUtils.createTestPath(
+            new Path("NativeAzureFileSystemContractLive")));
   }
 
   @After
   public void tearDown() throws Exception {
+    super.tearDown();
     testAccount = AzureTestUtils.cleanup(testAccount);
     fs = null;
   }

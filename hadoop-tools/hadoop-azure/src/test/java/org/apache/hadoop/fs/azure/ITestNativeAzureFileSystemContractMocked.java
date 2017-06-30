@@ -18,31 +18,46 @@
 
 package org.apache.hadoop.fs.azure;
 
-import static org.junit.Assume.assumeNotNull;
-
 import org.apache.hadoop.fs.FileSystemContractBaseTest;
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Test;
 
-public class TestNativeAzureFileSystemContractEmulator extends
+public class ITestNativeAzureFileSystemContractMocked extends
     FileSystemContractBaseTest {
-  private AzureBlobStorageTestAccount testAccount;
 
   @Before
   public void setUp() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.createForEmulator();
-    if (testAccount != null) {
-      fs = testAccount.getFileSystem();
-    }
-    assumeNotNull(fs);
+    fs = AzureBlobStorageTestAccount.createMock().getFileSystem();
+  }
+  
+  /**
+   * The following tests are failing on Azure and the Azure 
+   * file system code needs to be modified to make them pass.
+   * A separate work item has been opened for this.
+   */
+  @Ignore
+  @Test
+  public void testMoveFileUnderParent() throws Throwable {
   }
 
-  @After
-  public void tearDown() throws Exception {
-    if (testAccount != null) {
-      testAccount.cleanup();
-      testAccount = null;
-      fs = null;
-    }
+  @Ignore
+  @Test
+  public void testRenameFileToSelf() throws Throwable {
+  }
+  
+  @Ignore
+  @Test
+  public void testRenameChildDirForbidden() throws Exception {
+  }
+  
+  @Ignore
+  @Test
+  public void testMoveDirUnderParent() throws Throwable {
+  }
+  
+  @Ignore
+  @Test
+  public void testRenameDirToSelf() throws Throwable {
   }
 }

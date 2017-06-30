@@ -282,13 +282,36 @@ public final class AzureTestUtils extends Assert {
    * @param filename filename at the end of the path
    * @return an absolute path
    */
-  public static Path createBlobPath(String filename) {
+  public static Path testBlobPath(FileSystem fs, String filename) {
     String testUniqueForkId = System.getProperty(
         AzureTestConstants.TEST_UNIQUE_FORK_ID);
-    return new Path(PAGE_BLOB_DIR,
+    return fs.makeQualified(new Path(PAGE_BLOB_DIR,
         testUniqueForkId == null
         ? filename
-        : (testUniqueForkId + "/" + filename));
+        : (testUniqueForkId + "/" + filename)));
+  }
+  /**
+   * Create a test path using the value of
+   * {@link AzureTestUtils#TEST_UNIQUE_FORK_ID} if it is set.
+   * @param filename filename at the end of the path
+   * @return an absolute path
+   */
+  public static Path testPath(FileSystem fs, String filename) {
+    String testUniqueForkId = System.getProperty(
+        AzureTestConstants.TEST_UNIQUE_FORK_ID);
+    return fs.makeQualified(new Path(
+        testUniqueForkId == null
+        ? ("/test/" + filename)
+        : (testUniqueForkId + "/" + filename)));
+  }
+
+  /**
+   * Flag to indicate that this test is being executed in parallel.
+   * This is used by some of the scale tests to validate test time expectations.
+   * @return true if the build indicates this test is being run in parallel.
+   */
+  public static boolean isParallelExecution() {
+    return Boolean.getBoolean(KEY_PARALLEL_TEST_EXECUTION);
   }
 
   /**
