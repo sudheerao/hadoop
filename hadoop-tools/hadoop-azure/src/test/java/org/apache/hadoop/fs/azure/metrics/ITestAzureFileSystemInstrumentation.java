@@ -33,7 +33,6 @@ import static org.apache.hadoop.test.MetricsAsserts.getMetrics;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assume.assumeNotNull;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.verify;
 
@@ -44,6 +43,7 @@ import java.util.Date;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azure.AbstractWasbTestBase;
 import org.apache.hadoop.fs.azure.AzureBlobStorageTestAccount;
 import org.apache.hadoop.fs.azure.AzureException;
 import org.apache.hadoop.fs.azure.AzureNativeFileSystemStore;
@@ -53,39 +53,27 @@ import org.apache.hadoop.metrics2.MetricsRecordBuilder;
 import org.apache.hadoop.metrics2.MetricsTag;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class TestAzureFileSystemInstrumentation {
-  private FileSystem fs;
-  private AzureBlobStorageTestAccount testAccount;
+public class ITestAzureFileSystemInstrumentation extends AbstractWasbTestBase {
 
-  @Before
-  public void setUp() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.create();
-    if (testAccount != null) {
-      fs = testAccount.getFileSystem();
-    }
-    assumeNotNull(testAccount);
-  }
+  protected static final Logger LOG =
+      LoggerFactory.getLogger(ITestAzureFileSystemInstrumentation.class);
 
-  @After
-  public void tearDown() throws Exception {
-    if (testAccount != null) {
-      testAccount.cleanup();
-      testAccount = null;
-      fs = null;
-    }
+  @Override
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.create();
   }
 
   @Test
   public void testMetricTags() throws Exception {
     String accountName =
-        testAccount.getRealAccount().getBlobEndpoint()
+        getTestAccount().getRealAccount().getBlobEndpoint()
         .getAuthority();
     String containerName =
-        testAccount.getRealContainer().getName();
+        getTestAccount().getRealContainer().getName();
     MetricsRecordBuilder myMetrics = getMyMetrics();
     verify(myMetrics).add(argThat(
         new TagMatcher("accountName", accountName)
@@ -107,7 +95,7 @@ public class TestAzureFileSystemInstrumentation {
     long base = getBaseWebResponses();
 
     // Create a directory
-    assertTrue(fs.mkdirs(new Path("a")));
+    assertTrue(getFileSystem().mkdirs(new Path(methodName.getMethodName())));
     // At the time of writing, it takes 1 request to create the actual directory,
     // plus 2 requests per level to check that there's no blob with that name and
     // 1 request per level above to create it if it doesn't exist.
@@ -123,14 +111,14 @@ public class TestAzureFileSystemInstrumentation {
         AzureMetricsTestUtil.getLongCounterValue(getInstrumentation(), WASB_DIRECTORIES_CREATED));
 
     // List the root contents
-    assertEquals(1, fs.listStatus(new Path("/")).length);
+    assertEquals(1, getFileSystem().listStatus(new Path("/")).length);
     base = assertWebResponsesEquals(base, 1);
 
     assertNoErrors();
   }
 
   private BandwidthGaugeUpdater getBandwidthGaugeUpdater() {
-    NativeAzureFileSystem azureFs = (NativeAzureFileSystem)fs;
+    NativeAzureFileSystem azureFs = (NativeAzureFileSystem) getFileSystem();
     AzureNativeFileSystemStore azureStore = azureFs.getStore();
     return azureStore.getBandwidthGaugeUpdater();
   }
@@ -156,7 +144,7 @@ public class TestAzureFileSystemInstrumentation {
 
     // Create a file
     Date start = new Date();
-    OutputStream outputStream = fs.create(filePath);
+    OutputStream outputStream = getFileSystem().create(filePath);
     outputStream.write(nonZeroByteArray(FILE_SIZE));
     outputStream.close();
     long uploadDurationMs = new Date().getTime() - start.getTime();
@@ -181,7 +169,7 @@ public class TestAzureFileSystemInstrumentation {
         " bytes plus a little overhead.",
         totalBytesWritten >= FILE_SIZE && totalBytesWritten < (FILE_SIZE * 2));
     long uploadRate = AzureMetricsTestUtil.getLongGaugeValue(getInstrumentation(), WASB_UPLOAD_RATE);
-    System.out.println("Upload rate: " + uploadRate + " bytes/second.");
+    LOG.info("Upload rate: " + uploadRate + " bytes/second.");
     long expectedRate = (FILE_SIZE * 1000L) / uploadDurationMs;
     assertTrue("The upload rate " + uploadRate +
         " is below the expected range of around " + expectedRate +
@@ -191,7 +179,7 @@ public class TestAzureFileSystemInstrumentation {
         uploadRate >= expectedRate);
     long uploadLatency = AzureMetricsTestUtil.getLongGaugeValue(getInstrumentation(),
         WASB_UPLOAD_LATENCY);
-    System.out.println("Upload latency: " + uploadLatency);
+    LOG.info("Upload latency: {}", uploadLatency);
     long expectedLatency = uploadDurationMs; // We're uploading less than a block.
     assertTrue("The upload latency " + uploadLatency +
         " should be greater than zero now that I've just uploaded a file.",
@@ -205,7 +193,7 @@ public class TestAzureFileSystemInstrumentation {
 
     // Read the file
     start = new Date();
-    InputStream inputStream = fs.open(filePath);
+    InputStream inputStream = getFileSystem().open(filePath);
     int count = 0;
     while (inputStream.read() >= 0) {
       count++;
@@ -228,7 +216,7 @@ public class TestAzureFileSystemInstrumentation {
         " bytes plus a little overhead.",
         bytesRead > (FILE_SIZE / 2) && bytesRead < (FILE_SIZE * 2));
     long downloadRate = AzureMetricsTestUtil.getLongGaugeValue(getInstrumentation(), WASB_DOWNLOAD_RATE);
-    System.out.println("Download rate: " + downloadRate + " bytes/second.");
+    LOG.info("Download rate: " + downloadRate + " bytes/second.");
     expectedRate = (FILE_SIZE * 1000L) / downloadDurationMs;
     assertTrue("The download rate " + downloadRate +
         " is below the expected range of around " + expectedRate +
@@ -238,7 +226,7 @@ public class TestAzureFileSystemInstrumentation {
         downloadRate >= expectedRate);
     long downloadLatency = AzureMetricsTestUtil.getLongGaugeValue(getInstrumentation(),
         WASB_DOWNLOAD_LATENCY);
-    System.out.println("Download latency: " + downloadLatency);
+    LOG.info("Download latency: " + downloadLatency);
     expectedLatency = downloadDurationMs; // We're downloading less than a block.
     assertTrue("The download latency " + downloadLatency +
         " should be greater than zero now that I've just downloaded a file.",
@@ -267,7 +255,7 @@ public class TestAzureFileSystemInstrumentation {
     getBandwidthGaugeUpdater().suppressAutoUpdate();
 
     // Create a file
-    OutputStream outputStream = fs.create(filePath);
+    OutputStream outputStream = getFileSystem().create(filePath);
     outputStream.write(new byte[FILE_SIZE]);
     outputStream.close();
 
@@ -286,16 +274,16 @@ public class TestAzureFileSystemInstrumentation {
         " bytes plus a little overhead.",
         totalBytesWritten >= FILE_SIZE && totalBytesWritten < (FILE_SIZE * 2));
     long uploadRate = AzureMetricsTestUtil.getLongGaugeValue(getInstrumentation(), WASB_UPLOAD_RATE);
-    System.out.println("Upload rate: " + uploadRate + " bytes/second.");
+    LOG.info("Upload rate: " + uploadRate + " bytes/second.");
     long uploadLatency = AzureMetricsTestUtil.getLongGaugeValue(getInstrumentation(),
         WASB_UPLOAD_LATENCY);
-    System.out.println("Upload latency: " + uploadLatency);
+    LOG.info("Upload latency: " + uploadLatency);
     assertTrue("The upload latency " + uploadLatency +
         " should be greater than zero now that I've just uploaded a file.",
         uploadLatency > 0);
 
     // Read the file
-    InputStream inputStream = fs.open(filePath);
+    InputStream inputStream = getFileSystem().open(filePath);
     int count = 0;
     while (inputStream.read() >= 0) {
       count++;
@@ -312,10 +300,10 @@ public class TestAzureFileSystemInstrumentation {
     long totalBytesRead = AzureMetricsTestUtil.getCurrentTotalBytesRead(getInstrumentation());
     assertEquals(FILE_SIZE, totalBytesRead);
     long downloadRate = AzureMetricsTestUtil.getLongGaugeValue(getInstrumentation(), WASB_DOWNLOAD_RATE);
-    System.out.println("Download rate: " + downloadRate + " bytes/second.");
+    LOG.info("Download rate: " + downloadRate + " bytes/second.");
     long downloadLatency = AzureMetricsTestUtil.getLongGaugeValue(getInstrumentation(),
         WASB_DOWNLOAD_LATENCY);
-    System.out.println("Download latency: " + downloadLatency);
+    LOG.info("Download latency: " + downloadLatency);
     assertTrue("The download latency " + downloadLatency +
         " should be greater than zero now that I've just downloaded a file.",
         downloadLatency > 0);
@@ -330,13 +318,14 @@ public class TestAzureFileSystemInstrumentation {
 
     // Create an empty file
     assertEquals(0, AzureMetricsTestUtil.getLongCounterValue(getInstrumentation(), WASB_FILES_CREATED));
-    assertTrue(fs.createNewFile(originalPath));
+    assertTrue(getFileSystem().createNewFile(originalPath));
     logOpResponseCount("Creating an empty file", base);
     base = assertWebResponsesInRange(base, 2, 20);
     assertEquals(1, AzureMetricsTestUtil.getLongCounterValue(getInstrumentation(), WASB_FILES_CREATED));
 
     // Rename the file
-    assertTrue(fs.rename(originalPath, destinationPath));
+    assertTrue(
+        ((FileSystem) getFileSystem()).rename(originalPath, destinationPath));
     // Varies: at the time of writing this code it takes 7 requests/responses.
     logOpResponseCount("Renaming a file", base);
     base = assertWebResponsesInRange(base, 2, 15);
@@ -351,7 +340,7 @@ public class TestAzureFileSystemInstrumentation {
     Path filePath = new Path("/metricsTest_delete");
 
     // Check existence
-    assertFalse(fs.exists(filePath));
+    assertFalse(getFileSystem().exists(filePath));
     // At the time of writing this code it takes 2 requests/responses to
     // check existence, which seems excessive, plus initial request for
     // container check.
@@ -359,17 +348,17 @@ public class TestAzureFileSystemInstrumentation {
     base = assertWebResponsesInRange(base, 1, 3);
 
     // Create an empty file
-    assertTrue(fs.createNewFile(filePath));
+    assertTrue(getFileSystem().createNewFile(filePath));
     base = getCurrentWebResponses();
 
     // Check existence again
-    assertTrue(fs.exists(filePath));
+    assertTrue(getFileSystem().exists(filePath));
     logOpResponseCount("Checking file existence for existent file", base);
     base = assertWebResponsesInRange(base, 1, 2);
 
     // Delete the file
     assertEquals(0, AzureMetricsTestUtil.getLongCounterValue(getInstrumentation(), WASB_FILES_DELETED));
-    assertTrue(fs.delete(filePath, false));
+    assertTrue(getFileSystem().delete(filePath, false));
     // At the time of writing this code it takes 4 requests/responses to
     // delete, which seems excessive. Check for range 1-4 for now.
     logOpResponseCount("Deleting a file", base);
@@ -388,21 +377,35 @@ public class TestAzureFileSystemInstrumentation {
     Path destDirName = new Path("/metricsTestDirectory_RenameFinal");
 
     // Create an empty directory
-    assertTrue(fs.mkdirs(originalDirName));
+    assertTrue(getFileSystem().mkdirs(originalDirName));
     base = getCurrentWebResponses();
 
     // Create an inner file
-    assertTrue(fs.createNewFile(innerFileName));
+    assertTrue(getFileSystem().createNewFile(innerFileName));
     base = getCurrentWebResponses();
 
     // Rename the directory
-    assertTrue(fs.rename(originalDirName, destDirName));
+    assertTrue(getFileSystem().rename(originalDirName, destDirName));
+
     // At the time of writing this code it takes 11 requests/responses
     // to rename the directory with one file. Check for range 1-20 for now.
     logOpResponseCount("Renaming a directory", base);
     base = assertWebResponsesInRange(base, 1, 20);
 
     assertNoErrors();
+  }
+
+  /**
+   * Recursive discovery of path depth
+   * @param path path to measure.
+   * @return depth, where "/" == 0.
+   */
+  int depth(Path path) {
+    if (path.isRoot()) {
+      return 0;
+    } else {
+      return 1 + depth(path.getParent());
+    }
   }
 
   @Test
@@ -414,8 +417,8 @@ public class TestAzureFileSystemInstrumentation {
     String leaseID = null;
     try {
       // Create a file
-      outputStream = fs.create(filePath);
-      leaseID = testAccount.acquireShortLease(fileName);
+      outputStream = getFileSystem().create(filePath);
+      leaseID = getTestAccount().acquireShortLease(fileName);
       try {
         outputStream.write(new byte[FILE_SIZE]);
         outputStream.close();
@@ -428,14 +431,14 @@ public class TestAzureFileSystemInstrumentation {
       assertEquals(0, AzureMetricsTestUtil.getLongCounterValue(getInstrumentation(), WASB_SERVER_ERRORS));
     } finally {
       if(leaseID != null){
-        testAccount.releaseLease(leaseID, fileName);
+        getTestAccount().releaseLease(leaseID, fileName);
       }
       IOUtils.closeStream(outputStream);
     }
   }
 
   private void logOpResponseCount(String opName, long base) {
-    System.out.println(opName + " took " + (getCurrentWebResponses() - base) +
+    LOG.info(opName + " took " + (getCurrentWebResponses() - base) +
         " web responses to complete.");
   }
 
@@ -500,7 +503,7 @@ public class TestAzureFileSystemInstrumentation {
   }
 
   private AzureFileSystemInstrumentation getInstrumentation() {
-    return ((NativeAzureFileSystem)fs).getInstrumentation();
+    return getFileSystem().getInstrumentation();
   }
 
   /**
