@@ -20,25 +20,34 @@ package org.apache.hadoop.fs.azure;
 
 import java.io.FileNotFoundException;
 
-import org.apache.hadoop.fs.FileSystem;
+import org.junit.Test;
+
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.junit.After;
-import org.junit.Test;
 
-public class TestFileSystemOperationsExceptionHandlingMultiThreaded
+/**
+ * Multithreaded operations on FS, verify failures are as expected.
+ */
+public class ITestFileSystemOperationsExceptionHandlingMultiThreaded
     extends AbstractWasbTestBase {
 
   FSDataInputStream inputStream = null;
 
-  private static Path testPath = new Path("testfile.dat");
-  private static Path testFolderPath = new Path("testfolder");
+  private Path testPath;
+  private Path testFolderPath;
 
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
+    testPath = path("testfile.dat");
+    testFolderPath = path("testfolder");
+  }
 
-  /*
+  /**
    * Helper method to creates an input stream to test various scenarios.
    */
   private void getInputStreamToTest(FileSystem fs, Path testPath) throws Throwable {
@@ -51,19 +60,21 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     inputStream = fs.open(testPath);
   }
 
-  /*
+  /**
    * Test to validate correct exception is thrown for Multithreaded read
-   * scenario for block blobs
+   * scenario for block blobs.
    */
   @Test(expected=FileNotFoundException.class)
   public void testMultiThreadedBlockBlobReadScenario() throws Throwable {
 
     AzureBlobStorageTestAccount testAccount = createTestAccount();
     fs = testAccount.getFileSystem();
-    Path testFilePath1 = new Path("test1.dat");
-
+    Path base = methodPath();
+    Path testFilePath1 = new Path(base, "test1.dat");
+    Path renamePath = new Path(base, "test2.dat");
     getInputStreamToTest(fs, testFilePath1);
-    Thread renameThread = new Thread(new RenameThread(fs, testFilePath1));
+    Thread renameThread = new Thread(
+        new RenameThread(fs, testFilePath1, renamePath));
     renameThread.start();
 
     renameThread.join();
@@ -72,9 +83,9 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     inputStream.read(readBuffer);
   }
 
-  /*
+  /**
    * Test to validate correct exception is thrown for Multithreaded seek
-   * scenario for block blobs
+   * scenario for block blobs.
    */
 
   @Test(expected=FileNotFoundException.class)
@@ -82,10 +93,13 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
 
     AzureBlobStorageTestAccount testAccount = createTestAccount();
     fs = testAccount.getFileSystem();
-    Path testFilePath1 = new Path("test1.dat");
+    Path base = methodPath();
+    Path testFilePath1 = new Path(base, "test1.dat");
+    Path renamePath = new Path(base, "test2.dat");
 
     getInputStreamToTest(fs, testFilePath1);
-    Thread renameThread = new Thread(new RenameThread(fs, testFilePath1));
+    Thread renameThread = new Thread(
+        new RenameThread(fs, testFilePath1, renamePath));
     renameThread.start();
 
     renameThread.join();
@@ -94,10 +108,10 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     inputStream.read();
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic multi threaded setPermission scenario
+  /**
+   * Tests basic multi threaded setPermission scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testMultiThreadedPageBlobSetPermissionScenario() throws Throwable {
     ExceptionHandlingTestHelper.createEmptyFile(ExceptionHandlingTestHelper.getPageBlobTestStorageAccount(),
         testPath);
@@ -109,10 +123,10 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     fs.setPermission(testPath, new FsPermission(FsAction.EXECUTE, FsAction.READ, FsAction.READ));
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic multi threaded setPermission scenario
+  /**
+   * Tests basic multi threaded setPermission scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testMultiThreadedBlockBlobSetPermissionScenario() throws Throwable {
     ExceptionHandlingTestHelper.createEmptyFile(createTestAccount(),
         testPath);
@@ -124,10 +138,10 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     fs.setPermission(testPath, new FsPermission(FsAction.EXECUTE, FsAction.READ, FsAction.READ));
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic multi threaded setPermission scenario
+  /**
+   * Tests basic multi threaded setPermission scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testMultiThreadedPageBlobOpenScenario() throws Throwable {
 
     ExceptionHandlingTestHelper.createEmptyFile(createTestAccount(),
@@ -143,10 +157,10 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     inputStream.close();
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic multi threaded setPermission scenario
+  /**
+   * Tests basic multi threaded setPermission scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testMultiThreadedBlockBlobOpenScenario() throws Throwable {
 
     ExceptionHandlingTestHelper.createEmptyFile(ExceptionHandlingTestHelper.getPageBlobTestStorageAccount(),
@@ -162,10 +176,10 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     inputStream.close();
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic multi threaded setOwner scenario
+  /**
+   * Tests basic multi threaded setOwner scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testMultiThreadedBlockBlobSetOwnerScenario() throws Throwable {
 
     ExceptionHandlingTestHelper.createEmptyFile(createTestAccount(), testPath);
@@ -177,10 +191,10 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     fs.setOwner(testPath, "testowner", "testgroup");
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic multi threaded setOwner scenario
+  /**
+   * Tests basic multi threaded setOwner scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testMultiThreadedPageBlobSetOwnerScenario() throws Throwable {
     ExceptionHandlingTestHelper.createEmptyFile(ExceptionHandlingTestHelper.getPageBlobTestStorageAccount(),
         testPath);
@@ -192,10 +206,10 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     fs.setOwner(testPath, "testowner", "testgroup");
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic multi threaded listStatus scenario
+  /**
+   * Tests basic multi threaded listStatus scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testMultiThreadedBlockBlobListStatusScenario() throws Throwable {
 
     ExceptionHandlingTestHelper.createTestFolder(createTestAccount(), testFolderPath);
@@ -207,10 +221,10 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     fs.listStatus(testFolderPath);
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic multi threaded listStatus scenario
+  /**
+   * Tests basic multi threaded listStatus scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testMultiThreadedPageBlobListStatusScenario() throws Throwable {
 
     ExceptionHandlingTestHelper.createTestFolder(ExceptionHandlingTestHelper.getPageBlobTestStorageAccount(),
@@ -223,20 +237,22 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     fs.listStatus(testFolderPath);
   }
 
-  /*
+  /**
    * Test to validate correct exception is thrown for Multithreaded read
-   * scenario for page blobs
+   * scenario for page blobs.
    */
-
   @Test(expected=FileNotFoundException.class)
   public void testMultiThreadedPageBlobReadScenario() throws Throwable {
 
     AzureBlobStorageTestAccount testAccount = ExceptionHandlingTestHelper.getPageBlobTestStorageAccount();
     fs = testAccount.getFileSystem();
-    Path testFilePath1 = new Path("test1.dat");
+    Path base = methodPath();
+    Path testFilePath1 = new Path(base, "test1.dat");
+    Path renamePath = new Path(base, "test2.dat");
 
     getInputStreamToTest(fs, testFilePath1);
-    Thread renameThread = new Thread(new RenameThread(fs, testFilePath1));
+    Thread renameThread = new Thread(
+        new RenameThread(fs, testFilePath1, renamePath));
     renameThread.start();
 
     renameThread.join();
@@ -244,9 +260,9 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     inputStream.read(readBuffer);
   }
 
-  /*
+  /**
    * Test to validate correct exception is thrown for Multithreaded seek
-   * scenario for page blobs
+   * scenario for page blobs.
    */
 
   @Test(expected=FileNotFoundException.class)
@@ -254,10 +270,13 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
 
     AzureBlobStorageTestAccount testAccount = ExceptionHandlingTestHelper.getPageBlobTestStorageAccount();
     fs = testAccount.getFileSystem();
-    Path testFilePath1 = new Path("test1.dat");
+    Path base = methodPath();
+    Path testFilePath1 = new Path(base, "test1.dat");
+    Path renamePath = new Path(base, "test2.dat");
 
     getInputStreamToTest(fs, testFilePath1);
-    Thread renameThread = new Thread(new RenameThread(fs, testFilePath1));
+    Thread renameThread = new Thread(
+        new RenameThread(fs, testFilePath1, renamePath));
     renameThread.start();
 
     renameThread.join();
@@ -269,7 +288,7 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     return AzureBlobStorageTestAccount.create();
   }
 
-  @After
+  @Override
   public void tearDown() throws Exception {
 
     if (inputStream != null) {
@@ -279,6 +298,7 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
     if (fs != null && fs.exists(testPath)) {
       fs.delete(testPath, true);
     }
+    super.tearDown();
   }
 }
 
@@ -287,20 +307,23 @@ public class TestFileSystemOperationsExceptionHandlingMultiThreaded
  */
 class RenameThread implements Runnable {
 
-  private FileSystem fs;
-  private Path testPath;
-  private Path renamePath = new Path("test2.dat");
+  private final FileSystem fs;
+  private final Path testPath;
+  private final Path renamePath;
 
-  public RenameThread(FileSystem fs, Path testPath) {
+  public RenameThread(FileSystem fs,
+      Path testPath,
+      Path renamePath) {
     this.fs = fs;
     this.testPath = testPath;
+    this.renamePath = renamePath;
   }
 
   @Override
   public void run(){
     try {
       fs.rename(testPath, renamePath);
-    }catch (Exception e) {
+    } catch (Exception e) {
       // Swallowing the exception as the
       // correctness of the test is controlled
       // by the other thread
