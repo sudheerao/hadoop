@@ -40,6 +40,7 @@ public class TestNativeAzureFileSystemConcurrencyLive
 
   private static final int THREAD_COUNT = 102;
   private static final int TEST_EXECUTION_TIMEOUT = 5000;
+
   @Override
   protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
     return AzureBlobStorageTestAccount.create();
@@ -128,57 +129,57 @@ public class TestNativeAzureFileSystemConcurrencyLive
       }
     }
   }
-}
 
-abstract class FileSystemTask<V> implements Callable<V> {
-  private final FileSystem fileSystem;
-  private final Path path;
+  abstract class FileSystemTask<V> implements Callable<V> {
+    private final FileSystem fileSystem;
+    private final Path path;
 
-  protected FileSystem getFileSystem() {
-    return this.fileSystem;
+    protected FileSystem getFileSystem() {
+      return this.fileSystem;
+    }
+
+    protected Path getFilePath() {
+      return this.path;
+    }
+
+    FileSystemTask(FileSystem fs, Path p) {
+      this.fileSystem = fs;
+      this.path = p;
+    }
+
+    public abstract V call() throws Exception;
   }
 
-  protected Path getFilePath() {
-    return this.path;
+  class DeleteFileTask extends FileSystemTask<Boolean> {
+
+    DeleteFileTask(FileSystem fs, Path p) {
+      super(fs, p);
+    }
+
+    @Override
+    public Boolean call() throws Exception {
+      return this.getFileSystem().delete(this.getFilePath(), false);
+    }
   }
 
-  FileSystemTask(FileSystem fs, Path p) {
-    this.fileSystem = fs;
-    this.path = p;
-  }
+  class CreateFileTask extends FileSystemTask<Void> {
+    CreateFileTask(FileSystem fs, Path p) {
+      super(fs, p);
+    }
 
-  public abstract V call() throws Exception;
-}
+    public Void call() throws Exception {
+      FileSystem fs = getFileSystem();
+      Path p = getFilePath();
 
-class DeleteFileTask extends FileSystemTask<Boolean> {
+      // Create an empty file and close the stream.
+      FSDataOutputStream stream = fs.create(p, true);
+      stream.close();
 
-  DeleteFileTask(FileSystem fs, Path p) {
-    super(fs, p);
-  }
+      // Delete the file.  We don't care if delete returns true or false.
+      // We just want to ensure the file does not exist.
+      this.getFileSystem().delete(this.getFilePath(), false);
 
-  @Override
-  public Boolean call() throws Exception {
-    return this.getFileSystem().delete(this.getFilePath(), false);
-  }
-}
-
-class CreateFileTask extends FileSystemTask<Void> {
-  CreateFileTask(FileSystem fs, Path p) {
-    super(fs, p);
-  }
-
-  public Void call() throws Exception {
-    FileSystem fs = getFileSystem();
-    Path p = getFilePath();
-
-    // Create an empty file and close the stream.
-    FSDataOutputStream stream = fs.create(p, true);
-    stream.close();
-
-    // Delete the file.  We don't care if delete returns true or false.
-    // We just want to ensure the file does not exist.
-    this.getFileSystem().delete(this.getFilePath(), false);
-
-    return null;
+      return null;
+    }
   }
 }

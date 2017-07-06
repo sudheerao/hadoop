@@ -23,6 +23,7 @@ import java.util.*;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
+import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 import org.apache.hadoop.fs.azure.metrics.AzureFileSystemInstrumentation;
 
 import junit.framework.*;
@@ -34,7 +35,7 @@ import org.junit.Test;
  * A simple benchmark to find out the difference in speed between block
  * and page blobs.
  */
-public class TestBlobTypeSpeedDifference extends AbstractWasbTestBase {
+public class ITestBlobTypeSpeedDifference extends AbstractWasbTestBase {
 
   @Override
   protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
@@ -107,8 +108,10 @@ public class TestBlobTypeSpeedDifference extends AbstractWasbTestBase {
    */
   private static TestResult writePageBlobTestFile(NativeAzureFileSystem fs,
       long size, long flushInterval) throws IOException {
+    Path testFile = AzureTestUtils.testBlobPath(fs,
+        "writePageBlobTestFile");
     return writeTestFile(fs,
-        AzureBlobStorageTestAccount.pageBlobPath("pageBlob"),
+        testFile,
         size, flushInterval);
   }
 

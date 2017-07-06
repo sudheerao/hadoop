@@ -38,6 +38,8 @@ import org.slf4j.LoggerFactory;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
 
+import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.*;
+
 /**
  * Abstract test class that provides basic setup and teardown of testing Azure
  * Storage account.  Each subclass defines a different set of test cases to run
@@ -57,19 +59,16 @@ public abstract class AbstractWasbTestBase {
   @Before
   public void setUp() throws Exception {
     testAccount = createTestAccount();
+    assumeNotNull(testAccount);
     if (testAccount != null) {
       fs = testAccount.getFileSystem();
     }
-    assumeNotNull(testAccount);
   }
 
   @After
   public void tearDown() throws Exception {
-    if (testAccount != null) {
-      testAccount.cleanup();
-      testAccount = null;
-      fs = null;
-    }
+    testAccount = cleanupTestAccount(testAccount);
+    fs = null;
   }
 
   public Configuration getConfiguration() {

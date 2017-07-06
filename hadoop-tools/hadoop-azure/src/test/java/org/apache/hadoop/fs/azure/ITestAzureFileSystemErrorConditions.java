@@ -20,7 +20,6 @@ package org.apache.hadoop.fs.azure;
 
 import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO_CONTAINER_MSG;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeNotNull;
 
@@ -44,21 +43,16 @@ import com.microsoft.azure.storage.OperationContext;
 import com.microsoft.azure.storage.SendingRequestEvent;
 import com.microsoft.azure.storage.StorageEvent;
 
-public class TestAzureFileSystemErrorConditions {
+import static org.apache.hadoop.test.LambdaTestUtils.intercept;
+
+public class ITestAzureFileSystemErrorConditions {
   private static final int ALL_THREE_FILE_SIZE = 1024;
 
   @Test
   public void testNoInitialize() throws Exception {
     AzureNativeFileSystemStore store = new AzureNativeFileSystemStore();
-    boolean passed = false;
-    try {
-      store.retrieveMetadata("foo");
-      passed = true;
-    } catch (AssertionError e) {
-    }
-    assertFalse(
-        "Doing an operation on the store should throw if not initalized.",
-        passed);
+    intercept(AssertionError.class,
+        () -> store.retrieveMetadata("foo"));
   }
 
   /**
@@ -89,8 +83,7 @@ public class TestAzureFileSystemErrorConditions {
     AzureNativeFileSystemStore store = new AzureNativeFileSystemStore();
     MockStorageInterface mockStorage = new MockStorageInterface();
     store.setAzureStorageInteractionLayer(mockStorage);
-    FileSystem fs = new NativeAzureFileSystem(store);
-    try {
+    try (FileSystem fs = new NativeAzureFileSystem(store)) {
       Configuration conf = new Configuration();
       AzureBlobStorageTestAccount.setMockAccountKey(conf);
       HashMap<String, String> metadata = new HashMap<String, String>();
@@ -99,19 +92,14 @@ public class TestAzureFileSystemErrorConditions {
       mockStorage.addPreExistingContainer(
           AzureBlobStorageTestAccount.getMockContainerUri(), metadata);
 
-      boolean passed = false;
-      try {
-        fs.initialize(new URI(AzureBlobStorageTestAccount.MOCK_WASB_URI), conf);
-        fs.listStatus(new Path("/"));
-        passed = true;
-      } catch (AzureException ex) {
-        assertTrue("Unexpected exception message: " + ex,
-            ex.getMessage().contains("unsupported version: 2090-04-05."));
-      }
-      assertFalse("Should've thrown an exception because of the wrong version.",
-          passed);
-    } finally {
-      fs.close();
+      AzureException ex = intercept(AzureException.class,
+          () -> {
+            fs.initialize(new URI(AzureBlobStorageTestAccount.MOCK_WASB_URI),
+                conf);
+            return fs.listStatus(new Path("/"));
+          });
+      GenericTestUtils.assertExceptionContains(
+          "unsupported version: 2090-04-05.", ex);
     }
   }
 

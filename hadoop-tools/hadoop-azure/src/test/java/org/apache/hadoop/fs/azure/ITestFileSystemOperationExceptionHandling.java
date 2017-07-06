@@ -30,19 +30,29 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
 
+import static org.apache.hadoop.fs.azure.ExceptionHandlingTestHelper.*;
 
-public class TestFileSystemOperationExceptionHandling
+/**
+ * Single threaded exception handling.
+ */
+public class ITestFileSystemOperationExceptionHandling
     extends AbstractWasbTestBase {
 
   private FSDataInputStream inputStream = null;
 
-  private static Path testPath = new Path("testfile.dat");
+  private Path testPath;
+  private Path testFolderPath;
 
-  private static Path testFolderPath = new Path("testfolder");
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
+    testPath = path("testfile.dat");
+    testFolderPath = path("testfolder");
+  }
 
-  /*
+  /**
    * Helper method that creates a InputStream to validate exceptions
-   * for various scenarios
+   * for various scenarios.
    */
   private void setupInputStreamToTest(AzureBlobStorageTestAccount testAccount)
       throws Exception {
@@ -50,8 +60,9 @@ public class TestFileSystemOperationExceptionHandling
     FileSystem fs = testAccount.getFileSystem();
 
     // Step 1: Create a file and write dummy data.
-    Path testFilePath1 = new Path("test1.dat");
-    Path testFilePath2 = new Path("test2.dat");
+    Path base = methodPath();
+    Path testFilePath1 = new Path(base, "test1.dat");
+    Path testFilePath2 = new Path(base, "test2.dat");
     FSDataOutputStream outputStream = fs.create(testFilePath1);
     String testString = "This is a test string";
     outputStream.write(testString.getBytes());
@@ -64,28 +75,28 @@ public class TestFileSystemOperationExceptionHandling
     fs.rename(testFilePath1, testFilePath2);
   }
 
-  /*
+  /**
    * Tests a basic single threaded read scenario for Page blobs.
    */
   @Test(expected=FileNotFoundException.class)
   public void testSingleThreadedPageBlobReadScenario() throws Throwable {
-    AzureBlobStorageTestAccount testAccount = ExceptionHandlingTestHelper.getPageBlobTestStorageAccount();
+    AzureBlobStorageTestAccount testAccount = getPageBlobTestStorageAccount();
     setupInputStreamToTest(testAccount);
     byte[] readBuffer = new byte[512];
     inputStream.read(readBuffer);
   }
 
-  /*
+  /**
    * Tests a basic single threaded seek scenario for Page blobs.
    */
   @Test(expected=FileNotFoundException.class)
   public void testSingleThreadedPageBlobSeekScenario() throws Throwable {
-    AzureBlobStorageTestAccount testAccount = ExceptionHandlingTestHelper.getPageBlobTestStorageAccount();
+    AzureBlobStorageTestAccount testAccount = getPageBlobTestStorageAccount();
     setupInputStreamToTest(testAccount);
     inputStream.seek(5);
   }
 
-  /*
+  /**
    * Test a basic single thread seek scenario for Block blobs.
    */
   @Test(expected=FileNotFoundException.class)
@@ -97,7 +108,7 @@ public class TestFileSystemOperationExceptionHandling
     inputStream.read();
   }
 
-  /*
+  /**
    * Tests a basic single threaded read scenario for Block blobs.
    */
   @Test(expected=FileNotFoundException.class)
@@ -108,78 +119,81 @@ public class TestFileSystemOperationExceptionHandling
     inputStream.read(readBuffer);
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic single threaded setPermission scenario
+  /**
+   * Tests basic single threaded setPermission scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testSingleThreadedBlockBlobSetPermissionScenario() throws Throwable {
 
-    ExceptionHandlingTestHelper.createEmptyFile(createTestAccount(), testPath);
+    createEmptyFile(createTestAccount(), testPath);
     fs.delete(testPath, true);
-    fs.setPermission(testPath, new FsPermission(FsAction.EXECUTE, FsAction.READ, FsAction.READ));
+    fs.setPermission(testPath,
+        new FsPermission(FsAction.EXECUTE, FsAction.READ, FsAction.READ));
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic single threaded setPermission scenario
+  /**
+   * Tests basic single threaded setPermission scenario.
    */
-  public void testSingleThreadedPageBlobSetPermissionScenario() throws Throwable {
-    ExceptionHandlingTestHelper.createEmptyFile(ExceptionHandlingTestHelper.getPageBlobTestStorageAccount(),
-        testPath);
+  @Test(expected = FileNotFoundException.class)
+  public void testSingleThreadedPageBlobSetPermissionScenario()
+      throws Throwable {
+    createEmptyFile(getPageBlobTestStorageAccount(), testPath);
     fs.delete(testPath, true);
     fs.setOwner(testPath, "testowner", "testgroup");
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic single threaded setPermission scenario
+  /**
+   * Tests basic single threaded setPermission scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testSingleThreadedBlockBlobSetOwnerScenario() throws Throwable {
 
-    ExceptionHandlingTestHelper.createEmptyFile(createTestAccount(), testPath);
+    createEmptyFile(createTestAccount(), testPath);
     fs.delete(testPath, true);
     fs.setOwner(testPath, "testowner", "testgroup");
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Tests basic single threaded setPermission scenario
+  /**
+   * Tests basic single threaded setPermission scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testSingleThreadedPageBlobSetOwnerScenario() throws Throwable {
-    ExceptionHandlingTestHelper.createEmptyFile(ExceptionHandlingTestHelper.getPageBlobTestStorageAccount(),
+    createEmptyFile(getPageBlobTestStorageAccount(),
         testPath);
     fs.delete(testPath, true);
-    fs.setPermission(testPath, new FsPermission(FsAction.EXECUTE, FsAction.READ, FsAction.READ));
+    fs.setPermission(testPath,
+        new FsPermission(FsAction.EXECUTE, FsAction.READ, FsAction.READ));
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Test basic single threaded listStatus scenario
+  /**
+   * Test basic single threaded listStatus scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testSingleThreadedBlockBlobListStatusScenario() throws Throwable {
-    ExceptionHandlingTestHelper.createTestFolder(createTestAccount(), testFolderPath);
-    fs.delete(testFolderPath, true);
-    fs.listStatus(testFolderPath);
-  }
-
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Test basica single threaded listStatus scenario
-   */
-  public void testSingleThreadedPageBlobListStatusScenario() throws Throwable {
-    ExceptionHandlingTestHelper.createTestFolder(ExceptionHandlingTestHelper.getPageBlobTestStorageAccount(),
+    createTestFolder(createTestAccount(),
         testFolderPath);
     fs.delete(testFolderPath, true);
     fs.listStatus(testFolderPath);
   }
 
-  @Test
-  /*
-   * Test basic single threaded listStatus scenario
+  /**
+   * Test basic single threaded listStatus scenario.
    */
+  @Test(expected = FileNotFoundException.class)
+  public void testSingleThreadedPageBlobListStatusScenario() throws Throwable {
+    createTestFolder(getPageBlobTestStorageAccount(),
+        testFolderPath);
+    fs.delete(testFolderPath, true);
+    fs.listStatus(testFolderPath);
+  }
+
+  /**
+   * Test basic single threaded listStatus scenario.
+   */
+  @Test
   public void testSingleThreadedBlockBlobRenameScenario() throws Throwable {
 
-    ExceptionHandlingTestHelper.createEmptyFile(createTestAccount(),
+    createEmptyFile(createTestAccount(),
         testPath);
     Path dstPath = new Path("dstFile.dat");
     fs.delete(testPath, true);
@@ -187,13 +201,13 @@ public class TestFileSystemOperationExceptionHandling
     Assert.assertFalse(renameResult);
   }
 
-  @Test
-  /*
-   * Test basic single threaded listStatus scenario
+  /**
+   * Test basic single threaded listStatus scenario.
    */
+  @Test
   public void testSingleThreadedPageBlobRenameScenario() throws Throwable {
 
-    ExceptionHandlingTestHelper.createEmptyFile(ExceptionHandlingTestHelper.getPageBlobTestStorageAccount(),
+    createEmptyFile(getPageBlobTestStorageAccount(),
         testPath);
     Path dstPath = new Path("dstFile.dat");
     fs.delete(testPath, true);
@@ -201,51 +215,51 @@ public class TestFileSystemOperationExceptionHandling
     Assert.assertFalse(renameResult);
   }
 
-  @Test
-  /*
-   * Test basic single threaded listStatus scenario
+  /**
+   * Test basic single threaded listStatus scenario.
    */
+  @Test
   public void testSingleThreadedBlockBlobDeleteScenario() throws Throwable {
 
-    ExceptionHandlingTestHelper.createEmptyFile(createTestAccount(),
+    createEmptyFile(createTestAccount(),
         testPath);
     fs.delete(testPath, true);
     boolean deleteResult = fs.delete(testPath, true);
     Assert.assertFalse(deleteResult);
   }
 
-  @Test
-  /*
-   * Test basic single threaded listStatus scenario
+  /**
+   * Test basic single threaded listStatus scenario.
    */
+  @Test
   public void testSingleThreadedPageBlobDeleteScenario() throws Throwable {
 
-    ExceptionHandlingTestHelper.createEmptyFile(ExceptionHandlingTestHelper.getPageBlobTestStorageAccount(),
+    createEmptyFile(getPageBlobTestStorageAccount(),
         testPath);
     fs.delete(testPath, true);
     boolean deleteResult = fs.delete(testPath, true);
     Assert.assertFalse(deleteResult);
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Test basic single threaded listStatus scenario
+  /**
+   * Test basic single threaded listStatus scenario.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testSingleThreadedBlockBlobOpenScenario() throws Throwable {
 
-    ExceptionHandlingTestHelper.createEmptyFile(createTestAccount(),
+    createEmptyFile(createTestAccount(),
         testPath);
     fs.delete(testPath, true);
     inputStream = fs.open(testPath);
   }
 
-  @Test(expected=FileNotFoundException.class)
-  /*
-   * Test basic single threaded listStatus scenario
+  /**
+   * Test delete then open a file.
    */
+  @Test(expected = FileNotFoundException.class)
   public void testSingleThreadedPageBlobOpenScenario() throws Throwable {
 
-    ExceptionHandlingTestHelper.createEmptyFile(ExceptionHandlingTestHelper.getPageBlobTestStorageAccount(),
+    createEmptyFile(getPageBlobTestStorageAccount(),
         testPath);
     fs.delete(testPath, true);
     inputStream = fs.open(testPath);
@@ -260,10 +274,12 @@ public class TestFileSystemOperationExceptionHandling
     if (fs != null && fs.exists(testPath)) {
       fs.delete(testPath, true);
     }
+    super.tearDown();
   }
 
   @Override
-  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+  protected AzureBlobStorageTestAccount createTestAccount()
+      throws Exception {
     return AzureBlobStorageTestAccount.create();
   }
 }

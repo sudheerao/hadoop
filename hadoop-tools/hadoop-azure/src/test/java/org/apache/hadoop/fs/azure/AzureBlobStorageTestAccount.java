@@ -173,6 +173,7 @@ public final class AzureBlobStorageTestAccount implements AutoCloseable,
     return new Path("/" + DEFAULT_PAGE_BLOB_DIRECTORY);
   }
 
+  @Deprecated
   public static Path pageBlobPath(String fileName) {
     return new Path(pageBlobPath(), fileName);
   }

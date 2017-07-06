@@ -29,27 +29,52 @@ import java.util.EnumSet;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.AzureBlobStorageTestAccount.CreateOptions;
+import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
+import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
+
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 
 import com.microsoft.azure.storage.blob.BlobOutputStream;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.CloudBlockBlob;
+import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 /**
  * Tests that WASB creates containers only if needed.
  */
-public class TestContainerChecks {
+public class ITestContainerChecks {
   private AzureBlobStorageTestAccount testAccount;
   private boolean runningInSASMode = false;
+  @Rule
+  public TestName methodName = new TestName();
+
+
+  @BeforeClass
+  public static void nameTestThread() {
+    Thread.currentThread().setName("JUnit");
+  }
+
+  /**
+   * Set the timeout for every test.
+   */
+  @Rule
+  public Timeout testTimeout = new Timeout(
+      AzureTestConstants.AZURE_TEST_TIMEOUT);
+
+  @Before
+  public void nameThread() {
+    Thread.currentThread().setName("JUnit-" + methodName.getMethodName());
+  }
+
   @After
   public void tearDown() throws Exception {
-    if (testAccount != null) {
-      testAccount.cleanup();
-      testAccount = null;
-    }
+    testAccount = AzureTestUtils.cleanup(testAccount);
   }
 
   @Before
@@ -60,8 +85,7 @@ public class TestContainerChecks {
 
   @Test
   public void testContainerExistAfterDoesNotExist() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.create("",
-        EnumSet.noneOf(CreateOptions.class));
+    testAccount = blobStorageTestAccount();
     assumeNotNull(testAccount);
     CloudBlobContainer container = testAccount.getRealContainer();
     FileSystem fs = testAccount.getFileSystem();
@@ -93,10 +117,15 @@ public class TestContainerChecks {
     assertTrue(container.exists());
   }
 
+  protected AzureBlobStorageTestAccount blobStorageTestAccount()
+      throws Exception {
+    return AzureBlobStorageTestAccount.create("",
+        EnumSet.noneOf(CreateOptions.class));
+  }
+
   @Test
   public void testContainerCreateAfterDoesNotExist() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.create("",
-        EnumSet.noneOf(CreateOptions.class));
+    testAccount = blobStorageTestAccount();
     assumeNotNull(testAccount);
     CloudBlobContainer container = testAccount.getRealContainer();
     FileSystem fs = testAccount.getFileSystem();
@@ -125,8 +154,7 @@ public class TestContainerChecks {
 
   @Test
   public void testContainerCreateOnWrite() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.create("",
-        EnumSet.noneOf(CreateOptions.class));
+    testAccount = blobStorageTestAccount();
     assumeNotNull(testAccount);
     CloudBlobContainer container = testAccount.getRealContainer();
     FileSystem fs = testAccount.getFileSystem();
@@ -145,19 +173,21 @@ public class TestContainerChecks {
     assertFalse(container.exists());
 
     // Neither should a read.
+    Path foo = new Path("/testContainerCreateOnWrite-foo");
+    Path bar = new Path("/testContainerCreateOnWrite-bar");;
     try {
-      fs.open(new Path("/foo"));
+      fs.open(foo);
       assertFalse("Should've thrown.", true);
     } catch (FileNotFoundException ex) {
     }
     assertFalse(container.exists());
 
     // Neither should a rename
-    assertFalse(fs.rename(new Path("/foo"), new Path("/bar")));
+    assertFalse(fs.rename(foo, bar));
     assertFalse(container.exists());
 
     // But a write should.
-    assertTrue(fs.createNewFile(new Path("/foo")));
+    assertTrue(fs.createNewFile(foo));
     assertTrue(container.exists());
   }
 
@@ -176,7 +206,7 @@ public class TestContainerChecks {
 
     // A write should just fail
     try {
-      fs.createNewFile(new Path("/foo"));
+      fs.createNewFile(new Path("/testContainerChecksWithSas-foo"));
       assertFalse("Should've thrown.", true);
     } catch (AzureException ex) {
     }

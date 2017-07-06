@@ -446,4 +446,22 @@ public final class AzureTestUtils extends Assert {
     return null;
   }
 
+
+  /**
+   * Clean up the test account; any thrown exceptions are caught and
+   * logged.
+   * @param testAccount test account
+   * @return null, so that any fields can be reset.
+   */
+  public static AzureBlobStorageTestAccount cleanupTestAccount(
+      AzureBlobStorageTestAccount testAccount) {
+    if (testAccount != null) {
+      try {
+        testAccount.cleanup();
+      } catch (Exception e) {
+        LOG.error("While cleaning up test account: ", e);
+      }
+    }
+    return null;
+  }
 }

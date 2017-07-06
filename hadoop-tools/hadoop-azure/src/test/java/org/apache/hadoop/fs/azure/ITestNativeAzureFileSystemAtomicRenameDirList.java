@@ -22,14 +22,20 @@ import java.io.IOException;
 import java.net.URI;
 
 import org.apache.hadoop.conf.Configuration;
+
+import org.junit.Assert;
 import org.junit.Test;
 
-public class TestNativeAzureFileSystemAtomicRenameDirList
+/**
+ * Test atomic renaming.
+ */
+public class ITestNativeAzureFileSystemAtomicRenameDirList
     extends AbstractWasbTestBase {
 
   // HBase-site config controlling HBase root dir
   private static final String HBASE_ROOT_DIR_CONF_STRING = "hbase.rootdir";
-  private static final String HBASE_ROOT_DIR_VALUE_ON_DIFFERENT_FS = "wasb://somedifferentfilesystem.blob.core.windows.net/hbase";
+  private static final String HBASE_ROOT_DIR_VALUE_ON_DIFFERENT_FS =
+      "wasb://somedifferentfilesystem.blob.core.windows.net/hbase";
 
   @Override
   protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
@@ -38,7 +44,7 @@ public class TestNativeAzureFileSystemAtomicRenameDirList
 
   @Test
   public void testAzureNativeStoreIsAtomicRenameKeyDoesNotThrowNPEOnInitializingWithNonDefaultURI () throws IOException {
-    NativeAzureFileSystem azureFs = (NativeAzureFileSystem)fs;
+    NativeAzureFileSystem azureFs = fs;
     AzureNativeFileSystemStore azureStore = azureFs.getStore();
     Configuration conf = fs.getConf();
     conf.set(HBASE_ROOT_DIR_CONF_STRING, HBASE_ROOT_DIR_VALUE_ON_DIFFERENT_FS);

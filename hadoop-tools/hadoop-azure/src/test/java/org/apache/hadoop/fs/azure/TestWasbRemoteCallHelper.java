@@ -53,7 +53,7 @@ import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.times;
 
 /**
- * Test class to hold all WasbRemoteCallHelper tests
+ * Test class to hold all WasbRemoteCallHelper tests.
  */
 public class TestWasbRemoteCallHelper
     extends AbstractWasbTestBase {
