@@ -35,7 +35,7 @@ import java.util.concurrent.Future;
 /***
  * Test class to hold all Live Azure storage concurrency tests.
  */
-public class TestNativeAzureFileSystemConcurrencyLive
+public class ITestNativeAzureFileSystemConcurrencyLive
     extends AbstractWasbTestBase {
 
   private static final int THREAD_COUNT = 102;

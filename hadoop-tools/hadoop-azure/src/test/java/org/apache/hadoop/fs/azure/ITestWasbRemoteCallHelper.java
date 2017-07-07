@@ -55,7 +55,7 @@ import static org.mockito.Mockito.times;
 /**
  * Test class to hold all WasbRemoteCallHelper tests.
  */
-public class TestWasbRemoteCallHelper
+public class ITestWasbRemoteCallHelper
     extends AbstractWasbTestBase {
   public static final String EMPTY_STRING = "";
   private static final int INVALID_HTTP_STATUS_CODE_999 = 999;
@@ -68,10 +68,12 @@ public class TestWasbRemoteCallHelper
     return AzureBlobStorageTestAccount.create(conf);
   }
 
-  @Before
-  public void beforeMethod() {
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
     boolean useSecureMode = fs.getConf().getBoolean(KEY_USE_SECURE_MODE, false);
-    boolean useAuthorization = fs.getConf().getBoolean(NativeAzureFileSystem.KEY_AZURE_AUTHORIZATION, false);
+    boolean useAuthorization = fs.getConf()
+        .getBoolean(NativeAzureFileSystem.KEY_AZURE_AUTHORIZATION, false);
     Assume.assumeTrue("Test valid when both SecureMode and Authorization are enabled .. skipping",
         useSecureMode && useAuthorization);
   }
@@ -80,7 +82,7 @@ public class TestWasbRemoteCallHelper
   public ExpectedException expectedEx = ExpectedException.none();
 
   /**
-   * Test invalid status-code
+   * Test invalid status-code.
    * @throws Throwable
    */
   @Test // (expected = WasbAuthorizationException.class)
@@ -91,15 +93,17 @@ public class TestWasbRemoteCallHelper
     // set up mocks
     HttpClient mockHttpClient = Mockito.mock(HttpClient.class);
     HttpResponse mockHttpResponse = Mockito.mock(HttpResponse.class);
-    Mockito.when(mockHttpClient.execute(Mockito.<HttpGet>any())).thenReturn(mockHttpResponse);
-    Mockito.when(mockHttpResponse.getStatusLine()).thenReturn(newStatusLine(INVALID_HTTP_STATUS_CODE_999));
+    Mockito.when(mockHttpClient.execute(Mockito.<HttpGet>any()))
+        .thenReturn(mockHttpResponse);
+    Mockito.when(mockHttpResponse.getStatusLine())
+        .thenReturn(newStatusLine(INVALID_HTTP_STATUS_CODE_999));
     // finished setting up mocks
 
     performop(mockHttpClient);
   }
 
   /**
-   * Test invalid Content-Type
+   * Test invalid Content-Type.
    * @throws Throwable
    */
   @Test // (expected = WasbAuthorizationException.class)
@@ -120,7 +124,7 @@ public class TestWasbRemoteCallHelper
   }
 
   /**
-   * Test missing Content-Length
+   * Test missing Content-Length.
    * @throws Throwable
    */
   @Test // (expected = WasbAuthorizationException.class)
@@ -141,7 +145,7 @@ public class TestWasbRemoteCallHelper
   }
 
   /**
-   * Test Content-Length exceeds max
+   * Test Content-Length exceeds max.
    * @throws Throwable
    */
   @Test // (expected = WasbAuthorizationException.class)
@@ -187,7 +191,7 @@ public class TestWasbRemoteCallHelper
   }
 
   /**
-   * Test valid JSON response
+   * Test valid JSON response.
    * @throws Throwable
    */
   @Test
@@ -216,7 +220,7 @@ public class TestWasbRemoteCallHelper
   }
 
   /**
-   * Test malformed JSON response
+   * Test malformed JSON response.
    * @throws Throwable
    */
   @Test // (expected = WasbAuthorizationException.class)
@@ -246,7 +250,7 @@ public class TestWasbRemoteCallHelper
   }
 
   /**
-   * Test valid JSON response failure response code
+   * Test valid JSON response failure response code.
    * @throws Throwable
    */
   @Test // (expected = WasbAuthorizationException.class)

@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.azure;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystemContractBaseTest;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
 import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 
 import org.junit.After;
@@ -68,10 +69,14 @@ public class ITestNativeAzureFileSystemContractPageBlobLive extends
     basePath = AzureTestUtils.testPath(fs, "filesystemcontractpageblob");
   }
 
-  @After
+  @Override
   public void tearDown() throws Exception {
     testAccount = AzureTestUtils.cleanup(testAccount);
     fs = null;
+  }
+
+  protected int getGlobalTimeout() {
+    return AzureTestConstants.AZURE_TEST_TIMEOUT;
   }
 
   @Override

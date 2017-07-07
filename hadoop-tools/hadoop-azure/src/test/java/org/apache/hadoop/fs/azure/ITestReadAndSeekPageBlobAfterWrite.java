@@ -103,7 +103,7 @@ public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
   public void testReadAfterWriteRandomData() throws IOException {
 
     // local shorthand
-    final int PDS = PAGE_DATA_SIZE;
+    final int pds = PAGE_DATA_SIZE;
 
     // Test for sizes at and near page boundaries
     int[] dataSizes = {
@@ -113,13 +113,13 @@ public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
 
         // Near first physical page boundary (because the implementation
         // stores PDS + the page header size bytes on each page).
-        PDS - 1, PDS, PDS + 1, PDS + 2, PDS + 3,
+        pds - 1, pds, pds + 1, pds + 2, pds + 3,
 
         // near second physical page boundary
-        (2 * PDS) - 1, (2 * PDS), (2 * PDS) + 1, (2 * PDS) + 2, (2 * PDS) + 3,
+        (2 * pds) - 1, (2 * pds), (2 * pds) + 1, (2 * pds) + 2, (2 * pds) + 3,
 
         // near tenth physical page boundary
-        (10 * PDS) - 1, (10 * PDS), (10 * PDS) + 1, (10 * PDS) + 2, (10 * PDS) + 3,
+        (10 * pds) - 1, (10 * pds), (10 * pds) + 1, (10 * pds) + 2, (10 * pds) + 3,
 
         // test one big size, >> 4MB (an internal buffer size in the code)
         MAX_BYTES
@@ -244,15 +244,13 @@ public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
    * The syncInterval is the number of writes after which to call hflush to
    * force the data to storage.
    */
-  private void writeAndReadOneFile(int numWrites, int recordLength, int syncInterval) throws IOException {
-    final int NUM_WRITES = numWrites;
-    final int RECORD_LENGTH = recordLength;
-    final int SYNC_INTERVAL = syncInterval;
+  private void writeAndReadOneFile(int numWrites,
+      int recordLength, int syncInterval) throws IOException {
 
     // A lower bound on the minimum time we think it will take to do
     // a write to Azure storage.
     final long MINIMUM_EXPECTED_TIME = 20;
-    LOG.info("Writing " + NUM_WRITES * RECORD_LENGTH + " bytes to " + blobPath.getName());
+    LOG.info("Writing " + numWrites * recordLength + " bytes to " + blobPath.getName());
     FSDataOutputStream output = fs.create(blobPath);
     int writesSinceHFlush = 0;
     try {
@@ -261,11 +259,11 @@ public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
       // to test concurrent execution gates.
       output.flush();
       output.hflush();
-      for (int i = 0; i < NUM_WRITES; i++) {
-        output.write(randomData, i * RECORD_LENGTH, RECORD_LENGTH);
+      for (int i = 0; i < numWrites; i++) {
+        output.write(randomData, i * recordLength, recordLength);
         writesSinceHFlush++;
         output.flush();
-        if ((i % SYNC_INTERVAL) == 0) {
+        if ((i % syncInterval) == 0) {
           output.hflush();
           writesSinceHFlush = 0;
         }
@@ -285,7 +283,7 @@ public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
 
     // Read the data back and check it.
     FSDataInputStream stream = fs.open(blobPath);
-    int SIZE = NUM_WRITES * RECORD_LENGTH;
+    int SIZE = numWrites * recordLength;
     byte[] b = new byte[SIZE];
     try {
       stream.seek(0);

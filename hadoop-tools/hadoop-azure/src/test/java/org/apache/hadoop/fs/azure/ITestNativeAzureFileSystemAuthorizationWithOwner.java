@@ -30,7 +30,7 @@ import static org.junit.Assert.assertEquals;
 /**
  * Test class that runs wasb authorization tests with owner check enabled.
  */
-public class TestNativeAzureFileSystemAuthorizationWithOwner
+public class ITestNativeAzureFileSystemAuthorizationWithOwner
   extends TestNativeAzureFileSystemAuthorization {
 
   @Before

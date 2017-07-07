@@ -21,10 +21,14 @@ package org.apache.hadoop.fs.azure.contract;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.contract.AbstractContractAppendTest;
 import org.apache.hadoop.fs.contract.AbstractFSContract;
-import org.junit.Test;
 import static org.apache.hadoop.fs.contract.ContractTestUtils.skip;
 
+/**
+ * Append test, skipping one of them.
+ */
+
 public class ITestAzureNativeContractAppend extends AbstractContractAppendTest {
+
   @Override
   protected AbstractFSContract createContract(Configuration conf) {
     return new NativeAzureFileSystemContract(conf);

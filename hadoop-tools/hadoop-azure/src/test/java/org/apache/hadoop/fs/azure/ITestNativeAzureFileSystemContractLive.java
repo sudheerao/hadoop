@@ -22,6 +22,7 @@ import static org.junit.Assume.assumeNotNull;
 
 import org.apache.hadoop.fs.FileSystemContractBaseTest;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
 import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 
 import org.junit.After;
@@ -46,7 +47,7 @@ public class ITestNativeAzureFileSystemContractLive extends
     Thread.currentThread().setName("JUnit-" + methodName.getMethodName());
   }
 
-    @Before
+  @Before
   public void setUp() throws Exception {
     nameThread();
     testAccount = AzureBlobStorageTestAccount.create();
@@ -59,7 +60,7 @@ public class ITestNativeAzureFileSystemContractLive extends
             new Path("NativeAzureFileSystemContractLive")));
   }
 
-  @After
+  @Override
   public void tearDown() throws Exception {
     super.tearDown();
     testAccount = AzureTestUtils.cleanup(testAccount);
@@ -69,6 +70,10 @@ public class ITestNativeAzureFileSystemContractLive extends
   @Override
   public Path getTestBaseDir() {
     return basePath;
+  }
+
+  protected int getGlobalTimeout() {
+    return AzureTestConstants.AZURE_TEST_TIMEOUT;
   }
 
   /**

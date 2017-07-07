@@ -27,8 +27,6 @@ import java.io.OutputStream;
 
 import org.apache.hadoop.fs.Path;
 
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 

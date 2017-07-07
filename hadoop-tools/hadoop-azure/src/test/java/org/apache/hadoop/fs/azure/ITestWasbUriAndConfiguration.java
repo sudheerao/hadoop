@@ -36,6 +36,7 @@ import java.util.Date;
 import java.util.EnumSet;
 import java.io.File;
 
+import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 import org.apache.hadoop.security.ProviderUtils;
 import org.apache.hadoop.security.alias.CredentialProvider;
 import org.apache.hadoop.security.alias.CredentialProviderFactory;
@@ -57,7 +58,7 @@ import org.junit.rules.TemporaryFolder;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.CloudBlockBlob;
 
-public class TestWasbUriAndConfiguration {
+public class ITestWasbUriAndConfiguration {
 
   private static final int FILE_SIZE = 4096;
   private static final String PATH_DELIMITER = "/";
@@ -73,10 +74,7 @@ public class TestWasbUriAndConfiguration {
 
   @After
   public void tearDown() throws Exception {
-    if (testAccount != null) {
-      testAccount.cleanup();
-      testAccount = null;
-    }
+    testAccount = AzureTestUtils.cleanupTestAccount(testAccount);
   }
 
   @Before

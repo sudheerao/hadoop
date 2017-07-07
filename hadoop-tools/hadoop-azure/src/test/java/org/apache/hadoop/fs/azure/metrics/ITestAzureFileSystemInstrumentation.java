@@ -57,6 +57,10 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Instrumentation test, changing state of time and verifying metrics are
+ * consistent.
+ */
 public class ITestAzureFileSystemInstrumentation extends AbstractWasbTestBase {
 
   protected static final Logger LOG =
@@ -438,8 +442,8 @@ public class ITestAzureFileSystemInstrumentation extends AbstractWasbTestBase {
   }
 
   private void logOpResponseCount(String opName, long base) {
-    LOG.info(opName + " took " + (getCurrentWebResponses() - base) +
-        " web responses to complete.");
+    LOG.info("{}  took {} web responses to complete.",
+        opName, getCurrentWebResponses() - base);
   }
 
   /**
@@ -455,7 +459,7 @@ public class ITestAzureFileSystemInstrumentation extends AbstractWasbTestBase {
    * Gets the current value of the wasb_web_responses counter.
    */
   private long getCurrentWebResponses() {
-	    return AzureMetricsTestUtil.getCurrentWebResponses(getInstrumentation());
+      return AzureMetricsTestUtil.getCurrentWebResponses(getInstrumentation());
   }
 
   /**

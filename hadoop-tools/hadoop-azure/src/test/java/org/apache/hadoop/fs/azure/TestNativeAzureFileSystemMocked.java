@@ -25,7 +25,7 @@ import org.junit.Ignore;
  * Run {@link NativeAzureFileSystemBaseTest} tests against a mocked store,
  * skipping tests of unsupported features
  */
-public class ITestNativeAzureFileSystemMocked extends
+public class TestNativeAzureFileSystemMocked extends
     NativeAzureFileSystemBaseTest {
 
   @Override

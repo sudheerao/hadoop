@@ -22,7 +22,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.contract.AbstractContractOpenTest;
 import org.apache.hadoop.fs.contract.AbstractFSContract;
 
+/**
+ * Contract test.
+ */
 public class ITestAzureNativeContractOpen extends AbstractContractOpenTest {
+
   @Override
   protected AbstractFSContract createContract(Configuration conf) {
     return new NativeAzureFileSystemContract(conf);

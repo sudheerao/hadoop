@@ -346,10 +346,10 @@ public class ITestFileSystemOperationsExceptionHandlingMultiThreaded
   }
 
   class DeleteThread implements Runnable {
-    private FileSystem fs;
-    private Path testPath;
+    private final FileSystem fs;
+    private final Path testPath;
 
-    public DeleteThread(FileSystem fs, Path testPath) {
+    DeleteThread(FileSystem fs, Path testPath) {
       this.fs = fs;
       this.testPath = testPath;
     }

@@ -30,6 +30,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.junit.Assert;
 import org.junit.Test;
 
+/**
+ * Windows only tests of shell scripts to provide decryption keys.
+ */
 public class TestShellDecryptionKeyProvider {
   public static final Log LOG = LogFactory
       .getLog(TestShellDecryptionKeyProvider.class);

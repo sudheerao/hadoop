@@ -34,11 +34,10 @@ import org.junit.Test;
 
 import com.microsoft.azure.storage.StorageException;
 
-/*
- * Tests the Native Azure file system (WASB) against an actual blob store if
- * provided in the environment.
+/**
+ * Tests the Native Azure file system (WASB) against an actual blob store.
  */
-public class TestNativeAzureFileSystemLive extends
+public class ITestNativeAzureFileSystemLive extends
     NativeAzureFileSystemBaseTest {
 
   @Override
@@ -49,12 +48,12 @@ public class TestNativeAzureFileSystemLive extends
   @Test
   public void testLazyRenamePendingCanOverwriteExistingFile()
     throws Exception {
-    final String SRC_FILE_KEY = "srcFile";
-    final String DST_FILE_KEY = "dstFile";
-    Path srcPath = path(SRC_FILE_KEY);
+    final String srcFile = "srcFile";
+    final String dstFile = "dstFile";
+    Path srcPath = path(srcFile);
     FSDataOutputStream srcStream = fs.create(srcPath);
     assertTrue(fs.exists(srcPath));
-    Path dstPath = path(DST_FILE_KEY);
+    Path dstPath = path(dstFile);
     FSDataOutputStream dstStream = fs.create(dstPath);
     assertTrue(fs.exists(dstPath));
     NativeAzureFileSystem nfs = (NativeAzureFileSystem)fs;
@@ -81,7 +80,7 @@ public class TestNativeAzureFileSystemLive extends
     // Create the file
     Path path = methodPath();
     fs.create(path);
-    assertPathExists("test filke", path);
+    assertPathExists("test file", path);
     NativeAzureFileSystem nfs = fs;
     final String fullKey = nfs.pathToKey(nfs.makeAbsolute(path));
     final AzureNativeFileSystemStore store = nfs.getStore();

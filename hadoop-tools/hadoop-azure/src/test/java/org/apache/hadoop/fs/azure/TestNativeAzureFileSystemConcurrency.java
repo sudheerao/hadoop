@@ -33,28 +33,22 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.util.StringUtils;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 public class TestNativeAzureFileSystemConcurrency extends AbstractWasbTestBase {
-  private FileSystem fs;
   private InMemoryBlockBlobStore backingStore;
 
-  @Before
+  @Override
   public void setUp() throws Exception {
     super.setUp();
-    fs = getTestAccount().getFileSystem();
     backingStore = getTestAccount().getMockStorage().getBackingStore();
   }
 
-  @After
+  @Override
   public void tearDown() throws Exception {
     super.tearDown();
-    fs = null;
     backingStore = null;
   }
 

@@ -155,10 +155,10 @@ public class MockWasbAuthorizerImpl implements WasbAuthorizerInterface {
 
   private static class AuthorizationComponent {
 
-    private String wasbAbsolutePath;
-    private String accessType;
+    private final String wasbAbsolutePath;
+    private final String accessType;
 
-    public AuthorizationComponent(String wasbAbsolutePath,
+    AuthorizationComponent(String wasbAbsolutePath,
         String accessType) {
       this.wasbAbsolutePath = wasbAbsolutePath;
       this.accessType = accessType;

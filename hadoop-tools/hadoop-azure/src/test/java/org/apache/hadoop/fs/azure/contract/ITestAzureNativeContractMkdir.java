@@ -22,6 +22,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.contract.AbstractContractMkdirTest;
 import org.apache.hadoop.fs.contract.AbstractFSContract;
 
+/**
+ * Contract test.
+ */
 public class ITestAzureNativeContractMkdir extends AbstractContractMkdirTest {
   @Override
   protected AbstractFSContract createContract(Configuration conf) {

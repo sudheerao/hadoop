@@ -18,11 +18,6 @@
 
 package org.apache.hadoop.fs.azure;
 
-import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO_CONTAINER_MSG;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assume.assumeNotNull;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -31,19 +26,22 @@ import java.net.URI;
 import java.util.Arrays;
 import java.util.HashMap;
 
+import com.microsoft.azure.storage.OperationContext;
+import com.microsoft.azure.storage.SendingRequestEvent;
+import com.microsoft.azure.storage.StorageEvent;
+import org.junit.Test;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.TestHookOperationContext;
 import org.apache.hadoop.test.GenericTestUtils;
 
-import org.junit.Test;
-
-import com.microsoft.azure.storage.OperationContext;
-import com.microsoft.azure.storage.SendingRequestEvent;
-import com.microsoft.azure.storage.StorageEvent;
-
+import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO_CONTAINER_MSG;
 import static org.apache.hadoop.test.LambdaTestUtils.intercept;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeNotNull;
 
 public class ITestAzureFileSystemErrorConditions {
   private static final int ALL_THREE_FILE_SIZE = 1024;
@@ -117,7 +115,8 @@ public class ITestAzureFileSystemErrorConditions {
 
     @Override
     public void eventOccurred(SendingRequestEvent eventArg) {
-      HttpURLConnection connection = (HttpURLConnection)eventArg.getConnectionObject();
+      HttpURLConnection connection
+          = (HttpURLConnection) eventArg.getConnectionObject();
       if (!connectionRecognizer.isTargetConnection(connection)) {
         return;
       }
@@ -166,10 +165,10 @@ public class ITestAzureFileSystemErrorConditions {
   private void writeAllThreeFile(NativeAzureFileSystem fs, Path testFile)
       throws IOException {
     byte[] buffer = new byte[ALL_THREE_FILE_SIZE];
-    Arrays.fill(buffer, (byte)3);
-    OutputStream stream = fs.create(testFile);
-    stream.write(buffer);
-    stream.close();
+    Arrays.fill(buffer, (byte) 3);
+    try(OutputStream stream = fs.create(testFile)) {
+      stream.write(buffer);
+    };
   }
 
   private void readAllThreeFile(NativeAzureFileSystem fs, Path testFile)

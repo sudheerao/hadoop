@@ -18,17 +18,18 @@
 
 package org.apache.hadoop.fs.azure;
 
-import java.io.*;
-import java.util.*;
-
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.*;
-import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
-import org.apache.hadoop.fs.azure.metrics.AzureFileSystemInstrumentation;
-
-import junit.framework.*;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.Date;
 
 import org.junit.Test;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
+import org.apache.hadoop.fs.azure.metrics.AzureFileSystemInstrumentation;
 
 
 /**
@@ -144,7 +145,7 @@ public class ITestBlobTypeSpeedDifference extends AbstractWasbTestBase {
    * Runs the benchmark for the given file size and flush frequency from the
    * command line.
    */
-  public static void main(String argv[]) throws Exception {
+  public static void main(String[] argv) throws Exception {
     Configuration conf = new Configuration();
     long size = 10 * 1000 * 1000;
     long flushInterval = 2000;

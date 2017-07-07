@@ -25,9 +25,8 @@ import org.junit.Test;
 
 /**
  * Mocked testing of FileSystemContractBaseTest.
- * This isn't an IT, but making it so makes it a lot faster for now.
  */
-public class ITestNativeAzureFileSystemContractMocked extends
+public class TestNativeAzureFileSystemContractMocked extends
     FileSystemContractBaseTest {
 
   @Before

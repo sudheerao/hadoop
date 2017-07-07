@@ -26,7 +26,6 @@ import org.apache.hadoop.test.GenericTestUtils;
 import org.apache.hadoop.fs.azure.AzureBlobStorageTestAccount;
 import org.apache.hadoop.fs.azure.AzureException;
 import org.apache.hadoop.fs.azure.NativeAzureFileSystem;
-import org.apache.hadoop.test.GenericTestUtils;
 
 import org.junit.Assert;
 import org.junit.Test;

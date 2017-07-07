@@ -58,7 +58,6 @@ import com.microsoft.azure.storage.StorageException;
 import com.microsoft.azure.storage.blob.CloudBlob;
 
 import static org.apache.hadoop.test.GenericTestUtils.*;
-import static org.apache.hadoop.fs.contract.ContractTestUtils.*;
 
 /*
  * Tests the Native Azure file system (WASB) against an actual blob store if
@@ -574,7 +573,7 @@ public abstract class NativeAzureFileSystemBaseTest
 
     // Don't check the file length for page blobs. Only block blobs
     // provide the actual length of bytes written.
-    if (!(this instanceof TestNativeAzureFSPageBlobLive)) {
+    if (!(this instanceof ITestNativeAzureFSPageBlobLive)) {
       assertEquals(1, newStatus.getLen());
     }
   }
@@ -605,7 +604,7 @@ public abstract class NativeAzureFileSystemBaseTest
 
     // File length is only reported to be the size of bytes written to the file for block blobs.
     // So only check it for block blobs, not page blobs.
-    if (!(this instanceof TestNativeAzureFSPageBlobLive)) {
+    if (!(this instanceof ITestNativeAzureFSPageBlobLive)) {
       assertEquals(1, newStatus.getLen());
     }
     fs.setOwner(newFile, null, "newGroup");

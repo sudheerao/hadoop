@@ -24,7 +24,7 @@ import org.apache.hadoop.conf.Configuration;
  * operations on page blob files and folders work as expected.
  * These operations include create, delete, rename, list, and so on.
  */
-public class TestNativeAzureFSPageBlobLive extends
+public class ITestNativeAzureFSPageBlobLive extends
     NativeAzureFileSystemBaseTest {
 
   @Override

@@ -54,7 +54,7 @@ import com.microsoft.azure.storage.core.Base64;
  * Test that we do proper data integrity validation with MD5 checks as
  * configured.
  */
-public class TestBlobDataValidation {
+public class ITestBlobDataValidation {
   private AzureBlobStorageTestAccount testAccount;
 
   @After

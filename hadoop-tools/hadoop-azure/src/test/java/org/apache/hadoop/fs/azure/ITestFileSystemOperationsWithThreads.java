@@ -45,7 +45,7 @@ import org.mockito.stubbing.Answer;
 /**
  * Tests the Native Azure file system (WASB) using parallel threads for rename and delete operations.
  */
-public class TestFileSystemOperationsWithThreads extends AbstractWasbTestBase {
+public class ITestFileSystemOperationsWithThreads extends AbstractWasbTestBase {
 
   private final int renameThreads = 10;
   private final int deleteThreads = 20;
