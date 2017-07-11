@@ -93,11 +93,6 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     hugefileRenamed = new Path(scaleTestDir, "hugefileRenamed");
   }
 
-  @Override
-  public void teardown() throws Exception {
-    super.teardown();
-  }
-
   /**
    * Stop the test-case teardown from deleting the test path.
    * @throws IOException never
