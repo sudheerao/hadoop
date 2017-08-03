@@ -20,6 +20,7 @@ package org.apache.hadoop.fs.azure.integration;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.Iterator;
 
 import org.junit.Assert;
@@ -35,6 +36,7 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.StorageStatistics;
+import org.apache.hadoop.fs.azure.AzureBlobStorageTestAccount;
 import org.apache.hadoop.fs.azure.NativeAzureFileSystem;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
 import org.apache.hadoop.io.IOUtils;
@@ -67,6 +69,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
   private Path scaleTestDir;
   private Path hugefile;
   private Path hugefileRenamed;
+  private AzureBlobStorageTestAccount testAccountForCleanup;
 
   private static final int UPLOAD_BLOCKSIZE = 64 * _1KB;
   private static final byte[] SOURCE_DATA;
@@ -84,6 +87,29 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     scaleTestDir = new Path(testPath, "scale");
     hugefile = new Path(scaleTestDir, "hugefile");
     hugefileRenamed = new Path(scaleTestDir, "hugefileRenamed");
+  }
+
+  /**
+   * Only clean up the test account (and delete the container) if the account
+   * is set in the field {@code testAccountForCleanup}.
+   * @throws Exception
+   */
+  @Override
+  public void tearDown() throws Exception {
+    testAccount = null;
+    super.tearDown();
+    if (testAccountForCleanup != null) {
+      cleanupTestAccount(testAccount);
+    }
+  }
+
+  @Override
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.create(
+        "testazurehugefiles",
+        EnumSet.of(AzureBlobStorageTestAccount.CreateOptions.CreateContainer),
+        createConfiguration(),
+        true);
   }
 
   /**
@@ -415,7 +441,9 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
   }
 
   @Test
-  public void test_999_DeleteHugeFiles() throws IOException {
+  public void test_999_deleteHugeFiles() throws IOException {
+    // mark the test account for cleanup after this test
+    testAccountForCleanup = testAccount;
     deleteHugeFile();
     ContractTestUtils.NanoTimer timer2 = new ContractTestUtils.NanoTimer();
     NativeAzureFileSystem fs = getFileSystem();

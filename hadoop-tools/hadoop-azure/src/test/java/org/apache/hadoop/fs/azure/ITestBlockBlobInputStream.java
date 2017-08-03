@@ -38,6 +38,7 @@ import org.apache.hadoop.fs.FSExceptionMessages;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
 import org.apache.hadoop.fs.contract.ContractTestUtils.NanoTimer;
 
@@ -858,10 +859,15 @@ public class ITestBlockBlobInputStream extends AbstractWasbTestBase {
 
   @Test
   public void test_999_DeleteHugeFiles() throws IOException {
-    ContractTestUtils.NanoTimer timer = new ContractTestUtils.NanoTimer();
-    NativeAzureFileSystem fs = getFileSystem();
-    fs.delete(TEST_FILE_PATH, false);
-    timer.end("time to delete %s", TEST_FILE_PATH);
+    try {
+      NanoTimer timer = new NanoTimer();
+      NativeAzureFileSystem fs = getFileSystem();
+      fs.delete(TEST_FILE_PATH, false);
+      timer.end("time to delete %s", TEST_FILE_PATH);
+    } finally {
+      // clean up the test account
+      AzureTestUtils.cleanupTestAccount(accountUsingInputStreamV1);
+    }
   }
 
 }
