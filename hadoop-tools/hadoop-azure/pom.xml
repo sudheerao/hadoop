@@ -355,7 +355,6 @@
                     <exclude>**/ITestNativeAzureFileSystemLive.java</exclude>
                     <exclude>**/ITestNativeAzureFSPageBlobLive.java</exclude>
                     <exclude>**/ITestWasbRemoteCallHelper.java</exclude>
-                    <exclude>**/ITestWasbUriAndConfiguration.java</exclude>
                     <exclude>**/ITestBlockBlobInputStream.java</exclude>
                   </excludes>
                 </configuration>
@@ -386,7 +385,6 @@
                     <include>**/ITestNativeAzureFileSystemConcurrencyLive.java</include>
                     <include>**/ITestNativeAzureFileSystemLive.java</include>
                     <include>**/ITestWasbRemoteCallHelper.java</include>
-                    <include>**/ITestWasbUriAndConfiguration.java</include>
                     <include>**/ITestBlockBlobInputStream.java</include>
                   </includes>
                 </configuration>
