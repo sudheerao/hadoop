@@ -38,6 +38,7 @@ import org.apache.hadoop.fs.FSExceptionMessages;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.azure.integration.AbstractAzureScaleTest;
 import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
 import org.apache.hadoop.fs.contract.ContractTestUtils.NanoTimer;
@@ -53,7 +54,7 @@ import static org.apache.hadoop.test.LambdaTestUtils.*;
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 
-public class ITestBlockBlobInputStream extends AbstractWasbTestBase {
+public class ITestBlockBlobInputStream extends AbstractAzureScaleTest {
   private static final Logger LOG = LoggerFactory.getLogger(
       ITestBlockBlobInputStream.class);
   private static final int KILOBYTE = 1024;

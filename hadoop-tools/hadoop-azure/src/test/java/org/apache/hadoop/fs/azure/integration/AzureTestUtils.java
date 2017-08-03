@@ -464,4 +464,17 @@ public final class AzureTestUtils extends Assert {
     }
     return null;
   }
+
+  /**
+   * Assume that the scale tests are enabled by the relevant system property.
+   */
+  public static void assumeScaleTestsEnabled(Configuration conf) {
+    boolean enabled = getTestPropertyBool(
+        conf,
+        KEY_SCALE_TESTS_ENABLED,
+        DEFAULT_SCALE_TESTS_ENABLED);
+    assume("Scale test disabled: to enable set property "
+            + KEY_SCALE_TESTS_ENABLED,
+        enabled);
+  }
 }

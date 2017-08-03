@@ -37,7 +37,6 @@ public abstract class AbstractAzureScaleTest
 
   protected static final Logger LOG =
       LoggerFactory.getLogger(AbstractAzureScaleTest.class);
-  private boolean enabled;
 
   @Override
   protected int getTestTimeoutMillis() {
@@ -48,13 +47,7 @@ public abstract class AbstractAzureScaleTest
   public void setUp() throws Exception {
     super.setUp();
     LOG.debug("Scale test operation count = {}", getOperationCount());
-    enabled = getTestPropertyBool(
-        getConfiguration(),
-        KEY_SCALE_TESTS_ENABLED,
-        DEFAULT_SCALE_TESTS_ENABLED);
-    assume("Scale test disabled: to enable set property "
-            + KEY_SCALE_TESTS_ENABLED,
-        isEnabled());
+    assumeScaleTestsEnabled(getConfiguration());
   }
 
   /**
@@ -64,17 +57,6 @@ public abstract class AbstractAzureScaleTest
    */
   protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
     return AzureBlobStorageTestAccount.create(createConfiguration());
-  }
-
-  /**
-   * Is the test enabled. Base implementation looks at the scale property;
-   * subclasses may add extra criteria. They <i>must</i> always include
-   * the state of the base implementation as part of the requirements
-   * which must be true for the test boe considered enabled.
-   * @return true if the test is enabled and so can be executed.
-   */
-  protected boolean isEnabled() {
-    return enabled;
   }
 
   protected long getOperationCount() {

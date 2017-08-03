@@ -22,6 +22,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
 import org.apache.hadoop.tools.contract.AbstractContractDistCpTest;
 
+import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.assumeScaleTestsEnabled;
+
 /**
  * Contract test suite covering WASB integration with DistCp.
  */
@@ -35,5 +37,11 @@ public class ITestAzureNativeContractDistCp extends AbstractContractDistCpTest {
   @Override
   protected NativeAzureFileSystemContract createContract(Configuration conf) {
     return new NativeAzureFileSystemContract(conf);
+  }
+
+  @Override
+  public void setup() throws Exception {
+    super.setup();
+    assumeScaleTestsEnabled(getContract().getConf());
   }
 }
