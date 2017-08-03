@@ -18,7 +18,6 @@
 
 package org.apache.hadoop.fs.azure;
 
-import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -31,9 +30,6 @@ import org.slf4j.LoggerFactory;
 import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.permission.PermissionStatus;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 /**
  * Handle OOB IO into a shared container.

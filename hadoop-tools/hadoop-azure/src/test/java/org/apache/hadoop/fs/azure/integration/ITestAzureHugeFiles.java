@@ -64,10 +64,6 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
   private static final Logger LOG = LoggerFactory.getLogger(
       ITestAzureHugeFiles.class);
 
-  public static final String DEFAULT_PARTITION_SIZE = "8M";
-  public static final int BLOCK_SIZE = _32KB;
-  public static final int BIG_BLOCK_SIZE = _256KB;
-
   private Path scaleTestDir;
   private Path hugefile;
   private Path hugefileRenamed;
@@ -79,14 +75,11 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     SOURCE_DATA = dataset(UPLOAD_BLOCKSIZE, 0, 256);
   }
 
-  private int partitionSize;
-
   private Path testPath;
 
-
   @Override
-  public void setup() throws Exception {
-    super.setup();
+  public void setUp() throws Exception {
+    super.setUp();
     testPath = path("ITestAzureHugeFiles");
     scaleTestDir = new Path(testPath, "scale");
     hugefile = new Path(scaleTestDir, "hugefile");
@@ -129,7 +122,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
    * @throws IOException IO failure
    */
   FileStatus assumeHugeFileExists() throws IOException {
-    assertPathExists("huge file not created", hugefile);
+    assertPathExists(getFileSystem(), "huge file not created", hugefile);
     try {
       FileStatus status = getFileSystem().getFileStatus(hugefile);
       Assume.assumeTrue("Not a file: " + status, status.isFile());
@@ -165,9 +158,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     // clean up from any previous attempts
     deleteHugeFile();
 
-    describe("Creating file %s of size %d MB"
-            + " with partition size %d",
-        hugefile, filesizeMB, partitionSize);
+    describe("Creating file %s of size %d MB", hugefile, filesizeMB);
 
     // now do a check of available upload time, with a pessimistic bandwidth
     // (that of remote upload tests). If the test times out then not only is
@@ -430,8 +421,8 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     NativeAzureFileSystem fs = getFileSystem();
     fs.delete(hugefileRenamed, false);
     timer2.end("time to delete %s", hugefileRenamed);
-    ContractTestUtils.rm(fs, testPath, true, false);
-    assertPathDoesNotExist("deleted huge file", testPath);
+    rm(fs, testPath, true, false);
+    assertPathDoesNotExist(fs, "deleted huge file", testPath);
   }
 
 }

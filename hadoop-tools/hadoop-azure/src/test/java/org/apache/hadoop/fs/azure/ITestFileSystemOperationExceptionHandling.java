@@ -24,10 +24,10 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.contract.ContractTestUtils;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Test;
 
 import static org.apache.hadoop.fs.azure.ExceptionHandlingTestHelper.*;
@@ -198,7 +198,7 @@ public class ITestFileSystemOperationExceptionHandling
     Path dstPath = new Path("dstFile.dat");
     fs.delete(testPath, true);
     boolean renameResult = fs.rename(testPath, dstPath);
-    Assert.assertFalse(renameResult);
+    assertFalse(renameResult);
   }
 
   /**
@@ -212,7 +212,7 @@ public class ITestFileSystemOperationExceptionHandling
     Path dstPath = new Path("dstFile.dat");
     fs.delete(testPath, true);
     boolean renameResult = fs.rename(testPath, dstPath);
-    Assert.assertFalse(renameResult);
+    assertFalse(renameResult);
   }
 
   /**
@@ -225,7 +225,7 @@ public class ITestFileSystemOperationExceptionHandling
         testPath);
     fs.delete(testPath, true);
     boolean deleteResult = fs.delete(testPath, true);
-    Assert.assertFalse(deleteResult);
+    assertFalse(deleteResult);
   }
 
   /**
@@ -238,7 +238,7 @@ public class ITestFileSystemOperationExceptionHandling
         testPath);
     fs.delete(testPath, true);
     boolean deleteResult = fs.delete(testPath, true);
-    Assert.assertFalse(deleteResult);
+    assertFalse(deleteResult);
   }
 
   /**
@@ -271,9 +271,7 @@ public class ITestFileSystemOperationExceptionHandling
       inputStream.close();
     }
 
-    if (fs != null && fs.exists(testPath)) {
-      fs.delete(testPath, true);
-    }
+    ContractTestUtils.rm(fs, testPath, true, true);
     super.tearDown();
   }
 

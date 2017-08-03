@@ -284,7 +284,7 @@ public final class AzureTestUtils extends Assert {
    * @param filename filename at the end of the path
    * @return an absolute path
    */
-  public static Path testBlobPath(FileSystem fs, String filename) {
+  public static Path blobPathForTests(FileSystem fs, String filename) {
     String testUniqueForkId = System.getProperty(
         AzureTestConstants.TEST_UNIQUE_FORK_ID);
     return fs.makeQualified(new Path(PAGE_BLOB_DIR,
@@ -299,7 +299,7 @@ public final class AzureTestUtils extends Assert {
    * @param filename filename at the end of the path
    * @return an absolute path
    */
-  public static Path testPath(FileSystem fs, String filename) {
+  public static Path pathForTests(FileSystem fs, String filename) {
     String testUniqueForkId = System.getProperty(
         AzureTestConstants.TEST_UNIQUE_FORK_ID);
     return fs.makeQualified(new Path(

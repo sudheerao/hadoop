@@ -38,14 +38,9 @@ import org.apache.hadoop.fs.FSExceptionMessages;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.azure.integration.AbstractAzureScaleTest;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
 import org.apache.hadoop.fs.contract.ContractTestUtils.NanoTimer;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeNotNull;
 
 import static org.apache.hadoop.test.LambdaTestUtils.*;
@@ -57,7 +52,7 @@ import static org.apache.hadoop.test.LambdaTestUtils.*;
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 
-public class ITestBlockBlobInputStream extends AbstractAzureScaleTest {
+public class ITestBlockBlobInputStream extends AbstractWasbTestBase {
   private static final Logger LOG = LoggerFactory.getLogger(
       ITestBlockBlobInputStream.class);
   private static final int KILOBYTE = 1024;
@@ -76,8 +71,8 @@ public class ITestBlockBlobInputStream extends AbstractAzureScaleTest {
   private Path hugefile;
 
   @Override
-  public void setup() throws Exception {
-    super.setup();
+  public void setUp() throws Exception {
+    super.setUp();
     Configuration conf = new Configuration();
     conf.setInt(AzureNativeFileSystemStore.KEY_INPUT_STREAM_VERSION, 1);
 
@@ -95,7 +90,6 @@ public class ITestBlockBlobInputStream extends AbstractAzureScaleTest {
 
     assumeNotNull(accountUsingInputStreamV1);
     assumeNotNull(accountUsingInputStreamV2);
-    NativeAzureFileSystem fs = getFileSystem();
     hugefile = fs.makeQualified(TEST_FILE_PATH);
     try {
       testFileStatus = fs.getFileStatus(TEST_FILE_PATH);
@@ -126,15 +120,6 @@ public class ITestBlockBlobInputStream extends AbstractAzureScaleTest {
     assumeNotNull(accountUsingInputStreamV1);
     assumeNotNull(accountUsingInputStreamV2);
     return accountUsingInputStreamV1;
-  }
-
-  /**
-   * Stop the test-case teardown from deleting the test path.
-   * @throws IOException never
-   */
-  protected void deleteTestDirInTeardown() throws IOException {
-    // this is a no-op, so the test file is preserved.
-    // the last test in the suite does the teardown
   }
 
   /**
@@ -181,7 +166,6 @@ public class ITestBlockBlobInputStream extends AbstractAzureScaleTest {
   }
 
   void assumeHugeFileExists() throws IOException {
-    NativeAzureFileSystem fs = getFileSystem();
     ContractTestUtils.assertPathExists(fs, "huge file not created", hugefile);
     FileStatus status = fs.getFileStatus(hugefile);
     ContractTestUtils.assertIsFile(hugefile, status);

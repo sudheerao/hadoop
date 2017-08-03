@@ -18,10 +18,7 @@
 
 package org.apache.hadoop.fs.azure;
 
-import static org.junit.Assert.assertTrue;
-
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.junit.Test;

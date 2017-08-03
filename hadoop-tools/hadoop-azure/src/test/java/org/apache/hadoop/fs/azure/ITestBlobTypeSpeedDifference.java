@@ -109,7 +109,7 @@ public class ITestBlobTypeSpeedDifference extends AbstractWasbTestBase {
    */
   private static TestResult writePageBlobTestFile(NativeAzureFileSystem fs,
       long size, long flushInterval) throws IOException {
-    Path testFile = AzureTestUtils.testBlobPath(fs,
+    Path testFile = AzureTestUtils.blobPathForTests(fs,
         "writePageBlobTestFile");
     return writeTestFile(fs,
         testFile,

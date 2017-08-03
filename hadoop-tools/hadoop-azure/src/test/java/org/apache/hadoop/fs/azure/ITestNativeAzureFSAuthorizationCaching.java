@@ -19,7 +19,6 @@
 package org.apache.hadoop.fs.azure;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.contract.ContractTestUtils;
 import org.junit.Test;
 
 import static org.apache.hadoop.fs.azure.CachingAuthorizer.KEY_AUTH_SERVICE_CACHING_ENABLE;
@@ -27,22 +26,16 @@ import static org.apache.hadoop.fs.azure.CachingAuthorizer.KEY_AUTH_SERVICE_CACH
 /**
  * Test class to hold all WASB authorization caching related tests.
  */
-public class TestNativeAzureFSAuthorizationCaching
-    extends TestNativeAzureFileSystemAuthorizationWithOwner {
+public class ITestNativeAzureFSAuthorizationCaching
+    extends ITestNativeAzureFileSystemAuthorizationWithOwner {
 
   private static final int DUMMY_TTL_VALUE = 5000;
 
   @Override
-  public Configuration getConfiguration() {
-    Configuration conf = super.getConfiguration();
+  public Configuration createConfiguration() {
+    Configuration conf = super.createConfiguration();
     conf.set(KEY_AUTH_SERVICE_CACHING_ENABLE, "true");
     return conf;
-  }
-
-  @Override
-  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
-    Configuration conf = getConfiguration();
-    return AzureBlobStorageTestAccount.create(conf);
   }
 
   /**
@@ -51,10 +44,10 @@ public class TestNativeAzureFSAuthorizationCaching
   @Test
   public void testCachePut() throws Throwable {
     CachingAuthorizer<String, Integer> cache = new CachingAuthorizer<>(DUMMY_TTL_VALUE, "TEST");
-    cache.init(getConfiguration());
+    cache.init(createConfiguration());
     cache.put("TEST", 1);
     cache.put("TEST", 3);
     int result = cache.get("TEST");
-    ContractTestUtils.assertTrue("Cache returned unexpected result", result == 3);
+    assertEquals("Cache returned unexpected result", 3, result);
   }
 }

@@ -18,9 +18,6 @@
 
 package org.apache.hadoop.fs.azure;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
 import java.net.URI;
 import java.util.StringTokenizer;
 
@@ -36,11 +33,11 @@ import org.junit.Test;
  * testing with Live Azure storage because Emulator does not have support for
  * client-side logging.
  *
+ * <I>Important: </I> Do not attempt to move off commons-logging.
+ * The tests will fail.
  */
 public class ITestNativeAzureFileSystemClientLogging
     extends AbstractWasbTestBase {
-
-  private AzureBlobStorageTestAccount testAccount;
 
   // Core-site config controlling Azure Storage Client logging
   private static final String KEY_LOGGING_CONF_STRING = "fs.azure.storage.client.logging";
@@ -134,7 +131,6 @@ public class ITestNativeAzureFileSystemClientLogging
 
   @Override
   protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
-    testAccount = AzureBlobStorageTestAccount.create();
-    return testAccount;
+    return AzureBlobStorageTestAccount.create();
   }
 }

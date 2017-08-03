@@ -16,18 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.hadoop.fs.azure.integration;
+package org.apache.hadoop.fs.azure;
 
 import java.net.URI;
 import java.util.UUID;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.test.GenericTestUtils;
-import org.apache.hadoop.fs.azure.AzureBlobStorageTestAccount;
-import org.apache.hadoop.fs.azure.AzureException;
-import org.apache.hadoop.fs.azure.NativeAzureFileSystem;
 
-import org.junit.Assert;
 import org.junit.Test;
 
 import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO_CONTAINER_MSG;
@@ -36,7 +32,7 @@ import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO
  * Test for error messages coming from SDK.
  */
 public class ITestFileSystemOperationExceptionMessage
-    extends AbstractAzureIntegrationTest {
+    extends AbstractWasbTestWithTimeout {
 
   @Test
   public void testAnonymouseCredentialExceptionMessage() throws Throwable {
@@ -52,9 +48,9 @@ public class ITestFileSystemOperationExceptionMessage
     String wasbUri = String.format("wasb://%s@%s",
         testContainer, testStorageAccount);
 
-    try(NativeAzureFileSystem fs = new NativeAzureFileSystem()) {
-      fs.initialize(new URI(wasbUri), conf);
-      fail("Expected an exception, got " + fs);
+    try(NativeAzureFileSystem filesystem = new NativeAzureFileSystem()) {
+      filesystem.initialize(new URI(wasbUri), conf);
+      fail("Expected an exception, got " + filesystem);
     } catch (Exception ex) {
 
       Throwable innerException = ex.getCause();
@@ -68,7 +64,7 @@ public class ITestFileSystemOperationExceptionMessage
             NO_ACCESS_TO_CONTAINER_MSG, testStorageAccount, testContainer),
             ex);
       } else {
-        Assert.fail("No inner azure exception");
+        fail("No inner azure exception");
       }
     }
   }

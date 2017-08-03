@@ -286,7 +286,6 @@ Only a few properties can be set this way; more will be added.
 
 | Property | Meaninging |
 |-----------|-------------|
-| `fs.azure.scale.test.timeout`| Timeout in seconds for scale tests |
 | `fs.azure.scale.test.huge.filesize`| Size for huge file uploads |
 | `fs.azure.scale.test.huge.huge.partitionsize`| Size for partitions in huge file uploads |
 
@@ -407,6 +406,10 @@ to cut the previous one —after showing that coverage is not worsened.
 *Efficient*: prefer the `getFileStatus()` and examining the results, rather than
 call to `exists()`, `isFile()`, etc.
 
+*Fail with useful information:* provide as much diagnostics as possible
+on a failure. Using `org.apache.hadoop.fs.contract.ContractTestUtils` to make
+assertions about the state of a filesystem helps here.
+
 *Isolating Scale tests*. Any test doing large amounts of IO MUST extend the
 class `AbstractAzureScaleTest`, so only running if `scale` is defined on a build,
 supporting test timeouts configurable by the user. Scale tests should also
@@ -414,9 +417,9 @@ support configurability as to the actual size of objects/number of operations,
 so that behavior at different scale can be verified.
 
 *Designed for parallel execution*. A key need here is for each test suite to work
-on isolated parts of the filesystem. Subclasses of `AbstractAzureIntegrationTest`
-SHOULD use the `path()` method, with a base path of the test suite name, to
-build isolated paths. Tests MUST NOT assume that they have exclusive access
+on isolated parts of the filesystem. Subclasses of `AbstractWasbTestBase`
+SHOULD use the `path()`, `methodpath()` and `blobpath()` methods,
+to build isolated paths. Tests MUST NOT assume that they have exclusive access
 to a bucket.
 
 *Extending existing tests where appropriate*. This recommendation goes
@@ -442,19 +445,35 @@ is critical.
 
 #### Subclasses Existing Shared Base Blasses
 
-Extend `AbstractAzureIntegrationTest` or `AbstractAzureScaleTest` unless justifiable.
-These set things up for testing against the object stores, provide good threadnames,
-help generate isolated paths, and for `AbstractAzureScaleTest` subclasses,
-only run if `-Dscale` is set.
+There are a set of base classes which should be extended for Azure tests and
+integration tests.
 
-Key features of `AbstractAzureIntegrationTest`
+##### `org.apache.hadoop.fs.azure.AbstractWasbTestWithTimeout`
 
-* `getFileSystem()` returns the Azure Filesystem bonded to the contract test Filesystem
-defined in `fs.azure.contract.test`
-* Will automatically skip all tests if that URL is unset.
-* Extends `AbstractFSContractTestBase` and `Assert` for all their methods.
+This extends the junit `Assert` class with thread names and timeouts,
+the default timeout being set in `AzureTestConstants.AZURE_TEST_TIMEOUT` to
+ten minutes. The thread names are set to aid analyzing the stack trace of
+a test: a `jstack` call can be used to 
 
-Having shared base classes may help reduce future maintenance too. Please
+##### `org.apache.hadoop.fs.azure.AbstractWasbTestBase`
+
+The base class for tests which use `AzureBlobStorageTestAccount` to create
+mock or live Azure clients; in test teardown it tries to clean up store state.
+
+1. This class requires subclasses to implement `createTestAccount()` to create
+a mock or real test account.
+
+1. The configuration used to create a test account *should* be that from
+`createConfiguration()`; this can be extended in subclasses to tune the settings.
+ 
+
+##### `org.apache.hadoop.fs.azure.integration.AbstractAzureScaleTest`
+
+This extends `AbstractWasbTestBase` for scale tests; those test which
+only run when `-Dscale` is used to select the "scale" profile.
+These tests have a timeout of 30 minutes, so as to support slow test runs.
+
+Having shared base classes help reduces future maintenance. Please
 use them.
 
 #### Secure
@@ -489,9 +508,8 @@ Equally importantly: support proxies, as some testers need them.
 
 ### Provides Diagnostics and timing information
 
-1. Give threads useful names.
 1. Create logs, log things.
-1. you can use `AbstractAzureIntegrationTest.describe(format-stringm, args)` here.; it
+1. you can use `AbstractWasbTestBase.describe(format-string, args)` here; it
 adds some newlines so as to be easier to spot.
 1. Use `ContractTestUtils.NanoTimer` to measure the duration of operations,
 and log the output.

@@ -28,8 +28,7 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.test.GenericTestUtils;
-import org.junit.Assert;
-import org.junit.Before;
+
 import org.junit.Test;
 
 /**
@@ -39,15 +38,24 @@ public class ITestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
 
   private Path testPath;
 
-  @Before
+  @Override
+  public Configuration createConfiguration() {
+    Configuration conf = super.createConfiguration();
+    conf.setBoolean(NativeAzureFileSystem.APPEND_SUPPORT_ENABLE_PROPERTY_NAME,
+        true);
+    return conf;
+  }
+
+  @Override
   public void setUp() throws Exception {
     super.setUp();
-    fs = getTestAccount().getFileSystem();
-    Configuration conf = fs.getConf();
-    conf.setBoolean(NativeAzureFileSystem.APPEND_SUPPORT_ENABLE_PROPERTY_NAME, true);
-    URI uri = fs.getUri();
-    fs.initialize(uri, conf);
     testPath = methodPath();
+  }
+
+
+  @Override
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.create(createConfiguration());
   }
 
   /*
@@ -156,7 +164,7 @@ public class ITestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
       System.arraycopy(baseDataBuffer, 0, testData, 0, baseDataSize);
       System.arraycopy(appendDataBuffer, 0, testData, baseDataSize, appendDataSize);
 
-      Assert.assertTrue(verifyAppend(testData, testPath));
+      assertTrue(verifyAppend(testData, testPath));
     } finally {
       if (appendStream != null) {
         appendStream.close();
@@ -181,7 +189,7 @@ public class ITestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
       appendStream.write(appendDataBuffer);
       appendStream.close();
 
-      Assert.assertTrue(verifyAppend(appendDataBuffer, testPath));
+      assertTrue(verifyAppend(appendDataBuffer, testPath));
     } finally {
       if (appendStream != null) {
         appendStream.close();
@@ -211,7 +219,7 @@ public class ITestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
 
       appendStream1.close();
 
-      Assert.assertTrue(encounteredException);
+      assertTrue(encounteredException);
       GenericTestUtils.assertExceptionContains("Unable to set Append lease on the Blob", ioe);
     } finally {
       if (appendStream1 != null) {
@@ -257,7 +265,7 @@ public class ITestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
         appendCount++;
       }
 
-      Assert.assertTrue(verifyAppend(testData, testPath));
+      assertTrue(verifyAppend(testData, testPath));
 
     } finally {
       if (appendStream != null) {
@@ -307,7 +315,7 @@ public class ITestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
         appendCount++;
       }
 
-      Assert.assertTrue(verifyAppend(testData, testPath));
+      assertTrue(verifyAppend(testData, testPath));
     } finally {
       if (appendStream != null) {
         appendStream.close();
@@ -339,8 +347,4 @@ public class ITestNativeAzureFileSystemAppend extends AbstractWasbTestBase {
     }
   }
 
-  @Override
-  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
-    return AzureBlobStorageTestAccount.create();
-  }
 }

@@ -25,6 +25,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.concurrent.Callable;
 
 import com.microsoft.azure.storage.OperationContext;
 import com.microsoft.azure.storage.SendingRequestEvent;
@@ -32,6 +33,7 @@ import com.microsoft.azure.storage.StorageEvent;
 import org.junit.Test;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.TestHookOperationContext;
@@ -39,18 +41,22 @@ import org.apache.hadoop.test.GenericTestUtils;
 
 import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO_CONTAINER_MSG;
 import static org.apache.hadoop.test.LambdaTestUtils.intercept;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeNotNull;
 
-public class ITestAzureFileSystemErrorConditions {
+public class ITestAzureFileSystemErrorConditions extends
+    AbstractWasbTestWithTimeout {
   private static final int ALL_THREE_FILE_SIZE = 1024;
 
   @Test
   public void testNoInitialize() throws Exception {
-    AzureNativeFileSystemStore store = new AzureNativeFileSystemStore();
     intercept(AssertionError.class,
-        () -> store.retrieveMetadata("foo"));
+        new Callable<FileMetadata>() {
+          @Override
+          public FileMetadata call() throws Exception {
+            return new AzureNativeFileSystemStore()
+                .retrieveMetadata("foo");
+          }
+        });
   }
 
   /**
@@ -91,10 +97,13 @@ public class ITestAzureFileSystemErrorConditions {
           AzureBlobStorageTestAccount.getMockContainerUri(), metadata);
 
       AzureException ex = intercept(AzureException.class,
-          () -> {
-            fs.initialize(new URI(AzureBlobStorageTestAccount.MOCK_WASB_URI),
-                conf);
-            return fs.listStatus(new Path("/"));
+          new Callable<FileStatus[]>() {
+            @Override
+            public FileStatus[] call() throws Exception {
+              fs.initialize(new URI(AzureBlobStorageTestAccount.MOCK_WASB_URI),
+                  conf);
+              return fs.listStatus(new Path("/"));
+            }
           });
       GenericTestUtils.assertExceptionContains(
           "unsupported version: 2090-04-05.", ex);

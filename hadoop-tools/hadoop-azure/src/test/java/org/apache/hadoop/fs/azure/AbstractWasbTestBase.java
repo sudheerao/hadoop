@@ -20,24 +20,17 @@ package org.apache.hadoop.fs.azure;
 
 import java.io.IOException;
 
-import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.testBlobPath;
-import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.testPath;
-import static org.junit.Assume.assumeNotNull;
-
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
+import org.apache.hadoop.io.IOUtils;
 
+import static org.junit.Assume.assumeNotNull;
 import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.*;
 
 /**
@@ -47,43 +40,86 @@ import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.*;
  * to run those tests.  The returned account might integrate with Azure Storage
  * directly or it might be a mock implementation.
  */
-public abstract class AbstractWasbTestBase {
+public abstract class AbstractWasbTestBase extends AbstractWasbTestWithTimeout
+    implements AzureTestConstants {
 
   protected static final Logger LOG =
       LoggerFactory.getLogger(AbstractWasbTestBase.class);
 
-  @VisibleForTesting
   protected NativeAzureFileSystem fs;
   protected AzureBlobStorageTestAccount testAccount;
 
   @Before
   public void setUp() throws Exception {
-    testAccount = createTestAccount();
-    assumeNotNull(testAccount);
-    if (testAccount != null) {
-      fs = testAccount.getFileSystem();
-    }
+    AzureBlobStorageTestAccount account = createTestAccount();
+    assumeNotNull(account);
+    bindToTestAccount(account);
   }
 
   @After
   public void tearDown() throws Exception {
+    describe("closing test account and filesystem");
     testAccount = cleanupTestAccount(testAccount);
+    IOUtils.closeStream(fs);
     fs = null;
   }
 
-  public Configuration getConfiguration() {
-    return new Configuration();
+  /**
+   * Create the configuration to use when creating a test account.
+   * Subclasses can override this to tune the test account configuration.
+   * @return a configuration.
+   */
+  public Configuration createConfiguration() {
+    return AzureBlobStorageTestAccount.createTestConfiguration();
   }
 
+  /**
+   * Create the test account.
+   * Subclasses must implement this.
+   * @return the test account.
+   * @throws Exception
+   */
   protected abstract AzureBlobStorageTestAccount createTestAccount()
       throws Exception;
 
+  /**
+   * Get the test account.
+   * @return the current test account.
+   */
   protected AzureBlobStorageTestAccount getTestAccount() {
     return testAccount;
   }
 
+  /**
+   * Get the filesystem
+   * @return the current filesystem.
+   */
   protected NativeAzureFileSystem getFileSystem() {
     return fs;
+  }
+
+  /**
+   * Get the configuration used to create the filesystem
+   * @return the configuration of the test FS
+   */
+  protected Configuration getConfiguration() {
+    return getFileSystem().getConf();
+  }
+
+  /**
+   * Bind to a new test account; closing any existing one.
+   * This updates the test account returned in {@link #getTestAccount()}
+   * and the filesystem in {@link #getFileSystem()}.
+   * @param account new test account
+   */
+  protected void bindToTestAccount(AzureBlobStorageTestAccount account) {
+    // clean any existing test account
+    cleanupTestAccount(testAccount);
+    IOUtils.closeStream(fs);
+    testAccount = account;
+    if (testAccount != null) {
+      fs = testAccount.getFileSystem();
+    }
   }
 
   /**
@@ -93,9 +129,8 @@ public abstract class AbstractWasbTestBase {
    * @throws IOException
    */
   protected Path blobPath(String filepath) throws IOException {
-    return testBlobPath(getFileSystem(), filepath);
+    return blobPathForTests(getFileSystem(), filepath);
   }
-
 
   /**
    * Create a path under the test path provided by
@@ -105,7 +140,7 @@ public abstract class AbstractWasbTestBase {
    * @throws IOException IO problems
    */
   protected Path path(String filepath) throws IOException {
-    return testPath(getFileSystem(), filepath);
+    return pathForTests(getFileSystem(), filepath);
   }
 
   /**
@@ -118,26 +153,24 @@ public abstract class AbstractWasbTestBase {
     return path(methodName.getMethodName());
   }
 
-  @Rule
-  public TestName methodName = new TestName();
-
-
-  @BeforeClass
-  public static void nameTestThread() {
-    Thread.currentThread().setName("JUnit");
-  }
   /**
-   * Set the timeout for every test.
+   * Return a blob path bonded to this method name, unique to this fork during
+   * parallel execution.
+   * @return a method name unique to (fork, method).
+   * @throws IOException IO problems
    */
-  @Rule
-  public Timeout testTimeout = new Timeout(getTestTimeoutMillis());
-
-  @Before
-  public void nameThread() {
-    Thread.currentThread().setName("JUnit-" + methodName.getMethodName());
+  protected Path methodBlobPath() throws IOException {
+    return blobPath(methodName.getMethodName());
   }
 
-  protected int getTestTimeoutMillis() {
-    return AzureTestConstants.AZURE_TEST_TIMEOUT;
+  /**
+   * Describe a test in the logs.
+   * @param text text to print
+   * @param args arguments to format in the printing
+   */
+  protected void describe(String text, Object... args) {
+    LOG.info("\n\n{}: {}\n",
+        methodName.getMethodName(),
+        String.format(text, args));
   }
 }

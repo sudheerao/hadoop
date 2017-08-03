@@ -23,8 +23,6 @@ import java.io.OutputStream;
 import java.util.Arrays;
 import java.util.Random;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
@@ -33,6 +31,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.integration.AbstractAzureScaleTest;
 import org.apache.hadoop.util.Time;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.hadoop.fs.azure.integration.AzureTestUtils .*;
 
@@ -41,8 +41,8 @@ import static org.apache.hadoop.fs.azure.integration.AzureTestUtils .*;
  * or just a part of it.
  */
 public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
-  private static final Log LOG =
-      LogFactory.getLog(ITestReadAndSeekPageBlobAfterWrite.class);
+  private static final Logger LOG =
+      LoggerFactory.getLogger(ITestReadAndSeekPageBlobAfterWrite.class);
 
   private FileSystem fs;
   private byte[] randomData;
@@ -64,8 +64,8 @@ public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
   private Path blobPath;
 
   @Override
-  public void setup() throws Exception {
-    super.setup();
+  public void setUp() throws Exception {
+    super.setUp();
     fs = getTestAccount().getFileSystem();
     // Make sure we are using an integral number of pages.
     assertEquals(0, MAX_BYTES % PAGE_SIZE);
@@ -74,13 +74,13 @@ public class ITestReadAndSeekPageBlobAfterWrite extends AbstractAzureScaleTest {
     randomData = new byte[PAGE_SIZE * MAX_PAGES];
     rand.nextBytes(randomData);
 
-    blobPath = testBlobPath(fs, "ITestReadAndSeekPageBlobAfterWrite");
+    blobPath = blobPath("ITestReadAndSeekPageBlobAfterWrite");
   }
 
   @Override
-  public void teardown() throws Exception {
+  public void tearDown() throws Exception {
     deleteQuietly(fs, blobPath, true);
-    super.teardown();
+    super.tearDown();
   }
 
   /**

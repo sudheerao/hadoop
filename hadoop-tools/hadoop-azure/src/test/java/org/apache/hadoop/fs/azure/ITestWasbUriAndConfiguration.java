@@ -58,7 +58,7 @@ import org.junit.rules.TemporaryFolder;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.CloudBlockBlob;
 
-public class ITestWasbUriAndConfiguration {
+public class ITestWasbUriAndConfiguration extends AbstractWasbTestWithTimeout {
 
   private static final int FILE_SIZE = 4096;
   private static final String PATH_DELIMITER = "/";

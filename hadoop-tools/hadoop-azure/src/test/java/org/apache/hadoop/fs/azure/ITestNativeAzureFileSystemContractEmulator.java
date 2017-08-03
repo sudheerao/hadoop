@@ -24,7 +24,6 @@ import org.apache.hadoop.fs.FileSystemContractBaseTest;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TestName;
@@ -57,7 +56,7 @@ public class ITestNativeAzureFileSystemContractEmulator extends
             new Path("ITestNativeAzureFileSystemContractEmulator")));
   }
 
-  @After
+  @Override
   public void tearDown() throws Exception {
     super.tearDown();
     testAccount = AzureTestUtils.cleanup(testAccount);

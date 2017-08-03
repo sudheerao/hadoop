@@ -32,7 +32,7 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
-public class TestWasbFsck {
+public class TestWasbFsck extends AbstractWasbTestWithTimeout {
   private AzureBlobStorageTestAccount testAccount;
   private FileSystem fs;
   private InMemoryBlockBlobStore backingStore;

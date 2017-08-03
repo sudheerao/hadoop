@@ -18,11 +18,6 @@
 
 package org.apache.hadoop.fs.azure;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertNotNull;
-
 import java.util.concurrent.CountDownLatch;
 
 import org.apache.hadoop.io.IOUtils;
@@ -56,14 +51,14 @@ public class ITestNativeAzureFileSystemLive extends
     Path dstPath = path(dstFile);
     FSDataOutputStream dstStream = fs.create(dstPath);
     assertTrue(fs.exists(dstPath));
-    NativeAzureFileSystem nfs = (NativeAzureFileSystem)fs;
+    NativeAzureFileSystem nfs = fs;
     final String fullSrcKey = nfs.pathToKey(nfs.makeAbsolute(srcPath));
     final String fullDstKey = nfs.pathToKey(nfs.makeAbsolute(dstPath));
     nfs.getStoreInterface().rename(fullSrcKey, fullDstKey, true, null);
     assertTrue(fs.exists(dstPath));
     assertFalse(fs.exists(srcPath));
-    IOUtils.cleanup(null, srcStream);
-    IOUtils.cleanup(null, dstStream);
+    IOUtils.cleanupWithLogger(null, srcStream);
+    IOUtils.cleanupWithLogger(null, dstStream);
   }
   /**
    * Tests fs.delete() function to delete a blob when another blob is holding a

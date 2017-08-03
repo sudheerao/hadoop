@@ -48,29 +48,9 @@ import org.junit.rules.Timeout;
 /**
  * Tests that WASB creates containers only if needed.
  */
-public class ITestContainerChecks {
+public class ITestContainerChecks extends AbstractWasbTestWithTimeout {
   private AzureBlobStorageTestAccount testAccount;
   private boolean runningInSASMode = false;
-  @Rule
-  public TestName methodName = new TestName();
-
-
-  @BeforeClass
-  public static void nameTestThread() {
-    Thread.currentThread().setName("JUnit");
-  }
-
-  /**
-   * Set the timeout for every test.
-   */
-  @Rule
-  public Timeout testTimeout = new Timeout(
-      AzureTestConstants.AZURE_TEST_TIMEOUT);
-
-  @Before
-  public void nameThread() {
-    Thread.currentThread().setName("JUnit-" + methodName.getMethodName());
-  }
 
   @After
   public void tearDown() throws Exception {

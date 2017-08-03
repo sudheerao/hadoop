@@ -24,7 +24,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
 import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 
-import org.junit.After;
 import static org.junit.Assume.assumeNotNull;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -36,7 +35,6 @@ import org.junit.rules.TestName;
  * Run the {@link FileSystemContractBaseTest} test suite against azure
  * storage, after switching the FS using page blobs everywhere.
  */
-
 public class ITestNativeAzureFileSystemContractPageBlobLive extends
     FileSystemContractBaseTest {
   private AzureBlobStorageTestAccount testAccount;
@@ -66,7 +64,7 @@ public class ITestNativeAzureFileSystemContractPageBlobLive extends
     testAccount = createTestAccount();
     assumeNotNull(testAccount);
     fs = testAccount.getFileSystem();
-    basePath = AzureTestUtils.testPath(fs, "filesystemcontractpageblob");
+    basePath = AzureTestUtils.pathForTests(fs, "filesystemcontractpageblob");
   }
 
   @Override

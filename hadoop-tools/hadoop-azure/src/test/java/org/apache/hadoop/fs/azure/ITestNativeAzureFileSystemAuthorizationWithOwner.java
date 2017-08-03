@@ -24,7 +24,7 @@ import java.security.PrivilegedExceptionAction;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
-import org.junit.Before;
+
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -33,14 +33,14 @@ import static org.junit.Assert.assertEquals;
 public class ITestNativeAzureFileSystemAuthorizationWithOwner
   extends TestNativeAzureFileSystemAuthorization {
 
-  @Before
-  public void beforeMethod() {
-    super.beforeMethod();
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
     authorizer.init(fs.getConf(), true);
   }
 
   /**
-   * Test case when owner matches current user
+   * Test case when owner matches current user.
    */
   @Test
   public void testOwnerPermissionPositive() throws Throwable {
@@ -71,7 +71,7 @@ public class ITestNativeAzureFileSystemAuthorizationWithOwner
   }
 
   /**
-   * Negative test case for owner does not match current user
+   * Negative test case for owner does not match current user.
    */
   @Test
   public void testOwnerPermissionNegative() throws Throwable {
@@ -108,7 +108,7 @@ public class ITestNativeAzureFileSystemAuthorizationWithOwner
 
   /**
    * Test to verify that retrieving owner information does not
-   * throw when file/folder does not exist
+   * throw when file/folder does not exist.
    */
   @Test
   public void testRetrievingOwnerDoesNotFailWhenFileDoesNotExist() throws Throwable {

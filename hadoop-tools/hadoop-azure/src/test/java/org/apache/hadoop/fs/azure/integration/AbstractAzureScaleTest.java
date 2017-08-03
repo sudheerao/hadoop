@@ -21,6 +21,9 @@ package org.apache.hadoop.fs.azure.integration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.hadoop.fs.azure.AbstractWasbTestBase;
+import org.apache.hadoop.fs.azure.AzureBlobStorageTestAccount;
+
 import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.*;
 
 /**
@@ -28,12 +31,9 @@ import static org.apache.hadoop.fs.azure.integration.AzureTestUtils.*;
  * is set; the setup method will check this and skip
  * tests if not.
  *
- * The S3A test has a very complex setup related to configuration of
- * test timeouts and scalability thereof. Ideally, that should be avoided
- * here.
  */
 public abstract class AbstractAzureScaleTest
-    extends AbstractAzureIntegrationTest implements Sizes {
+    extends AbstractWasbTestBase implements Sizes {
 
   protected static final Logger LOG =
       LoggerFactory.getLogger(AbstractAzureScaleTest.class);
@@ -45,8 +45,8 @@ public abstract class AbstractAzureScaleTest
   }
 
   @Override
-  public void setup() throws Exception {
-    super.setup();
+  public void setUp() throws Exception {
+    super.setUp();
     LOG.debug("Scale test operation count = {}", getOperationCount());
     enabled = getTestPropertyBool(
         getConfiguration(),
@@ -55,6 +55,15 @@ public abstract class AbstractAzureScaleTest
     assume("Scale test disabled: to enable set property "
             + KEY_SCALE_TESTS_ENABLED,
         isEnabled());
+  }
+
+  /**
+   * Create the test account.
+   * @return a test account
+   * @throws Exception on any failure to create the account.
+   */
+  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
+    return AzureBlobStorageTestAccount.create(createConfiguration());
   }
 
   /**
