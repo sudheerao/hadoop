@@ -560,3 +560,17 @@ using an absolute XInclude reference to it.
 
 </configuration>
 ```
+
+### Cleaning up Containers
+
+The Azure tests create containers with the prefix `"wasbtests-"` and delete
+them after the test runs. If a test run is interrupted, these containers
+may not get deleted. There is a special test case which can be manually invoked
+to list and delete these, `CleanupTestContainers`
+
+```bash
+mvn test -Dtest=CleanupTestContainers
+```
+
+This will delete the containers; the output log of the test run will
+provide the details and summary of the operation.

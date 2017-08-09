@@ -59,7 +59,7 @@ public final class AzureTestUtils extends Assert {
    * Create the test filesystem.
    *
    * If the test.fs.wasb.name property is not set, this will
-   * trigger a JUnit failure.
+   * raise a JUnit assumption exception
    *
    * @param conf configuration
    * @return the FS
@@ -78,8 +78,7 @@ public final class AzureTestUtils extends Assert {
       liveTest = testURI.getScheme().equals(WASB_SCHEME);
     }
     if (!liveTest) {
-      // This doesn't work with our JUnit 3 style test cases, so instead we'll
-      // make this whole class not run by default
+      // Skip the test
       throw new AssumptionViolatedException(
           "No test filesystem in " + TEST_FS_WASB_NAME);
     }
