@@ -155,7 +155,9 @@ public class ITestBlobTypeSpeedDifference extends AbstractWasbTestBase {
     if (argv.length > 1) {
       flushInterval = Long.parseLong(argv[1]);
     }
-    testForSizeAndFlushInterval((NativeAzureFileSystem)FileSystem.get(conf),
-        size, flushInterval);
+    testForSizeAndFlushInterval(
+        (NativeAzureFileSystem) FileSystem.get(conf),
+        size,
+        flushInterval);
   }
 }

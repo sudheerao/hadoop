@@ -22,6 +22,9 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.contract.AbstractContractDeleteTest;
 import org.apache.hadoop.fs.contract.AbstractFSContract;
 
+/**
+ * Contract test.
+ */
 public class ITestAzureNativeContractDelete extends AbstractContractDeleteTest {
   @Override
   protected AbstractFSContract createContract(Configuration conf) {

@@ -61,6 +61,7 @@ public class ITestFileSystemOperationsExceptionHandlingMultiThreaded
 
     IOUtils.closeStream(inputStream);
     ContractTestUtils.rm(fs, testPath, true, false);
+    ContractTestUtils.rm(fs, testFolderPath, true, false);
     super.tearDown();
   }
 
@@ -342,7 +343,7 @@ public class ITestFileSystemOperationsExceptionHandlingMultiThreaded
     }
   }
 
-  class DeleteThread implements Runnable {
+  private static class DeleteThread implements Runnable {
     private final FileSystem fs;
     private final Path testPath;
 

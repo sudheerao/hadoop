@@ -18,32 +18,27 @@
 
 package org.apache.hadoop.fs.azure;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeNotNull;
 
 import java.io.FileNotFoundException;
 import java.util.EnumSet;
+import java.util.concurrent.Callable;
 
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.AzureBlobStorageTestAccount.CreateOptions;
-import org.apache.hadoop.fs.azure.integration.AzureTestConstants;
 import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
+import org.apache.hadoop.test.LambdaTestUtils;
 
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
 import org.junit.Test;
 
 import com.microsoft.azure.storage.blob.BlobOutputStream;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
 import com.microsoft.azure.storage.blob.CloudBlockBlob;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
 
 /**
  * Tests that WASB creates containers only if needed.
@@ -154,12 +149,16 @@ public class ITestContainerChecks extends AbstractWasbTestWithTimeout {
 
     // Neither should a read.
     Path foo = new Path("/testContainerCreateOnWrite-foo");
-    Path bar = new Path("/testContainerCreateOnWrite-bar");;
-    try {
-      fs.open(foo);
-      assertFalse("Should've thrown.", true);
-    } catch (FileNotFoundException ex) {
-    }
+    Path bar = new Path("/testContainerCreateOnWrite-bar");
+    LambdaTestUtils.intercept(FileNotFoundException.class,
+        new Callable<String>() {
+          @Override
+          public String call() throws Exception {
+            fs.open(foo).close();
+            return "Stream to " + foo;
+          }
+        }
+    );
     assertFalse(container.exists());
 
     // Neither should a rename

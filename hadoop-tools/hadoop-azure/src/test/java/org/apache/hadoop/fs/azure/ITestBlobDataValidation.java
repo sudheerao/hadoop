@@ -29,6 +29,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.util.Arrays;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.TestHookOperationContext;
@@ -81,12 +82,23 @@ public class ITestBlobDataValidation extends AbstractWasbTestWithTimeout {
     testStoreBlobMd5(true);
   }
 
+  /**
+   * Trims a suffix/prefix from the given string. For example if
+   * s is given as "/xy" and toTrim is "/", this method returns "xy"
+   */
+  private static String trim(String s, String toTrim) {
+    return StringUtils.removeEnd(StringUtils.removeStart(s, toTrim),
+        toTrim);
+  }
+
   private void testStoreBlobMd5(boolean expectMd5Stored) throws Exception {
     assumeNotNull(testAccount);
     // Write a test file.
-    String testFileKey = "testFile";
-    Path testFilePath = new Path("/" + testFileKey);
-    OutputStream outStream = testAccount.getFileSystem().create(testFilePath);
+    NativeAzureFileSystem fs = testAccount.getFileSystem();
+    Path testFilePath = AzureTestUtils.pathForTests(fs,
+        methodName.getMethodName());
+    String testFileKey = trim(testFilePath.toUri().getPath(), "/");
+    OutputStream outStream = fs.create(testFilePath);
     outStream.write(new byte[] { 5, 15 });
     outStream.close();
 
@@ -109,7 +121,7 @@ public class ITestBlobDataValidation extends AbstractWasbTestWithTimeout {
 
     // Now read back the content. If we stored the MD5 for the blob content
     // we should get a data corruption error.
-    InputStream inStream = testAccount.getFileSystem().open(testFilePath);
+    InputStream inStream = fs.open(testFilePath);
     try {
       byte[] inBuf = new byte[100];
       while (inStream.read(inBuf) > 0){

@@ -71,11 +71,11 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
   private Path hugefileRenamed;
   private AzureBlobStorageTestAccount testAccountForCleanup;
 
-  private static final int UPLOAD_BLOCKSIZE = 64 * _1KB;
+  private static final int UPLOAD_BLOCKSIZE = 64 * S_1K;
   private static final byte[] SOURCE_DATA;
 
   static {
-    SOURCE_DATA = dataset(UPLOAD_BLOCKSIZE, 0, 256);
+    SOURCE_DATA = dataset(UPLOAD_BLOCKSIZE, 0, S_256);
   }
 
   private Path testPath;
@@ -179,7 +179,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     long filesize = getTestPropertyBytes(getConfiguration(),
         KEY_HUGE_FILESIZE,
         DEFAULT_HUGE_FILESIZE);
-    long filesizeMB = filesize / _1MB;
+    long filesizeMB = filesize / S_1M;
 
     // clean up from any previous attempts
     deleteHugeFile();
@@ -208,7 +208,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     byte[] data = SOURCE_DATA;
 
     long blocks = filesize / UPLOAD_BLOCKSIZE;
-    long blocksPerMB = _1MB / UPLOAD_BLOCKSIZE;
+    long blocksPerMB = S_1M / UPLOAD_BLOCKSIZE;
 
     // perform the upload.
     // there's lots of logging here, so that a tail -f on the output log
@@ -228,8 +228,8 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
         // every 10 MB and on file upload @ 100%, print some stats
         if (block % blocksPer10MB == 0 || written == filesize) {
           long percentage = written * 100 / filesize;
-          double elapsedTime = timer.elapsedTime() / 1.0e9;
-          double writtenMB = 1.0 * written / _1MB;
+          double elapsedTime = timer.elapsedTime() / NANOSEC;
+          double writtenMB = 1.0 * written / S_1M;
           LOG.info(String.format("[%02d%%] Buffered %.2f MB out of %d MB;"
                   + " elapsedTime=%.2fs; write to buffer bandwidth=%.2f MB/s",
               percentage,
@@ -288,7 +288,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
       ops++;
       LOG.info("Final stream state: {}", in);
     }
-    long mb = Math.max(filesize / _1MB, 1);
+    long mb = Math.max(filesize / S_1M, 1);
 
     logFSState();
     timer.end("time to performed positioned reads of %d MB ", mb);
@@ -312,7 +312,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
    * @return the number of bytes/second of the recorded operation
    */
   public static double bandwidthInBytes(NanoTimer timer, long bytes) {
-    return bytes * 1.0e9 / timer.duration();
+    return bytes * NANOSEC / timer.duration();
   }
 
   @Test
@@ -333,7 +333,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
       LOG.info("Final stream state: {}", in);
     }
 
-    long mb = Math.max(filesize / _1MB, 1);
+    long mb = Math.max(filesize / S_1M, 1);
     timer.end("time to read file of %d MB ", mb);
     LOG.info("Time per MB to read = {} nS",
         toHuman(timer.nanosPerOperation(mb)));
@@ -344,7 +344,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
   @Test
   public void test_060_openAndReadWholeFileBlocks() throws Throwable {
     FileStatus status = assumeHugeFileExists();
-    int blockSize = _1MB;
+    int blockSize = S_1M;
     describe("Open the test file and read it in blocks of size %d",
         blockSize);
     long len =  status.getLen();
@@ -360,7 +360,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
       // implicitly rounding down here
       blockCount = len / blockSize;
       totalToRead = blockCount * blockSize;
-      long minimumBandwidth = 128 * 1024;
+      long minimumBandwidth = S_128K;
       int maxResetCount = 4;
       resetCount = 0;
       for (long i = 0; i < blockCount; i++) {
@@ -422,7 +422,7 @@ public class ITestAzureHugeFiles extends AbstractAzureScaleTest {
     fs.delete(hugefileRenamed, false);
     ContractTestUtils.NanoTimer timer = new ContractTestUtils.NanoTimer();
     fs.rename(hugefile, hugefileRenamed);
-    long mb = Math.max(filesize / _1MB, 1);
+    long mb = Math.max(filesize / S_1M, 1);
     timer.end("time to rename file of %d MB", mb);
     LOG.info("Time per MB to rename = {} nS",
         toHuman(timer.nanosPerOperation(mb)));

@@ -43,6 +43,9 @@ import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO
 import static org.apache.hadoop.test.LambdaTestUtils.intercept;
 import static org.junit.Assume.assumeNotNull;
 
+/**
+ * Error handling.
+ */
 public class ITestAzureFileSystemErrorConditions extends
     AbstractWasbTestWithTimeout {
   private static final int ALL_THREE_FILE_SIZE = 1024;
@@ -115,7 +118,7 @@ public class ITestAzureFileSystemErrorConditions extends
   }
 
   private class TransientErrorInjector extends StorageEvent<SendingRequestEvent> {
-    final ConnectionRecognizer connectionRecognizer;
+    private final ConnectionRecognizer connectionRecognizer;
     private boolean injectedErrorOnce = false;
 
     public TransientErrorInjector(ConnectionRecognizer connectionRecognizer) {
@@ -177,7 +180,7 @@ public class ITestAzureFileSystemErrorConditions extends
     Arrays.fill(buffer, (byte) 3);
     try(OutputStream stream = fs.create(testFile)) {
       stream.write(buffer);
-    };
+    }
   }
 
   private void readAllThreeFile(NativeAzureFileSystem fs, Path testFile)

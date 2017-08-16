@@ -383,7 +383,6 @@
                     <include>**/ITest*.java</include>
                   </includes>
                   <excludes>
-                    <exclude>**/ITestBlobDataValidation.java</exclude>
                     <exclude>**/ITestFileSystemOperationsExceptionHandlingMultiThreaded.java</exclude>
                     <exclude>**/ITestFileSystemOperationsWithThreads.java</exclude>
                     <exclude>**/ITestOutOfBandAzureBlobOperationsLive.java</exclude>
@@ -414,7 +413,6 @@
                     <fs.azure.scale.test.timeout>${fs.azure.scale.test.timeout}</fs.azure.scale.test.timeout>
                   </systemPropertyVariables>
                   <includes>
-                    <include>**/ITestBlobDataValidation.java</include>
                     <include>**/ITestFileSystemOperationsExceptionHandlingMultiThreaded.java</include>
                     <include>**/ITestFileSystemOperationsWithThreads.java</include>
                     <include>**/ITestOutOfBandAzureBlobOperationsLive.java</include>

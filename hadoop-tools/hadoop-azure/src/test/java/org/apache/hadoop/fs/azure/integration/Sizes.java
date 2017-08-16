@@ -24,16 +24,20 @@ package org.apache.hadoop.fs.azure.integration;
  */
 public interface Sizes {
 
-  int _1KB = 1024;
-  int _4KB = 4 * _1KB;
-  int _8KB = 8 * _1KB;
-  int _16KB = 16 * _1KB;
-  int _32KB = 32 * _1KB;
-  int _64KB = 64 * _1KB;
-  int _128KB = 128 * _1KB;
-  int _256KB = 256 * _1KB;
-  int _1MB = _1KB * _1KB;
-  int _2MB = 2 * _1MB;
-  int _5MB = 5 * _1MB;
-  int _10MB = 10* _1MB;
+  int S_256 = 256;
+  int S_512 = 512;
+  int S_1K = 1024;
+  int S_4K = 4 * S_1K;
+  int S_8K = 8 * S_1K;
+  int S_16K = 16 * S_1K;
+  int S_32K = 32 * S_1K;
+  int S_64K = 64 * S_1K;
+  int S_128K = 128 * S_1K;
+  int S_256K = 256 * S_1K;
+  int S_1M = S_1K * S_1K;
+  int S_2M = 2 * S_1M;
+  int S_5M = 5 * S_1M;
+  int S_10M = 10* S_1M;
+  double NANOSEC = 1.0e9;
+
 }

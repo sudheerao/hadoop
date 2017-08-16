@@ -21,11 +21,8 @@ package org.apache.hadoop.fs.azure.integration;
 import java.util.EnumSet;
 
 import com.microsoft.azure.storage.CloudStorageAccount;
-import com.microsoft.azure.storage.blob.BlobContainerProperties;
-import com.microsoft.azure.storage.blob.BlobListingDetails;
 import com.microsoft.azure.storage.blob.CloudBlobClient;
 import com.microsoft.azure.storage.blob.CloudBlobContainer;
-import com.microsoft.azure.storage.blob.ListBlobItem;
 import org.junit.Test;
 
 import org.apache.hadoop.fs.azure.AbstractWasbTestBase;

@@ -27,6 +27,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
 
+/**
+ * Test block location logic.
+ */
 public class TestNativeAzureFileSystemBlockLocations
     extends AbstractWasbTestWithTimeout {
   @Test
