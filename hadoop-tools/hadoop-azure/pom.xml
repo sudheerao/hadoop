@@ -255,9 +255,10 @@
                   <target>
                     <script language="javascript"><![CDATA[
                       var baseDirs = [
-                          "${test.build.data}",
-                          "${test.build.dir}",
-                          "${hadoop.tmp.dir}" ];
+                        project.getProperty("test.build.data"),
+                        project.getProperty("test.build.dir"),
+                        project.getProperty("hadoop.tmp.dir")
+                      ];
                       for (var i in baseDirs) {
                         for (var j = 1; j <= ${testsThreadCount}; ++j) {
                           var mkdir = project.createTask("mkdir");
