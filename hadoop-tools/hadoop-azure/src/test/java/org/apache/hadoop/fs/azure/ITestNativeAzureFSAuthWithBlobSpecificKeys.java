@@ -26,19 +26,15 @@ import static org.apache.hadoop.fs.azure.SecureStorageInterfaceImpl.KEY_USE_CONT
  * Test class to hold all WASB authorization tests that use blob-specific keys
  * to access storage.
  */
-public class TestNativeAzureFSAuthWithBlobSpecificKeys
-    extends TestNativeAzureFileSystemAuthorizationWithOwner {
+public class ITestNativeAzureFSAuthWithBlobSpecificKeys
+    extends ITestNativeAzureFileSystemAuthorizationWithOwner {
+
 
   @Override
-  public Configuration getConfiguration() {
-    Configuration conf = super.getConfiguration();
+  public Configuration createConfiguration() {
+    Configuration conf = super.createConfiguration();
     conf.set(KEY_USE_CONTAINER_SASKEY_FOR_ALL_ACCESS, "false");
     return conf;
   }
 
-  @Override
-  protected AzureBlobStorageTestAccount createTestAccount() throws Exception {
-    Configuration conf = getConfiguration();
-    return AzureBlobStorageTestAccount.create(conf);
-  }
 }
