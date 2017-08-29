@@ -22,8 +22,10 @@ import java.net.URI;
 import java.util.UUID;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.azure.integration.AzureTestUtils;
 import org.apache.hadoop.test.GenericTestUtils;
 
+import com.microsoft.azure.storage.CloudStorageAccount;
 import org.junit.Test;
 
 import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO_CONTAINER_MSG;
@@ -34,10 +36,16 @@ import static org.apache.hadoop.fs.azure.AzureNativeFileSystemStore.NO_ACCESS_TO
 public class ITestFileSystemOperationExceptionMessage
     extends AbstractWasbTestWithTimeout {
 
+
+
   @Test
   public void testAnonymouseCredentialExceptionMessage() throws Throwable {
 
     Configuration conf = AzureBlobStorageTestAccount.createTestConfiguration();
+    CloudStorageAccount account =
+        AzureBlobStorageTestAccount.createTestAccount(conf);
+    AzureTestUtils.assume("No test account", account != null);
+
     String testStorageAccount = conf.get("fs.azure.test.account.name");
     conf = new Configuration();
     conf.set("fs.AbstractFileSystem.wasb.impl",
