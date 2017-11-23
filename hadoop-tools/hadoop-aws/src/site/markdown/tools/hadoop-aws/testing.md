@@ -147,6 +147,35 @@ Example:
 </configuration>
 ```
 
+### How to keep your credentials safe: `git-secrets`
+
+A common way to leak your credentials is to unintentionally check in a file
+containing the secrets. Even if you revert that change, the SCM history
+remembers &mdash;when you push it to a public git repo, the keys are then
+public
+
+Amazon provide a tool, [git-secrets](https://github.com/awslabs/git-secrets),
+which can scan a directory tree and git history for any strings which look
+like secrets. The Hadoop codebase is set up to work with this, with a 
+`.gitallowed` file executing some strings and regular expressions which trigger
+false alarms.
+
+Here is the best practise for using this tool to keep your secrets safe:
+
+1. Install `git-secrets`.
+1. Follow its instructions to register the AWS key patterns as secrets for the hadoop
+repoository.
+1. Use `git secrets --scan` and `git secrets --scan-history` to verify there
+are no secrets already in the code. If there are, it's an emergency. Deal with it.
+1. Register the scan as a commit hook.
+1. If a new patch fails the scan, either its a secret (bad), or its a false alarm
+from a new string which matches the AWS rules. 
+If you can't/won't rename the string, fix git-secrets by editing `.gitallowed`
+and adding the new string.
+
+Set up all your other git repositories the same way: you should have no reason
+not to do this.
+
 ### <a name="encryption"></a> Configuring S3a Encryption
 
 For S3a encryption tests to run correctly, the
