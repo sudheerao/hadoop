@@ -99,7 +99,7 @@
     <mssql.version>6.2.1.jre7</mssql.version>
 
     <!-- define the Java language version used by the compiler -->
-    <javac.version>1.7</javac.version>
+    <javac.version>1.8</javac.version>
 
     <!-- The java version enforced by the maven enforcer -->
     <!-- more complex patterns can be used here, such as
