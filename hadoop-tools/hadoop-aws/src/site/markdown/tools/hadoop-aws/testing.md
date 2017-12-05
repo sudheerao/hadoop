@@ -1007,11 +1007,7 @@ When the `s3guard` profile is enabled, following profiles can be specified:
 
 * `dynamo`: use an AWS-hosted DynamoDB table; creating the table if it does
   not exist. You will have to pay the bills for DynamoDB web service.
-* `dynamodblocal`: use an in-memory DynamoDBLocal server instead of real AWS
-  DynamoDB web service; launch the server and creating the table.
-  You won't be charged bills for using DynamoDB in test. As it runs in-JVM,
-  the table isn't shared across other tests running in parallel.
-* `non-auth`: treat the S3Guard metadata as authorative.
+* `auth`: treat the S3Guard metadata as authoritative.
 
 ```bash
 mvn -T 1C verify -Dparallel-tests -DtestsThreadCount=6 -Ds3guard -Ddynamo -Dauth
