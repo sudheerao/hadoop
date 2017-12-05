@@ -39,9 +39,11 @@ The specifics of using these filesystems are documented in this section.
 
 See also:
 
-* [Testing](testing.html)
-* [Troubleshooting S3a](troubleshooting_s3a.html)
-* [S3Guard](s3guard.html)
+* [S3Guard](./s3guard.html)
+* [Troubleshooting](./troubleshooting_s3a.html)
+* [Committing work to S3 with the "S3A Committers"](./committers.html)
+* [S3A Committers Architecture](./committer_architecture.html)
+* [Testing](./testing.html)
 
 ### Warning #1: Object Stores are not filesystems
 

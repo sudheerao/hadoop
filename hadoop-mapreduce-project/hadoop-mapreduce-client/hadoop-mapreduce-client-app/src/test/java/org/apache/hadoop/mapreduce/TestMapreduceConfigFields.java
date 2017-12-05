@@ -27,6 +27,7 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.NLineInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.PathOutputCommitterFactory;
 import org.apache.hadoop.mapreduce.v2.jobhistory.JHAdminConfig;
 
 /**
@@ -50,17 +51,26 @@ import org.apache.hadoop.mapreduce.v2.jobhistory.JHAdminConfig;
  */
 public class TestMapreduceConfigFields extends TestConfigurationFieldsBase {
 
+  @SuppressWarnings("deprecation")
   @Override
   public void initializeMemberVariables() {
-    xmlFilename = new String("mapred-default.xml");
-    configurationClasses = new Class[] { MRJobConfig.class, MRConfig.class,
-        JHAdminConfig.class, ShuffleHandler.class, FileOutputFormat.class,
-	FileInputFormat.class, Job.class, NLineInputFormat.class,
-	JobConf.class, FileOutputCommitter.class };
+    xmlFilename = "mapred-default.xml";
+    configurationClasses = new Class[] {
+        MRJobConfig.class,
+        MRConfig.class,
+        JHAdminConfig.class,
+        ShuffleHandler.class,
+        FileOutputFormat.class,
+        FileInputFormat.class,
+        Job.class,
+        NLineInputFormat.class,
+        JobConf.class,
+        FileOutputCommitter.class,
+        PathOutputCommitterFactory.class
+    };
 
     // Initialize used variables
-    configurationPropsToSkipCompare = new HashSet<String>();
-    xmlPropsToSkipCompare = new HashSet<String>();
+    configurationPropsToSkipCompare = new HashSet<>();
 
     // Set error modes
     errorIfMissingConfigProps = true;
@@ -78,6 +88,11 @@ public class TestMapreduceConfigFields extends TestConfigurationFieldsBase {
     xmlPropsToSkipCompare.add("mapreduce.local.clientfactory.class.name");
     xmlPropsToSkipCompare.add("mapreduce.jobtracker.system.dir");
     xmlPropsToSkipCompare.add("mapreduce.jobtracker.staging.root.dir");
+
+    // PathOutputCommitterFactory values
+    xmlPrefixToSkipCompare = new HashSet<>();
+    xmlPrefixToSkipCompare.add(
+        PathOutputCommitterFactory.COMMITTER_FACTORY_SCHEME);
   }
 
 }
