@@ -281,7 +281,7 @@ the entire query:
 
 ```python
 def isCommitJobRepeatable() :
-  return True
+  return False
 ```
 
 Accordingly, it is a failure point in the protocol. With a low number of files
@@ -352,21 +352,20 @@ def mergePathsV1(fs, src, dest) :
       fs.delete(dest, recursive = True)
     fs.rename(src.getPath, dest)
   else :
-    # destination is directory, choose action on source type
-    if src.isDirectory :
-      if not toStat is None :
-        if not toStat.isDirectory :
-          # Destination exists and is not a directory
-          fs.delete(dest)
-          fs.rename(src.getPath(), dest)
-        else :
-          # Destination exists and is a directory
-          # merge all children under destination directory
-          for child in fs.listStatus(src.getPath) :
-            mergePathsV1(fs, child, dest + child.getName)
-      else :
-        # destination does not exist
+    # src is directory, choose action on dest type
+    if not toStat is None :
+      if not toStat.isDirectory :
+        # Destination exists and is not a directory
+        fs.delete(dest)
         fs.rename(src.getPath(), dest)
+      else :
+        # Destination exists and is a directory
+        # merge all children under destination directory
+        for child in fs.listStatus(src.getPath) :
+          mergePathsV1(fs, child, dest + child.getName)
+    else :
+      # destination does not exist
+      fs.rename(src.getPath(), dest)
 ```
 
 ## v2 commit algorithm
