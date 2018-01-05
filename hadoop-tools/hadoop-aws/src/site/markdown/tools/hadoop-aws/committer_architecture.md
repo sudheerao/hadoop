@@ -895,7 +895,7 @@ and metadata.
 
         POST bucket.s3.aws.com/path?uploads
 
-    An UploadId is returned
+    An `UploadId` is returned
 
 1. Caller uploads one or more parts.
 
@@ -993,7 +993,7 @@ Task outputs are directed to the local FS by `getTaskAttemptPath` and `getWorkPa
 
 The single-directory and partitioned committers handle conflict resolution by
 checking whether target paths exist in S3 before uploading any data.
-There are 3 conflict resolution modes, controlled by setting `fs.s3a.committer.staging.conflict-mode`:
+There are three conflict resolution modes, controlled by setting `fs.s3a.committer.staging.conflict-mode`:
 
 * `fail`: Fail a task if an output directory or partition already exists. (Default)
 * `append`: Upload data files without checking whether directories or partitions already exist.
