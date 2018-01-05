@@ -18,25 +18,22 @@
 
 package org.apache.hadoop.fs.s3a.commit.staging.integration;
 
-import org.junit.Test;
+import java.io.IOException;
 
-import org.hamcrest.core.StringContains;
-import org.hamcrest.core.StringEndsWith;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.fs.s3a.commit.AbstractITCommitMRJob;
-import org.apache.hadoop.fs.s3a.commit.CommitConstants;
 import org.apache.hadoop.fs.s3a.commit.staging.StagingCommitter;
-import org.apache.hadoop.fs.s3a.commit.staging.StagingCommitterConstants;
-import org.apache.hadoop.security.UserGroupInformation;
-
-import static org.apache.hadoop.fs.s3a.commit.staging.Paths.getMultipartUploadCommitsDirectory;
+import org.apache.hadoop.mapred.FileAlreadyExistsException;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.test.LambdaTestUtils;
 
 /**
- * Full integration test for the staging committer.
+ * This is a test to verify that the committer will fail if the destination
+ * directory exists, and that this happens in job setup.
  */
-public class ITStagingCommitMRJob extends AbstractITCommitMRJob {
+public class ITStagingCommitMRJobBadDest extends AbstractITCommitMRJob {
 
   @Override
   protected String committerName() {
@@ -44,23 +41,22 @@ public class ITStagingCommitMRJob extends AbstractITCommitMRJob {
   }
 
   /**
-   * Verify that staging commit dirs are made absolute under the user's
-   * home directory, so, in a secure cluster, private.
+   * create the destination directory and expect a failure.
+   * @param conf configuration
    */
-  @Test
-  public void testStagingDirectory() throws Throwable {
-    FileSystem hdfs = getDFS();
-    Configuration conf = hdfs.getConf();
-    conf.set(CommitConstants.FS_S3A_COMMITTER_STAGING_TMP_PATH,
-        "private");
-    Path dir = getMultipartUploadCommitsDirectory(conf, "UUID");
-    assertThat(dir.toString(), StringEndsWith.endsWith(
-        "UUID/"
-        + StagingCommitterConstants.STAGING_UPLOADS));
-    assertTrue("path unqualified", dir.isAbsolute());
-    String self = UserGroupInformation.getCurrentUser().getShortUserName();
-    assertThat(dir.toString(),
-        StringContains.containsString("/user/" + self + "/private"));
+  @Override
+  protected void applyCustomConfigOptions(JobConf conf) throws IOException {
+    // This is the destination in the S3 FS
+    String outdir = conf.get(FileOutputFormat.OUTDIR);
+    S3AFileSystem fs = getFileSystem();
+    Path outputPath = new Path(outdir);
+    fs.mkdirs(outputPath);
   }
 
+  @Override
+  public void testMRJob() throws Exception {
+    LambdaTestUtils.intercept(FileAlreadyExistsException.class,
+        "Output directory",
+        super::testMRJob);
+  }
 }
