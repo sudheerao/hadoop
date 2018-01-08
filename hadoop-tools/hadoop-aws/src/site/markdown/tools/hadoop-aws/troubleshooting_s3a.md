@@ -24,14 +24,27 @@ Common problems working with S3 are
 1. Authentication
 1. S3 Inconsistency side-effects
 
-Classpath is usually the first problem. For the S3x filesystem clients,
-you need the Hadoop-specific filesystem clients, third party S3 client libraries
-compatible with the Hadoop code, and any dependent libraries compatible with
+Classpath is usually the first problem. For the S3a filesystem clients,
+you need the Hadoop-specific filesystem clients, the AWS SDK library
+which Hadoop was built against, and any dependent libraries compatible with
 Hadoop and the specific JVM.
 
 The classpath must be set up for the process talking to S3: if this is code
 running in the Hadoop cluster, the JARs must be on that classpath. That
 includes `distcp` and the `hadoop fs` command.
+
+<b>Critical:</b> *Do not attempt to "drop in" a newer version of the AWS
+SDK than that which the Hadoop version was built with* 
+Whatever problem you have, changing the AWS SDK version will not fix things,
+only change the stack traces you see.
+
+Similarly, don't try and mix a `hadoop-aws` JAR from one Hadoop release
+with that of any other. The JAR must be in sync with `hadoop-common` and
+some other Hadoop JARs.
+                 
+<i>Randomly changing hadoop- and aws- JARs in the hope of making a problem
+"go away" or to gain access to a feature you want, 
+will not lead to the outcome you desire.</i>
 
 <!-- MACRO{toc|fromDepth=0|toDepth=2} -->
 
@@ -56,7 +69,7 @@ the classpath.
 This means that the `aws-java-sdk-bundle.jar` JAR is not on the classpath:
 add it.
 
-### Missing method in `com.amazonaws` class
+### `java.lang.NoSuchMethodError` referencing a `com.amazonaws` class
 
 This can be triggered by incompatibilities between the AWS SDK on the classpath
 and the version which Hadoop was compiled with.
@@ -68,6 +81,11 @@ version.
 The sole fix is to use the same version of the AWS SDK with which Hadoop
 was built.
 
+
+### `java.lang.NoSuchMethodError` referencing an `org.apache.hadoop` class
+
+This happens if the `hadoop-aws` and `hadoop-common` JARs are out of sync.
+You can't mix them around: they have to have exactly matching version numbers. 
 
 ## <a name="authentication"></a> Authentication Failure
 
@@ -307,6 +325,69 @@ can be used:
 Using the explicit endpoint for the region is recommended for speed and
 to use the V4 signing API.
 
+ 
+### <a name="unknown-ID"></a> AccessDeniedException "The AWS Access Key Id you provided does not exist in our records."
+
+The value of `fs.s3a.access.key` does not match a known access key ID.
+It may be mistyped, or the access key may have been deleted by one of the account managers.
+
+```
+java.nio.file.AccessDeniedException: bucket: doesBucketExist on bucket:
+    com.amazonaws.services.s3.model.AmazonS3Exception:
+    The AWS Access Key Id you provided does not exist in our records.
+     (Service: Amazon S3; Status Code: 403; Error Code: InvalidAccessKeyId;
+	at org.apache.hadoop.fs.s3a.S3AUtils.translateException(S3AUtils.java:214)
+	at org.apache.hadoop.fs.s3a.Invoker.once(Invoker.java:111)
+	at org.apache.hadoop.fs.s3a.Invoker.lambda$retry$3(Invoker.java:260)
+	at org.apache.hadoop.fs.s3a.Invoker.retryUntranslated(Invoker.java:314)
+	at org.apache.hadoop.fs.s3a.Invoker.retry(Invoker.java:256)
+	at org.apache.hadoop.fs.s3a.Invoker.retry(Invoker.java:231)
+	at org.apache.hadoop.fs.s3a.S3AFileSystem.verifyBucketExists(S3AFileSystem.java:366)
+	at org.apache.hadoop.fs.s3a.S3AFileSystem.initialize(S3AFileSystem.java:302)
+	at org.apache.hadoop.fs.FileSystem.createFileSystem(FileSystem.java:3354)
+	at org.apache.hadoop.fs.FileSystem.access$200(FileSystem.java:124)
+	at org.apache.hadoop.fs.FileSystem$Cache.getInternal(FileSystem.java:3403)
+	at org.apache.hadoop.fs.FileSystem$Cache.get(FileSystem.java:3371)
+	at org.apache.hadoop.fs.FileSystem.get(FileSystem.java:477)
+	at org.apache.hadoop.fs.contract.AbstractBondedFSContract.init(AbstractBondedFSContract.java:72)
+	at org.apache.hadoop.fs.contract.AbstractFSContractTestBase.setup(AbstractFSContractTestBase.java:177)
+	at org.apache.hadoop.fs.s3a.commit.AbstractCommitITest.setup(AbstractCommitITest.java:163)
+	at org.apache.hadoop.fs.s3a.commit.AbstractITCommitMRJob.setup(AbstractITCommitMRJob.java:129)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.lang.reflect.Method.invoke(Method.java:498)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:47)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:44)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:24)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.rules.ExternalResource$1.evaluate(ExternalResource.java:48)
+	at org.junit.rules.TestWatcher$1.evaluate(TestWatcher.java:55)
+	at org.junit.internal.runners.statements.FailOnTimeout$StatementThread.run(FailOnTimeout.java:74)
+Caused by: com.amazonaws.services.s3.model.AmazonS3Exception:
+               The AWS Access Key Id you provided does not exist in our records.
+                (Service: Amazon S3; Status Code: 403; Error Code: InvalidAccessKeyId;
+	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.handleErrorResponse(AmazonHttpClient.java:1638)
+	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.executeOneRequest(AmazonHttpClient.java:1303)
+	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.executeHelper(AmazonHttpClient.java:1055)
+	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.doExecute(AmazonHttpClient.java:743)
+	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.executeWithTimer(AmazonHttpClient.java:717)
+	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.execute(AmazonHttpClient.java:699)
+	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.access$500(AmazonHttpClient.java:667)
+	at com.amazonaws.http.AmazonHttpClient$RequestExecutionBuilderImpl.execute(AmazonHttpClient.java:649)
+	at com.amazonaws.http.AmazonHttpClient.execute(AmazonHttpClient.java:513)
+	at com.amazonaws.services.s3.AmazonS3Client.invoke(AmazonS3Client.java:4229)
+	at com.amazonaws.services.s3.AmazonS3Client.invoke(AmazonS3Client.java:4176)
+	at com.amazonaws.services.s3.AmazonS3Client.getAcl(AmazonS3Client.java:3381)
+	at com.amazonaws.services.s3.AmazonS3Client.getBucketAcl(AmazonS3Client.java:1160)
+	at com.amazonaws.services.s3.AmazonS3Client.getBucketAcl(AmazonS3Client.java:1150)
+	at com.amazonaws.services.s3.AmazonS3Client.doesBucketExist(AmazonS3Client.java:1266)
+	at org.apache.hadoop.fs.s3a.S3AFileSystem.lambda$verifyBucketExists$1(S3AFileSystem.java:367)
+	at org.apache.hadoop.fs.s3a.Invoker.once(Invoker.java:109)
+	... 27 more
+
+```
 
 ### <a name="timeout"></a> "Timeout waiting for connection from pool" when writing data
 
