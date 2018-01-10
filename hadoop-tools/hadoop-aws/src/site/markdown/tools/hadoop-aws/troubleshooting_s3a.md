@@ -58,7 +58,7 @@ on the authentication process (i.e. the secrets used to authenticate).
 
 ### `ClassNotFoundException: org.apache.hadoop.fs.s3a.S3AFileSystem`
 
-These is Hadoop filesytem client classes, found in the `hadoop-aws` JAR.
+These are Hadoop filesytem client classes, found in the `hadoop-aws` JAR.
 An exception reporting this class as missing means that this JAR is not on
 the classpath.
 
@@ -80,7 +80,6 @@ version.
 
 The sole fix is to use the same version of the AWS SDK with which Hadoop
 was built.
-
 
 ### `java.lang.NoSuchMethodError` referencing an `org.apache.hadoop` class
 
@@ -336,56 +335,56 @@ java.nio.file.AccessDeniedException: bucket: doesBucketExist on bucket:
     com.amazonaws.services.s3.model.AmazonS3Exception:
     The AWS Access Key Id you provided does not exist in our records.
      (Service: Amazon S3; Status Code: 403; Error Code: InvalidAccessKeyId;
-	at org.apache.hadoop.fs.s3a.S3AUtils.translateException(S3AUtils.java:214)
-	at org.apache.hadoop.fs.s3a.Invoker.once(Invoker.java:111)
-	at org.apache.hadoop.fs.s3a.Invoker.lambda$retry$3(Invoker.java:260)
-	at org.apache.hadoop.fs.s3a.Invoker.retryUntranslated(Invoker.java:314)
-	at org.apache.hadoop.fs.s3a.Invoker.retry(Invoker.java:256)
-	at org.apache.hadoop.fs.s3a.Invoker.retry(Invoker.java:231)
-	at org.apache.hadoop.fs.s3a.S3AFileSystem.verifyBucketExists(S3AFileSystem.java:366)
-	at org.apache.hadoop.fs.s3a.S3AFileSystem.initialize(S3AFileSystem.java:302)
-	at org.apache.hadoop.fs.FileSystem.createFileSystem(FileSystem.java:3354)
-	at org.apache.hadoop.fs.FileSystem.access$200(FileSystem.java:124)
-	at org.apache.hadoop.fs.FileSystem$Cache.getInternal(FileSystem.java:3403)
-	at org.apache.hadoop.fs.FileSystem$Cache.get(FileSystem.java:3371)
-	at org.apache.hadoop.fs.FileSystem.get(FileSystem.java:477)
-	at org.apache.hadoop.fs.contract.AbstractBondedFSContract.init(AbstractBondedFSContract.java:72)
-	at org.apache.hadoop.fs.contract.AbstractFSContractTestBase.setup(AbstractFSContractTestBase.java:177)
-	at org.apache.hadoop.fs.s3a.commit.AbstractCommitITest.setup(AbstractCommitITest.java:163)
-	at org.apache.hadoop.fs.s3a.commit.AbstractITCommitMRJob.setup(AbstractITCommitMRJob.java:129)
-	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
-	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
-	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
-	at java.lang.reflect.Method.invoke(Method.java:498)
-	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:47)
-	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
-	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:44)
-	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:24)
-	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
-	at org.junit.rules.ExternalResource$1.evaluate(ExternalResource.java:48)
-	at org.junit.rules.TestWatcher$1.evaluate(TestWatcher.java:55)
-	at org.junit.internal.runners.statements.FailOnTimeout$StatementThread.run(FailOnTimeout.java:74)
+  at org.apache.hadoop.fs.s3a.S3AUtils.translateException(S3AUtils.java:214)
+  at org.apache.hadoop.fs.s3a.Invoker.once(Invoker.java:111)
+  at org.apache.hadoop.fs.s3a.Invoker.lambda$retry$3(Invoker.java:260)
+  at org.apache.hadoop.fs.s3a.Invoker.retryUntranslated(Invoker.java:314)
+  at org.apache.hadoop.fs.s3a.Invoker.retry(Invoker.java:256)
+  at org.apache.hadoop.fs.s3a.Invoker.retry(Invoker.java:231)
+  at org.apache.hadoop.fs.s3a.S3AFileSystem.verifyBucketExists(S3AFileSystem.java:366)
+  at org.apache.hadoop.fs.s3a.S3AFileSystem.initialize(S3AFileSystem.java:302)
+  at org.apache.hadoop.fs.FileSystem.createFileSystem(FileSystem.java:3354)
+  at org.apache.hadoop.fs.FileSystem.access$200(FileSystem.java:124)
+  at org.apache.hadoop.fs.FileSystem$Cache.getInternal(FileSystem.java:3403)
+  at org.apache.hadoop.fs.FileSystem$Cache.get(FileSystem.java:3371)
+  at org.apache.hadoop.fs.FileSystem.get(FileSystem.java:477)
+  at org.apache.hadoop.fs.contract.AbstractBondedFSContract.init(AbstractBondedFSContract.java:72)
+  at org.apache.hadoop.fs.contract.AbstractFSContractTestBase.setup(AbstractFSContractTestBase.java:177)
+  at org.apache.hadoop.fs.s3a.commit.AbstractCommitITest.setup(AbstractCommitITest.java:163)
+  at org.apache.hadoop.fs.s3a.commit.AbstractITCommitMRJob.setup(AbstractITCommitMRJob.java:129)
+  at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+  at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+  at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+  at java.lang.reflect.Method.invoke(Method.java:498)
+  at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:47)
+  at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+  at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:44)
+  at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:24)
+  at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+  at org.junit.rules.ExternalResource$1.evaluate(ExternalResource.java:48)
+  at org.junit.rules.TestWatcher$1.evaluate(TestWatcher.java:55)
+  at org.junit.internal.runners.statements.FailOnTimeout$StatementThread.run(FailOnTimeout.java:74)
 Caused by: com.amazonaws.services.s3.model.AmazonS3Exception:
                The AWS Access Key Id you provided does not exist in our records.
                 (Service: Amazon S3; Status Code: 403; Error Code: InvalidAccessKeyId;
-	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.handleErrorResponse(AmazonHttpClient.java:1638)
-	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.executeOneRequest(AmazonHttpClient.java:1303)
-	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.executeHelper(AmazonHttpClient.java:1055)
-	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.doExecute(AmazonHttpClient.java:743)
-	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.executeWithTimer(AmazonHttpClient.java:717)
-	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.execute(AmazonHttpClient.java:699)
-	at com.amazonaws.http.AmazonHttpClient$RequestExecutor.access$500(AmazonHttpClient.java:667)
-	at com.amazonaws.http.AmazonHttpClient$RequestExecutionBuilderImpl.execute(AmazonHttpClient.java:649)
-	at com.amazonaws.http.AmazonHttpClient.execute(AmazonHttpClient.java:513)
-	at com.amazonaws.services.s3.AmazonS3Client.invoke(AmazonS3Client.java:4229)
-	at com.amazonaws.services.s3.AmazonS3Client.invoke(AmazonS3Client.java:4176)
-	at com.amazonaws.services.s3.AmazonS3Client.getAcl(AmazonS3Client.java:3381)
-	at com.amazonaws.services.s3.AmazonS3Client.getBucketAcl(AmazonS3Client.java:1160)
-	at com.amazonaws.services.s3.AmazonS3Client.getBucketAcl(AmazonS3Client.java:1150)
-	at com.amazonaws.services.s3.AmazonS3Client.doesBucketExist(AmazonS3Client.java:1266)
-	at org.apache.hadoop.fs.s3a.S3AFileSystem.lambda$verifyBucketExists$1(S3AFileSystem.java:367)
-	at org.apache.hadoop.fs.s3a.Invoker.once(Invoker.java:109)
-	... 27 more
+  at com.amazonaws.http.AmazonHttpClient$RequestExecutor.handleErrorResponse(AmazonHttpClient.java:1638)
+  at com.amazonaws.http.AmazonHttpClient$RequestExecutor.executeOneRequest(AmazonHttpClient.java:1303)
+  at com.amazonaws.http.AmazonHttpClient$RequestExecutor.executeHelper(AmazonHttpClient.java:1055)
+  at com.amazonaws.http.AmazonHttpClient$RequestExecutor.doExecute(AmazonHttpClient.java:743)
+  at com.amazonaws.http.AmazonHttpClient$RequestExecutor.executeWithTimer(AmazonHttpClient.java:717)
+  at com.amazonaws.http.AmazonHttpClient$RequestExecutor.execute(AmazonHttpClient.java:699)
+  at com.amazonaws.http.AmazonHttpClient$RequestExecutor.access$500(AmazonHttpClient.java:667)
+  at com.amazonaws.http.AmazonHttpClient$RequestExecutionBuilderImpl.execute(AmazonHttpClient.java:649)
+  at com.amazonaws.http.AmazonHttpClient.execute(AmazonHttpClient.java:513)
+  at com.amazonaws.services.s3.AmazonS3Client.invoke(AmazonS3Client.java:4229)
+  at com.amazonaws.services.s3.AmazonS3Client.invoke(AmazonS3Client.java:4176)
+  at com.amazonaws.services.s3.AmazonS3Client.getAcl(AmazonS3Client.java:3381)
+  at com.amazonaws.services.s3.AmazonS3Client.getBucketAcl(AmazonS3Client.java:1160)
+  at com.amazonaws.services.s3.AmazonS3Client.getBucketAcl(AmazonS3Client.java:1150)
+  at com.amazonaws.services.s3.AmazonS3Client.doesBucketExist(AmazonS3Client.java:1266)
+  at org.apache.hadoop.fs.s3a.S3AFileSystem.lambda$verifyBucketExists$1(S3AFileSystem.java:367)
+  at org.apache.hadoop.fs.s3a.Invoker.once(Invoker.java:109)
+  ... 27 more
 
 ```
 
