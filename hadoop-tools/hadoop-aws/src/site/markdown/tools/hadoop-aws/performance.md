@@ -17,7 +17,7 @@
 
 <!-- MACRO{toc|fromDepth=0|toDepth=5} -->
 
-##<a name="introduction"></a> Introduction
+## <a name="introduction"></a> Introduction
 
 S3 is slower to work with than HDFS, even on virtual clusters running on
 Amazon EC2.
@@ -54,13 +54,13 @@ data expensive.
 The slow performance of `rename()` surfaces during the commit phase of jobs,
 applications like `DistCP`, and elsewhere. 
 
-##<a name="commit"></a> Speeding up directory listing operations through S3Guard
+## <a name="commit"></a> Speeding up directory listing operations through S3Guard
 
 [S3Guard](s3guard.html) provides significant speedups for operations which 
 list files a lot. This includes the setup of all queries agains data:
 MapReduce, Hive and Spark, as well as DistCP.
 
-##<a name="commit"></a> Committing Work in MapReduce and Spark
+## <a name="commit"></a> Committing Work in MapReduce and Spark
 
 The MapReduce `FileOutputCommitter`. This also used by Apache Spark.
 
@@ -324,9 +324,9 @@ the S3 bucket/shard.
 </property>
 ```
 
-##<a name="rm"></a> HDFS fs -rm
+## <a name="rm"></a> hadoop shell commands fs -rm
 
-The `hdfs fs -rm` command can rename the file under `.Trash` rather than
+The `hadoop fs -rm` command can rename the file under `.Trash` rather than
 deleting it. Use `-skipTrash` to eliminate that step.
 
 
