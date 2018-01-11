@@ -157,7 +157,9 @@ to set fadvise policies on input streams. Once implemented,
 this will become the supported mechanism used for configuring the input IO policy.
 
 
-###<a name="pool-sizes"></a> Tuning thread and connection pool sizes.
+## <a name="tuning"></a> Options to Tune
+
+### <a name="pool-sizes"></a> Thread and connection pool sizes.
 
 Each S3A client interacting with a single bucket, as a single user, has its
 own dedicated pool of open HTTP 1.1 connections, and of threads used
@@ -192,7 +194,7 @@ Be aware, however, that processes which perform many parallel queries
 may consume large amounts of resources if each query is working with 
 a different set of s3 buckets, or are acting on behalf of different users.
 
-## For large data uploads, tune the block size: `fs.s3a.block.size`
+### For large data uploads, tune the block size: `fs.s3a.block.size`
 
 When uploading data, it is uploaded in blocks set by the option
 `fs.s3a.block.size`; default value "32M" for 32 Megabytes.
@@ -210,7 +212,7 @@ begins:
 This means that fewer PUT/POST requests are made of S3 to upload data,
 which reduces the likelihood that S3 will throttle the client(s)
 
-## Maybe: Buffer uploads in memory
+### Maybe: Buffer uploads in memory
 
 When large files are being uploaded, blocks are saved to disk and then
 queued for uploading, with multiple threads uploading different blocks
@@ -297,8 +299,7 @@ the S3 bucket/shard.
   <name>fs.s3a.connection.maximum</name>
   <value>30</value>
   <descriptiom>
-   Make greater than both fs.s3a.threads.max
-   and -numListstatusThreads
+   Make greater than both fs.s3a.threads.max and -numListstatusThreads
    </descriptiom>
 </property>
 
