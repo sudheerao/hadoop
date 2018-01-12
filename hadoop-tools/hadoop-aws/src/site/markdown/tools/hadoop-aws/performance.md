@@ -22,57 +22,48 @@
 S3 is slower to work with than HDFS, even on virtual clusters running on
 Amazon EC2.
 
-* HDFS replicates data for parallel access to the data.
-* HDFS stores the data on the local hard disks, avoiding network traffic
- if the code can be executed on that host. As EC2 hosts often have their
- network bandwidth throttled, this can make a tangible difference.
-* HDFS is significantly faster for many "metadata" operations: listing
-the contents of a directory, calling `getFileStatus()` on path,
-creating or deleting directories.
-* On HDFS, Directory renames and deletes are `O(1)` operations. 
-* Data is uploaded and replicated as it is uploaded; the final `close()`
-call of the write flushes the final buffer and closes the connection.
+That's because its a very different system, as you can see:
 
-In contrast, S3 is an object store with an HTTP REST API to interact with.
 
-1. All interaction is via HTTPS requests.
-1. There are no directories: that is just something mimicked in the S3A client,
-1. S3A makes many HTTP requests to probe for files and directories.
-1. There is no `rename()`.  S3A's rename operation is a very expensive `O(data)` 
-COPY followed by a delete, a sequence which may fail partway through
-in which case the final state depends on where the copy+ delete sequence was when it failed.
-All the objects are copied, then the original set of objects are deleted, so
-a failure should not lose data -it may result in duplicate datasets.
-1. Directory `delete()` involves listing all child entries and deleting them.
-1. Data is uploaded in a PUT when an output stream is closed, or, when 
-whenever a block's worth of data has been uploaded. The `close()` can be slow.
-* Reading data is done via an HTTP GET.
-* When performing a `seek()` within an open data stream, S3A needs to either skip ahead
-in the stream or abort the connection. This can make reading columnar Parquet/ORC
-data expensive.
+| Feature | HDFS | S3 through the S3A connector |
+|---------|------|------------------------------|
+| communication | RPC | HTTP GET/PUT/HEAD/LIST/COPY requests |
+| data locality | local storage | remote S3 servers |
+| replication | multiple datanodes | asynchronous after upload |
+| consistency | consistent data and listings | eventual consistent for listings, deletes and updates |
+| bandwidth | best: local IO, worst: datacenter network | bandwidth between servers and S3 |
+| latency | low | high, especially for "low cost" directory operations |
+| rename | fast, atomic | slow faked rename through COPY & DELETE|
+| delete | fast, atomic | fast for a file, slow & non-atomic for directories |
+| writing| incremental | in blocks; not visible until the writer is closed |
+| reading | seek() is fast | seek() is slow and expensive |
+| IOPs | limited only by hardware | callers are throttled to shards in an s3 bucket |
+| Security | Posix user+group; ACLs | AWS Roles and policies |
 
+From a performance perspective, key points to remember are:
+
+* S3 throttles bucket access across all callers: adding workers can make things worse.
+* EC2 VMs have network IO throttled based on the VM type. 
+* Directory rename and copy operations take *much* longer the more objects and data there is.
 The slow performance of `rename()` surfaces during the commit phase of jobs,
 applications like `DistCP`, and elsewhere. 
+* seek() calls when reading a file can force new HTTP requests. 
+This can make reading columnar Parquet/ORC data expensive.
 
-## <a name="commit"></a> Speeding up directory listing operations through S3Guard
+Overall, although the S3A connector makes S3 look like a file system,
+it isn't, and some attempts to preserve the metaphor are "aggressively suboptimal".
+
+To make most efficient use of S3, care is needed.
+
+## <a name="s3guard"></a> Speeding up directory listing operations through S3Guard
 
 [S3Guard](s3guard.html) provides significant speedups for operations which 
-list files a lot. This includes the setup of all queries agains data:
+list files a lot. This includes the setup of all queries against data:
 MapReduce, Hive and Spark, as well as DistCP.
 
-## <a name="commit"></a> Committing Work in MapReduce and Spark
 
-The MapReduce `FileOutputCommitter`. This also used by Apache Spark.
+Experiment with using it to see what speedup it delivers.
 
-If committing work takes a long time, it is because you are using the standard
-`FileOutputCommitter`. If you are doing this on any S3 endpoint which lacks
-list consistency (Amazon S3 without [S3Guard](s3guard.html)), this committer
-is at risk of losing data!
-
-*Your problem may appear to be performance, but really it is that the commit
-protocol is both slow and unreliable*.
-
-Fix: Use one of the dedicated [S3A Committer](committers.md).
 
 ##<a name="fadvise"></a> Improving data input performance through fadvise
 
@@ -88,22 +79,13 @@ The whole document is requested in a single HTTP request; forward seeks
 within the readahead range are supported by skipping over the intermediate
 data.
 
-This is leads to maximum read throughput —but with very expensive
+This delivers maximum sequential throughput —but with very expensive
 backward seeks.
 
-### fadvise `normal` (default)
-
-The `normal` policy starts off reading a file  in `sequential` mode,
-but if the caller seeks backwards in the stream, it switches from
-sequential to `random`.
-
-This policy essentially recognizes the initial read pattern of columnar
-storage formats (e.g. Apache ORC and Apache Parquet), which seek to the end
-of a file, read in index data and then seek backwards to selectively read
-columns. The first seeks may be be expensive compared to the random policy,
-however the overall process is much less expensive than either sequentially
-reading through a file with the `random` policy, or reading columnar data
-with the `sequential` policy. 
+Applications reading a file in bulk (DistCP, any copy operations) should use
+sequential access, as should those reading data from gzipped `.gz` files.
+Because the "normal" fadvise policy starts off in sequential IO mode,
+there is rarely any need to explicit request this policy. 
 
 ### fadvise `random`
 
@@ -118,14 +100,10 @@ By reducing the cost of closing existing HTTP requests, this is
 highly efficient for file IO accessing a binary file
 through a series of `PositionedReadable.read()` and `PositionedReadable.readFully()`
 calls. Sequential reading of a file is expensive, as now many HTTP requests must
-be made to read through the file.
+be made to read through the file: there's a delay between each GET operation.
 
-For operations simply reading through a file: copying, distCp, reading
-Gzipped or other compressed formats, parsing .csv files, etc, the `sequential`
-policy is appropriate. This is the default: S3A does not need to be configured.
 
-For the specific case of high-performance random access IO, the `random` policy
-may be considered. The requirements are:
+Random IO is best for IO with seek-heavy characteristics:
 
 * Data is read using the `PositionedReadable` API.
 * Long distance (many MB) forward seeks
@@ -156,15 +134,47 @@ basis.
 to set fadvise policies on input streams. Once implemented,
 this will become the supported mechanism used for configuring the input IO policy.
 
+### fadvise `normal` (default)
 
+The `normal` policy starts off reading a file  in `sequential` mode,
+but if the caller seeks backwards in the stream, it switches from
+sequential to `random`.
+
+This policy essentially recognizes the initial read pattern of columnar
+storage formats (e.g. Apache ORC and Apache Parquet), which seek to the end
+of a file, read in index data and then seek backwards to selectively read
+columns. The first seeks may be be expensive compared to the random policy,
+however the overall process is much less expensive than either sequentially
+reading through a file with the `random` policy, or reading columnar data
+with the `sequential` policy. 
+
+
+## <a name="commit"></a> Committing Work in MapReduce and Spark
+
+Hadoop MapReduce, Apache Hive and Apache Spark all write their work
+to HDFS and similar filesystems.
+When using S3 as a destination, this is slow because of the way `rename()`
+is mimicked with copy and delete.
+
+If committing output takes a long time, it is because you are using the standard
+`FileOutputCommitter`. If you are doing this on any S3 endpoint which lacks
+list consistency (Amazon S3 without [S3Guard](s3guard.html)), this committer
+is at risk of losing data!
+
+*Your problem may appear to be performance, but that is a symptom
+of the underlying problem: the way S3A fakes rename operations means that
+the rename cannot be safely be used in output-commit algorithms.*
+ 
+Fix: Use one of the dedicated [S3A Committers](committers.md).
+ 
 ## <a name="tuning"></a> Options to Tune
 
-### <a name="pool-sizes"></a> Thread and connection pool sizes.
+### <a name="pooling"></a> Thread and connection pool sizes.
 
 Each S3A client interacting with a single bucket, as a single user, has its
-own dedicated pool of open HTTP 1.1 connections, and of threads used
-to perform upload and copy operations.
-The default values are intended to strike a balance between performance
+own dedicated pool of open HTTP 1.1 connections alongside a pool of threads used
+for upload and copy operations.
+The default pool sizes are intended to strike a balance between performance
 and memory/thread use.
 
 You can have a larger pool of (reused) HTTP connections and threads
@@ -212,7 +222,7 @@ begins:
 This means that fewer PUT/POST requests are made of S3 to upload data,
 which reduces the likelihood that S3 will throttle the client(s)
 
-### Maybe: Buffer uploads in memory
+### Maybe: Buffer Write Data in Memory
 
 When large files are being uploaded, blocks are saved to disk and then
 queued for uploading, with multiple threads uploading different blocks
@@ -267,7 +277,7 @@ killer.
 
 ### DistCP: Parameters to Tune
 
-1. As discussed [earlier](#pool-sizes), use large values for
+1. As discussed [earlier](#pooling), use large values for
 `fs.s3a.threads.max` and `fs.s3a.connection.maximum`.
 
 1. Make sure that the bucket is using `sequential` or `normal` fadvise seek policies,
@@ -330,6 +340,18 @@ The `hadoop fs -rm` command can rename the file under `.Trash` rather than
 deleting it. Use `-skipTrash` to eliminate that step.
 
 
+This can be set in the property `fs.trash.interval`; while the default is 0,
+most HDFS deployments have it set to a non-zero value to reduce the risk of 
+data loss.
+
+```xml
+<property>
+  <name>fs.trash.interval</name>
+  <value>0</value>
+</property>
+```
+
+
 ## <a name="load balancing"></a>Improving S3 load-balancing behavior
 
 Amazon S3 uses a set of front-end servers to provide access to the underlying data.
@@ -359,18 +381,6 @@ An example of this is covered in [HADOOP-13871](https://issues.apache.org/jira/b
         curl -O https://landsat-pds.s3.amazonaws.com/scene_list.gz
 1. Use `nettop` to monitor a processes connections.
 
-Consider reducing the connection timeout of the s3a connection.
-
-```xml
-<property>
-  <name>fs.s3a.connection.timeout</name>
-  <value>15000</value>
-</property>
-```
-
-This *may* cause the client to react faster to network pauses, so display
-stack traces fast. At the same time, it may be less resilient to
-connectivity problems.
 
 ## <a name="throttling"></a> Throttling
 
@@ -418,21 +428,21 @@ them, which, for S3 means: across all buckets with data encrypted with SSE-KMS.
 
 ### <a name="minimizing_throttling"> Tips to Keep Throttling down
 
-* If you are seeing a lot of throttling responses on a large scale
+If you are seeing a lot of throttling responses on a large scale
 operation like a `distcp` copy, *reduce* the number of processes trying
 to work with the bucket (for distcp: reduce the number of mappers with the
 `-m` option).
 
-* If you are reading or writing lists of files, if you can randomize
+If you are reading or writing lists of files, if you can randomize
 the list so they are not processed in a simple sorted order, you may
 reduce load on a specific shard of S3 data, so potentially increase throughput.
 
-* An S3 Bucket is throttled by requests coming from all
+An S3 Bucket is throttled by requests coming from all
 simultaneous clients. Different applications and jobs may interfere with
 each other: consider that when troubleshooting.
 Partitioning data into different buckets may help isolate load here.
 
-* If you are using data encrypted with SSE-KMS, then the
+If you are using data encrypted with SSE-KMS, then the
 will also apply: these are stricter than the S3 numbers.
 If you believe that you are reaching these limits, you may be able to
 get them increased.
@@ -449,7 +459,7 @@ To see the allocated capacity of a bucket, the `hadoop s3guard bucket-info s3a:/
 command will print out the allocated capacity. 
 
 
-If significant throttling events/rate is observed here, the preallocated
+If significant throttling events/rate is observed here, the pre-allocated
 IOPs can be increased with the `hadoop s3guard set-capacity` command, or
 through the AWS Console. Throttling events in S3Guard are noted in logs, and
 also in the S3A metrics `s3guard_metadatastore_throttle_rate` and
@@ -458,5 +468,53 @@ also in the S3A metrics `s3guard_metadatastore_throttle_rate` and
 If you are using DistCP for a large backup to/from a S3Guarded bucket, it is
 actually possible to increase the capacity for the duration of the operation.
 
+
+##  <a name="coding"> Best Practises for Code
+
+Here are some best practises if you are writing applications to work with
+S3 or any other object store through the Hadoop APIs.
+
+Use `listFiles(path, recursive)` over `listStatus(path)`.
+The recursive `listFiles()` call can enumerate all dependents of a path
+in a single LIST call, irrespective of how deep the path is.
+In contrast, any directory tree-walk implemented in the client is issuing
+multiple HTTP requests to scan each directory, all the way down.
+
+Cache the outcome of `getFileStats()`, rather than repeatedly ask for it.
+That includes using `isFile()`, `isDirectory()`, which are simply wrappers
+around `getFileStatus()`. 
+
+Don't immediately look for a file with a `getFileStatus()` or listing call 
+after creating it, or try to read it immediately.
+This is where eventual consistency problems surface: the data may not yet be visible.
+
+Rely on `FileNotFoundException` being raised if the source of an operation is
+missing, rather than implementing your own probe for the file before
+conditionally calling the operation. 
+
+### `rename()` 
+
+Avoid any algorithm which uploads data into a temporary file and then uses
+`rename()` to commit it into place with a final path.
+On HDFS this offers a fast commit operation.
+With S3, Wasb and other object stores, you can write straight to the destination,
+knowing that the file isn't visible until you close the write: the write itself
+is atomic.
+
+The `rename()` operation may return `false` if the source is missing; this
+is a weakness in the API. Consider a check before calling rename, and if/when
+a new rename() call is made public, switch to it.
+
+
+### `delete(path, recursive)`
+
+Keep in mind that `delete(path, recursive)` is a no-op if the path does not exist, so
+there's no need to have a check for the path existing before you call it.
+
+`delete()` is often used as a cleanup operation.
+With an object store this is slow, and may cause problems if the caller
+expects an immediate response. For example, a thread may block so long
+that other liveness checks start to fail.
+Consider spawning off an executor thread to do these background cleanup operations.
 
 
