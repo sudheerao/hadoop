@@ -21,6 +21,7 @@ package org.apache.hadoop.tools.mapred;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.store.BulkDelete;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -385,6 +386,17 @@ public class CopyCommitter extends FileOutputCommitter {
       Text trgtRelPath = new Text();
 
       FileSystem targetFS = targetFinalPath.getFileSystem(conf);
+      boolean useBulkDelete = targetFS instanceof BulkDelete;
+      int window = 0;
+      boolean showProgress = false;
+      List<Path> deletePage = null;
+      BulkDelete bulkDelete = null;
+      if (useBulkDelete) {
+        bulkDelete = (BulkDelete) targetFS;
+        window = bulkDelete.getBulkDeleteLimit();
+        deletePage = new ArrayList<>();
+      }
+
       boolean srcAvailable = sourceReader.next(srcRelPath, srcFileStatus);
       while (targetReader.next(trgtRelPath, trgtFileStatus)) {
         // Skip sources that don't exist on target.
@@ -395,17 +407,39 @@ public class CopyCommitter extends FileOutputCommitter {
         if (srcAvailable && trgtRelPath.equals(srcRelPath)) continue;
 
         // Target doesn't exist at source. Delete.
-        boolean result = targetFS.delete(trgtFileStatus.getPath(), true)
-            || !targetFS.exists(trgtFileStatus.getPath());
-        if (result) {
-          LOG.info("Deleted " + trgtFileStatus.getPath() + " - Missing at source");
-          deletedEntries++;
+        if (!useBulkDelete) {
+          boolean result = targetFS.delete(trgtFileStatus.getPath(), true)
+              || !targetFS.exists(trgtFileStatus.getPath());
+          if (result) {
+            LOG.info("Deleted " + trgtFileStatus.getPath() + " - Missing at source");
+            deletedEntries++;
+            showProgress = true;
+          } else {
+            throw new IOException("Unable to delete " + trgtFileStatus.getPath());
+          }
         } else {
-          throw new IOException("Unable to delete " + trgtFileStatus.getPath());
+          deletePage.add(trgtFileStatus.getPath());
+          if (deletePage.size() == window) {
+            showProgress = true;
+            LOG.info("Initiating bulk delete of size " + deletePage.size());
+            deletedEntries += bulkDelete.bulkDelete(deletePage);
+            deletePage.clear();
+          } else {
+            // no delete
+            showProgress = false;
+          }
         }
-        taskAttemptContext.progress();
-        taskAttemptContext.setStatus("Deleting missing files from target. [" +
-            targetReader.getPosition() * 100 / totalLen + "%]");
+        if (showProgress) {
+          // update progress if there's been any FS IO/files deleted.
+          taskAttemptContext.progress();
+          taskAttemptContext.setStatus("Deleting missing files from target. [" +
+              targetReader.getPosition() * 100 / totalLen + "%]");
+        }
+      }
+      // end of the loop: there may still be some bulk delete files to write
+      if (useBulkDelete) {
+        LOG.info("Initiating final bulk delete of size " + deletePage.size());
+        deletedEntries += bulkDelete.bulkDelete(deletePage);
       }
     } finally {
       IOUtils.closeStream(sourceReader);

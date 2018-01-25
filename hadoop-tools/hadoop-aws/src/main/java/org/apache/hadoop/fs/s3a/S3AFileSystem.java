@@ -32,6 +32,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -83,6 +84,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.store.BulkDelete;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -141,7 +143,9 @@ import org.slf4j.LoggerFactory;
  */
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
-public class S3AFileSystem extends FileSystem implements StreamCapabilities {
+public class S3AFileSystem extends FileSystem implements StreamCapabilities,
+    BulkDelete {
+
   /**
    * Default blocksize as used in blocksize and FS status queries.
    */
@@ -1375,6 +1379,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
     }
   }
 
+
   /**
    * Perform a bulk object delete operation.
    * Increments the {@code OBJECT_DELETE_REQUESTS} and write
@@ -1406,6 +1411,69 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
       }
       throw e;
     }
+  }
+
+  @Override // BulkDelete
+  public int getBulkDeleteLimit() {
+    return enableMultiObjectsDelete ? MAX_ENTRIES_TO_DELETE : 1;
+  }
+
+  @Override // BulkDelete
+  public int bulkDelete(final List<Path> pathsToDelete) throws IOException {
+    int pathCount = pathsToDelete.size();
+    if (pathCount == 0) {
+      LOG.debug( "No paths to delete");
+      return 0;
+    }
+    Preconditions.checkArgument(pathCount > getBulkDeleteLimit(),
+        "Too many files to delete (%d) limit is (%d)",
+        getBulkDeleteLimit(), pathCount);
+
+    if (enableMultiObjectsDelete) {
+      List<DeleteObjectsRequest.KeyVersion> keys =new ArrayList<>(pathCount);
+      Map<String, Path> pathMap = new HashMap<>(pathCount);
+      for (Path path : pathsToDelete) {
+        String k = pathToKey(path);
+        blockRootDelete(k);
+        if (null != pathMap.put(k, path)) {
+          keys.add(new DeleteObjectsRequest.KeyVersion(k));
+        }
+      }
+      // remove the keys
+      try {
+        removeKeys(keys, true, true);
+      } catch (MultiObjectDeleteException e) {
+        // sync S3Guard with the partial failure
+        Path firstPath = null;
+        List<MultiObjectDeleteException.DeleteError> errors = e.getErrors();
+        for (MultiObjectDeleteException.DeleteError error : errors) {
+          Path removed = pathMap.remove(error.getKey());
+          if (firstPath == null) {
+            firstPath = removed;
+          }
+          for (Path path : pathMap.values()) {
+            metadataStore.delete(path);
+          }
+        }
+        throw translateException("delete",
+            firstPath != null ? firstPath.toString(): "",
+            e);
+        // this could support explicit extraction
+      } catch (AmazonClientException e) {
+        throw translateException("delete", "", e);
+      }
+      // update S3Guard
+      if (hasMetadataStore()) {
+        for (Path path : pathMap.values()) {
+          metadataStore.delete(path);
+        }
+      }
+      return pathMap.size();
+    } else {
+      delete(pathsToDelete.get(0), false);
+      return 1;
+    }
+
   }
 
   /**
