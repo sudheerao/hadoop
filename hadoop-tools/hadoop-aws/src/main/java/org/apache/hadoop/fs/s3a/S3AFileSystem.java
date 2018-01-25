@@ -34,6 +34,7 @@ import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -84,7 +85,8 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.store.BulkDelete;
+import org.apache.hadoop.fs.s3a.commit.MagicCommitPaths;
+import org.apache.hadoop.fs.store.BulkIO;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -144,7 +146,7 @@ import org.slf4j.LoggerFactory;
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
 public class S3AFileSystem extends FileSystem implements StreamCapabilities,
-    BulkDelete {
+    BulkIO {
 
   /**
    * Default blocksize as used in blocksize and FS status queries.
@@ -1413,12 +1415,86 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     }
   }
 
-  @Override // BulkDelete
+  @Override // BulkIO
   public int getBulkDeleteLimit() {
     return enableMultiObjectsDelete ? MAX_ENTRIES_TO_DELETE : 1;
   }
 
-  @Override // BulkDelete
+  /**
+   * A specific type for path trees
+   */
+  private static class PathTreeEntry {
+    private Map<String, PathTreeEntry> children;
+    private Path dir;
+
+    public PathTreeEntry(final Path dir) {
+      this.dir = dir;
+      children = new HashMap<>();
+    }
+
+    private boolean isLeaf() {
+      return children.isEmpty();
+    }
+
+    private void addChild(Iterator<String> elements, Path p) {
+      Preconditions.checkArgument(elements.hasNext(),
+        "empty elements for path %s", p);
+      String name = elements.next();
+      if (!elements.hasNext()) {
+        if (!children.containsKey(name)) {
+          // mew entry
+          children.put(name, new PathTreeEntry(p));
+        } else {
+          // leaf but existing entry. No-op
+        }
+      } else {
+        // not a leaf entry, so add an intermediate node
+        PathTreeEntry entry = children.get(name);
+        if (entry == null) {
+          // new entry
+          entry = new PathTreeEntry(p);
+          children.put(name, entry);
+        }
+        // at this point we have the path tree entry for the child elt
+        // we are also confident that the iterator has an entry
+        // so recurse down
+        entry.addChild(elements, p);
+      }
+    }
+
+    /**
+     * Recursive listing of all leaf nodes.
+     * @param leaves list to add entries to
+     */
+    private void enumLeafNodes(List<Path> leaves) {
+      if (isLeaf()) {
+          leaves.add(dir);
+      } else {
+        for (PathTreeEntry pathTreeEntry : children.values()) {
+          pathTreeEntry.enumLeafNodes(leaves);
+        }
+      }
+    }
+  }
+
+  @Retries.RetryTranslated
+  private int maybeMkdirLeafNodes(PathTreeEntry pathTreeEntry)
+      throws IOException {
+    List<Path> paths = new ArrayList<>(getBulkDeleteLimit());
+    pathTreeEntry.enumLeafNodes(paths);
+    LOG.info("Found {} directories to maybe create", paths.size());
+    int actualCount = 0;
+    for (Path path : paths) {
+      if (createFakeDirectoryIfNecessary(path)) {
+        actualCount++;
+      }
+    }
+    LOG.info("Created {} directories", actualCount);
+    return actualCount;
+  }
+
+  @Override // BulkIO
+  @Retries.RetryTranslated
   public int bulkDelete(final List<Path> pathsToDelete) throws IOException {
     int pathCount = pathsToDelete.size();
     if (pathCount == 0) {
@@ -1429,19 +1505,35 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
         "Too many files to delete (%d) limit is (%d)",
         getBulkDeleteLimit(), pathCount);
 
-    if (enableMultiObjectsDelete) {
+    if (!enableMultiObjectsDelete) {
+      // the limit size will be 1 here, we know its not an empty list, so
+      // go with it
+      delete(pathsToDelete.get(0), false);
+      return 1;
+    } else {
       List<DeleteObjectsRequest.KeyVersion> keys =new ArrayList<>(pathCount);
       Map<String, Path> pathMap = new HashMap<>(pathCount);
+      // this is a tree which is built up for mkdirs.
+      // it is only for directories
+      // root path is null.
+      PathTreeEntry pathTree = new PathTreeEntry(new Path("/"));
       for (Path path : pathsToDelete) {
         String k = pathToKey(path);
         blockRootDelete(k);
         if (null != pathMap.put(k, path)) {
           keys.add(new DeleteObjectsRequest.KeyVersion(k));
+          List<String> pathElements =
+              MagicCommitPaths.splitPathToElements(path.getParent());
+          if (!pathElements.isEmpty()) {
+            pathTree.addChild(pathElements.iterator(), path);
+          }
         }
       }
-      // remove the keys
+      // remove the keys.
+      // This does not rebuild any fake directories; these are handled next.
       try {
-        removeKeys(keys, true, true);
+        removeKeys(keys, true, false);
+        maybeMkdirLeafNodes(pathTree);
       } catch (MultiObjectDeleteException e) {
         // sync S3Guard with the partial failure
         Path firstPath = null;
@@ -1451,9 +1543,11 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
           if (firstPath == null) {
             firstPath = removed;
           }
-          for (Path path : pathMap.values()) {
-            metadataStore.delete(path);
-          }
+        }
+        // Now remove all entries in the path map which weren't in the error
+        // list, and which therefore are valid
+        for (Path path : pathMap.values()) {
+          metadataStore.delete(path);
         }
         throw translateException("delete",
             firstPath != null ? firstPath.toString(): "",
@@ -1469,9 +1563,6 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
         }
       }
       return pathMap.size();
-    } else {
-      delete(pathsToDelete.get(0), false);
-      return 1;
     }
 
   }
@@ -1873,19 +1964,22 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   /**
    * Create a fake directory if required.
    * That is: it is not the root path and the path does not exist.
-   * Retry policy: retrying; untranslated.
+   * Retry policy: retrying; translated.
    * @param f path to create
+   * @return number of entries deleted.
    * @throws IOException IO problem
    * @throws AmazonClientException untranslated AWS client problem
    */
   @Retries.RetryTranslated
-  private void createFakeDirectoryIfNecessary(Path f)
+  private boolean createFakeDirectoryIfNecessary(Path f)
       throws IOException, AmazonClientException {
     String key = pathToKey(f);
     if (!key.isEmpty() && !s3Exists(f)) {
       LOG.debug("Creating new fake directory at {}", f);
       createFakeDirectory(key);
+      return true;
     }
+    return false;
   }
 
   /**

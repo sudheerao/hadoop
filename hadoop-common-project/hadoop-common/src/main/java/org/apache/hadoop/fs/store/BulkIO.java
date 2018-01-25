@@ -26,21 +26,29 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.Path;
 
 /**
- * Interface for a filesystem which supports BulkDelete to offer.
+ * Interface for a filesystem which supports BulkIO.
+ * This is only for DistCP; a public API may be completely different.
  */
-@InterfaceAudience.Private
+@InterfaceAudience.LimitedPrivate("DistCP")
 @InterfaceStability.Unstable
-public interface BulkDelete {
+public interface BulkIO {
 
   /**
    * Return the maximum delete page size.
-   * @return a value greater than 1.
+   * @return a value greater than 0 if bulk delete is supported.
    */
   int getBulkDeleteLimit();
 
   /**
    * Initiate a bulk delete operation.
-   * If a failure occurs, the outcome of the overall operation is undefined.
+   * <ol>
+   *   <li>This is not expected to be atomic.</li>
+   *   <li>If a failure occurs, the outcome of the overall operation is
+   *   undefined.</li>
+   *   <li>It is not required to be O(1), only that it should scale better.</li>
+   *   <li>There's no guarantee that for small lists, it is any faster at all.</li>
+   * </ol>
+   *
    * @param pathsToDelete (possibly empty) list of paths to delete
    * @return the number of entries deleted.
    * @throws IOException a failure.

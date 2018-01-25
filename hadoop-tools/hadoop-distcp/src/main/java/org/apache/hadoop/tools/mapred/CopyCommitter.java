@@ -21,7 +21,7 @@ package org.apache.hadoop.tools.mapred;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.store.BulkDelete;
+import org.apache.hadoop.fs.store.BulkIO;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -386,13 +386,13 @@ public class CopyCommitter extends FileOutputCommitter {
       Text trgtRelPath = new Text();
 
       FileSystem targetFS = targetFinalPath.getFileSystem(conf);
-      boolean useBulkDelete = targetFS instanceof BulkDelete;
+      boolean useBulkDelete = targetFS instanceof BulkIO;
       int window = 0;
       boolean showProgress = false;
       List<Path> deletePage = null;
-      BulkDelete bulkDelete = null;
+      BulkIO bulkDelete = null;
       if (useBulkDelete) {
-        bulkDelete = (BulkDelete) targetFS;
+        bulkDelete = (BulkIO) targetFS;
         window = bulkDelete.getBulkDeleteLimit();
         deletePage = new ArrayList<>();
       }
