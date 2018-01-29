@@ -393,7 +393,7 @@ public class CopyCommitter extends FileOutputCommitter {
       BulkIO bulkDelete = null;
       if (useBulkDelete) {
         bulkDelete = (BulkIO) targetFS;
-        window = bulkDelete.getBulkDeleteLimit();
+        window = bulkDelete.getBulkDeleteFilesLimit();
         deletePage = new ArrayList<>();
       }
 
@@ -422,7 +422,7 @@ public class CopyCommitter extends FileOutputCommitter {
           if (deletePage.size() == window) {
             showProgress = true;
             LOG.info("Initiating bulk delete of size " + deletePage.size());
-            deletedEntries += bulkDelete.bulkDelete(deletePage);
+            deletedEntries += bulkDelete.bulkDeleteFiles(deletePage);
             deletePage.clear();
           } else {
             // no delete
@@ -439,7 +439,7 @@ public class CopyCommitter extends FileOutputCommitter {
       // end of the loop: there may still be some bulk delete files to write
       if (useBulkDelete) {
         LOG.info("Initiating final bulk delete of size " + deletePage.size());
-        deletedEntries += bulkDelete.bulkDelete(deletePage);
+        deletedEntries += bulkDelete.bulkDeleteFiles(deletePage);
       }
     } finally {
       IOUtils.closeStream(sourceReader);

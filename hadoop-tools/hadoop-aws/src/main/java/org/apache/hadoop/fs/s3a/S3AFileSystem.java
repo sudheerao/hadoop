@@ -174,7 +174,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   private Listing listing;
   private long partSize;
   private boolean enableMultiObjectsDelete;
-  private final S3ABulkOperations  bulkOperations = new S3ABulkOperations(this);
+  /** Bulk operations is configured based on multi object delete flag. */
+  private S3ABulkOperations  bulkOperations;
   private TransferManager transfers;
   private ListeningExecutorService boundedThreadPool;
   private ExecutorService unboundedThreadPool;
@@ -266,7 +267,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       //check but do not store the block size
       longBytesOption(conf, FS_S3A_BLOCK_SIZE, DEFAULT_BLOCKSIZE, 1);
       enableMultiObjectsDelete = conf.getBoolean(ENABLE_MULTI_DELETE, true);
-
+      bulkOperations = new S3ABulkOperations(this,
+          enableMultiObjectsDelete ? MAX_ENTRIES_TO_DELETE : 1);
       readAhead = longBytesOption(conf, READAHEAD_RANGE,
           DEFAULT_READAHEAD_RANGE, 0);
 
@@ -1414,15 +1416,23 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   }
 
   @Override // BulkIO
-  public int getBulkDeleteLimit() {
-    return enableMultiObjectsDelete ? MAX_ENTRIES_TO_DELETE : 1;
+  public int getBulkDeleteFilesLimit() {
+    return bulkOperations.getBulkDeleteFilesLimit();
   }
 
-
+  /**
+   * {@inheritDoc}.
+   * Updates the counters of {@link Statistic#INVOCATION_BULK_DELETE}
+   * and {@link Statistic#FILES_DELETED}.
+   * @param files (possibly empty) list of paths to delete
+   * @return the number of paths actually deleted.
+   * @throws IOException failure
+   */
   @Override // BulkIO
   @Retries.RetryTranslated
-  public int bulkDelete(final List<Path> pathsToDelete) throws IOException {
-    return bulkOperations.bulkDelete(pathsToDelete);
+  public int bulkDeleteFiles(final List<Path> files) throws IOException {
+    entryPoint(Statistic.INVOCATION_BULK_DELETE);
+    return bulkOperations.bulkDeleteFiles(files);
   }
 
   /**
@@ -1640,6 +1650,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
 
   /**
    * A helper method to delete a list of keys on a s3-backend.
+   * Also updates the statistics on files/fake directories deleted.
    * Retry policy: retry untranslated; delete considered idempotent.
    * @param keysToDelete collection of keys to delete on the s3-backend.
    *        if empty, no request is made of the object store.
@@ -1658,6 +1669,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       boolean clearKeys, boolean deleteFakeDir)
       throws MultiObjectDeleteException, AmazonClientException,
       IOException {
+    checkNotClosed();
     if (keysToDelete.isEmpty()) {
       // exit fast if there are no keys to delete
       return;

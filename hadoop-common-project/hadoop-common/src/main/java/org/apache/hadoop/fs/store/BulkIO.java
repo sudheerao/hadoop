@@ -37,21 +37,42 @@ public interface BulkIO {
    * Return the maximum delete page size.
    * @return a value greater than 0 if bulk delete is supported.
    */
-  int getBulkDeleteLimit();
+  int getBulkDeleteFilesLimit();
 
   /**
    * Initiate a bulk delete operation.
+   *
+   * Preconditions:
+   * <pre>
+   *   files = list of Path
+   *   forall f in files: not exists(FS, f) or isFile(FS, f)
+   * </pre>
+   *
+   * Postconditions for a successfully completed operation
+   * <pre>
+   *   FS' = FS where not exists(FS', f) forall f in files
+   * </pre>
+   *
    * <ol>
-   *   <li>This is not expected to be atomic.</li>
-   *   <li>If a failure occurs, the outcome of the overall operation is
-   *   undefined.</li>
-   *   <li>It is not required to be O(1), only that it should scale better.</li>
-   *   <li>There's no guarantee that for small lists, it is any faster at all.</li>
+   *   <i>All paths in the list must consist of files.</i>
+   *   <li>If a directory is included in the list, the outcome will be one of:
+   *   reject, ignore.</li>
+   *   <li>The operation must not be expected to be atomic.</li>
+   *   <li>If an error occurs, the state of the filesystem is undefined.
+   *   Some, all or none of the other files may have been deleted.</li>
+   *   <li>It is not required to be O(1), only that it should scale better.
+   *   than a sequence of individual file delete operations.</li>
+   *   <li>It is not expected that the changes in the operation
+   *   will be isolated from other, concurrent changes to the FS.</li>
+   *   <li>Duplicates may result in multiple attempts to delete the file,
+   *   or they may be filtered.</li>
+   *   <li>There's no guarantee that for small sets of files, it is any
+   *   faster at all.</li>
    * </ol>
    *
-   * @param pathsToDelete (possibly empty) list of paths to delete
-   * @return the number of entries deleted.
+   * @param filesToDelete (possibly empty) list of files to delete
+   * @return the number of files deleted.
    * @throws IOException a failure.
    */
-  int bulkDelete(List<Path> pathsToDelete) throws IOException;
+  int bulkDeleteFiles(List<Path> filesToDelete) throws IOException;
 }

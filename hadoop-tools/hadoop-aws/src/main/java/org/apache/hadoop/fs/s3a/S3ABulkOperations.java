@@ -20,18 +20,17 @@ package org.apache.hadoop.fs.s3a;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.s3.model.DeleteObjectsRequest;
-import com.amazonaws.services.s3.model.MultiObjectDeleteException;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 
-import org.apache.hadoop.fs.InvalidRequestException;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.commit.MagicCommitPaths;
 import org.apache.hadoop.fs.store.BulkIO;
@@ -39,28 +38,30 @@ import org.apache.hadoop.fs.store.BulkIO;
 import static org.apache.hadoop.fs.s3a.S3AUtils.translateException;
 
 /**
- * This performs the bulk IO so that
+ * This performs the bulk IO so that it is isolated for testing.
  */
 class S3ABulkOperations implements BulkIO {
 
   private static final Logger LOG = S3AFileSystem.LOG;
 
   private final S3AFileSystem owner;
+  private final int pageSize;
 
-  public S3ABulkOperations(final S3AFileSystem owner) {
+  public S3ABulkOperations(final S3AFileSystem owner, final int pageSize) {
     this.owner = owner;
+    this.pageSize = pageSize;
   }
 
   @Override
-  public int getBulkDeleteLimit() {
-    return owner.getBulkDeleteLimit();
+  public int getBulkDeleteFilesLimit() {
+    return pageSize;
   }
 
   @Retries.RetryTranslated
   private int maybeMkdirLeafNodes(PathTreeEntry pathTreeEntry)
       throws IOException {
-    List<Path> paths = new ArrayList<>(getBulkDeleteLimit());
-    pathTreeEntry.enumLeafNodes(paths);
+    List<Path> paths = new ArrayList<>(getBulkDeleteFilesLimit());
+    pathTreeEntry.leaves(paths);
     LOG.info("Found {} directories to maybe create", paths.size());
     int actualCount = 0;
     for (Path path : paths) {
@@ -74,147 +75,217 @@ class S3ABulkOperations implements BulkIO {
 
   @Override // BulkIO
   @Retries.RetryTranslated
-  public int bulkDelete(final List<Path> pathsToDelete) throws IOException {
-    int pathCount = pathsToDelete.size();
+  public int bulkDeleteFiles(final List<Path> filesToDelete) throws IOException {
+    int pathCount = filesToDelete.size();
     if (pathCount == 0) {
       LOG.debug("No paths to delete");
       return 0;
     }
-    int deleteLimit = getBulkDeleteLimit();
+    int deleteLimit = getBulkDeleteFilesLimit();
     Preconditions.checkArgument(pathCount > deleteLimit,
         "Too many files to delete (%d) limit is (%d)",
         deleteLimit, pathCount);
+    int deleteCount;
 
     if (deleteLimit == 1) {
       // the limit size will be 1 here, we know its not an empty list, so
       // go with it
       // and we know that this already blocks root delete operations.
-      owner.delete(pathsToDelete.get(0), false);
-      return 1;
+      owner.delete(filesToDelete.get(0), false);
+      deleteCount = 1;
     } else {
       List<DeleteObjectsRequest.KeyVersion> keys = new ArrayList<>(pathCount);
       Map<String, Path> pathMap = new HashMap<>(pathCount);
-      // this is a tree which is built up for mkdirs.
-      // it is only for directories
-      // root path is null.
-      PathTreeEntry pathTree = new PathTreeEntry(new Path("/"));
-      for (Path path : pathsToDelete) {
-        String k = owner.pathToKey(path);
-        owner.blockRootDelete(k);
-        if (null != pathMap.put(k, path)) {
-          keys.add(new DeleteObjectsRequest.KeyVersion(k));
-          List<String> pathElements =
-              MagicCommitPaths.splitPathToElements(path.getParent());
-          if (!pathElements.isEmpty()) {
-            pathTree.addChild(pathElements.iterator(), path);
-          }
-        }
-      }
+      PathTreeEntry pathTree = prepareFilesForDeletion(filesToDelete,
+          keys,
+          pathMap);
+
       // remove the keys.
       // This does not rebuild any fake directories; these are handled next.
-      try {
-        owner.removeKeys(keys, true, false);
-        maybeMkdirLeafNodes(pathTree);
-      } catch (MultiObjectDeleteException e) {
-        // sync S3Guard with the partial failure
-        Path firstPath = null;
-        List<MultiObjectDeleteException.DeleteError> errors = e.getErrors();
-        for (MultiObjectDeleteException.DeleteError error : errors) {
-          Path removed = pathMap.remove(error.getKey());
-          if (firstPath == null) {
-            firstPath = removed;
-          }
-        }
-        // Now remove all entries in the path map which weren't in the error
-        // list, and which therefore are valid
-        for (Path path : pathMap.values()) {
-          owner.getMetadataStore().delete(path);
-        }
-        throw translateException("delete",
-            firstPath != null ? firstPath.toString() : "",
-            e);
-        // this could support explicit extraction
-      } catch (AmazonClientException e) {
-        throw translateException("delete", "", e);
-      }
-      // update S3Guard
-      if (owner.hasMetadataStore()) {
-        for (Path path : pathMap.values()) {
-          owner.getMetadataStore().delete(path);
-        }
-      }
-      return pathMap.size();
+      Invoker.once("Bulk delete", "",
+          () -> {
+            owner.removeKeys(keys, true, false);
+            maybeMkdirLeafNodes(pathTree);
+          });
+      deleteCount = pathMap.size();
     }
-
+    return deleteCount;
   }
 
   /**
-   * Reject any request to delete an object where the key is root.
-   * This is just lifted from S3AFS, just isolated to re
-   * @param key key to validate
-   * @throws InvalidRequestException if the request was rejected due to
-   * a mistaken attempt to delete the root directory.
+   * Prepare the files for deletion by building the datastructures
+   * needed for the request and afterwards.
+   * @param filesToDelete [in]: list of files
+   * @param keys [out]: list of the keys of all paths to be used in
+   * building the S3 API delete request.
+   * @param pathMap map of keys to path for later use.
+   * @return the tree of paths needed to identify directories to
+   * maybe add mock markers to.
    */
-  private void blockRootDelete(String key) throws InvalidRequestException {
-    if (key.isEmpty() || "/".equals(key)) {
-      throw new InvalidRequestException("Bucket cannot be deleted");
+  @VisibleForTesting
+  PathTreeEntry prepareFilesForDeletion(final List<Path> filesToDelete,
+      final List<DeleteObjectsRequest.KeyVersion> keys,
+      final Map<String, Path> pathMap) {
+    // this is a tree which is built up for mkdirs.
+    // it is only for directories
+    // root path is null.
+    PathTreeEntry pathTree = new PathTreeEntry(new Path("/"));
+    for (Path path : filesToDelete) {
+      Preconditions.checkArgument(path.isAbsolute(),
+          "Path %s is not absolute", path);
+      String k = owner.pathToKey(path);
+      Preconditions.checkArgument(!isRootKey(k),
+          "Cannot delete the root path");
+      if (null != pathMap.put(k, path)) {
+        // not in the path map; so add it to the list of entries
+        // in the delete request.
+        keys.add(new DeleteObjectsRequest.KeyVersion(k));
+        List<String> pathElements = splitPathToElements(path.getParent());
+        if (!pathElements.isEmpty()) {
+          pathTree.addChild(pathElements.iterator(), path);
+        }
+      }
     }
+    return pathTree;
+  }
+
+  private boolean isRootKey(final String k) {
+    return k.isEmpty() || "/".equals(k);
   }
 
   /**
-   * A specific type for path trees
+   * Split a path to elements.
+   *
+   * @param path path
+   * @return a list of elements within it.
    */
-  private static class PathTreeEntry {
+  static List<String> splitPathToElements(Path path) {
+    return MagicCommitPaths.splitPathToElements(path);
+  }
 
-    private Map<String, PathTreeEntry> children;
+  /**
+   * A specific type for path trees.
+   * This is the tree built up to optimize parent directory creation after
+   * the delete operation.
+   * Only those directory paths which don't have any children need to go
+   * through the {@code createFakeDirectoryIfNecessary} process.
+   * As any directory in the operation which also has a child entry is
+   * guaranteed to not need creation, they can be omitted.
+   * All that is needed is to determine the lowest entries in the hierarchy,
+   * which is done by:
+   * <ol>
+   *   <li>Split each path up into elements.</li>
+   *   <li>Add to a tree using each element as the name of the node.</li>
+   * </ol>
+   * Later, {@link #enumLeafNodes(List)} can be used to enumerate all leaf
+   * nodes, which can then be created.
+   *
+   * It is a requirement that all leaf nodes must have a path field, but
+   * non-leaf nodes do not need to.
+   *
+   * Cost of operation.
+   * <ul>
+   *   <li>Insertion: O(depth) + cost of scanning/inserting child nodes</li>
+   *   <li>Enumeration: O(nodes)</li>
+   * </ul>
+   * A simple hash map is used to store the children, so there's the cost
+   * of scanning/expanding that if there are many child entries.
+   * There's also the memory cost of all those hash tables.
+   * The datastructure isn't "free", but "if it saves just one HTTPS call"
+   * it's justified.
+   */
+  @VisibleForTesting
+  static class PathTreeEntry {
 
-    private Path dir;
+    /** Children hashmap */
+    private final Map<String, PathTreeEntry> children;
 
-    public PathTreeEntry(final Path dir) {
-      this.dir = dir;
+    /**
+     * Path of entry; will be null if the entry was added to the tree
+     * when it was already known that this was a root node.
+     */
+    private final Path path;
+
+    /**
+     * Create an entry with the given directory.
+     * @param path directory.
+     */
+    PathTreeEntry(final Path path) {
+      this.path = path;
       children = new HashMap<>();
     }
 
-    private boolean isLeaf() {
+    public Map<String, PathTreeEntry> getChildren() {
+      return children;
+    }
+
+    public Path getPath() {
+      return path;
+    }
+
+    /**
+     * Is the entry a leaf node.
+     * That is: it has no children.
+     * @return true if the node is a leaf.
+     */
+    boolean isLeaf() {
       return children.isEmpty();
     }
 
-    private void addChild(Iterator<String> elements, Path p) {
+    /**
+     * Recursively add a child.
+     * @param elements list of remaining elements.
+     * @param child path to add
+     * @return true iff a child was added.
+     */
+    boolean addChild(Iterator<String> elements, Path child) {
       Preconditions.checkArgument(elements.hasNext(),
-          "empty elements for path %s", p);
+          "Empty elements for path %s", child);
       String name = elements.next();
+      Preconditions.checkArgument(!child.isRoot(),
+          "Root path cannot be added for key %s: %s",
+          name, path);
+      Preconditions.checkArgument(child.isAbsolute(),
+          "Non-absolute path for key %s: %s", name, path);
+      boolean inserted;
       if (!elements.hasNext()) {
         if (!children.containsKey(name)) {
           // mew entry
-          children.put(name, new PathTreeEntry(p));
+          children.put(name, new PathTreeEntry(child));
+          inserted = true;
         } else {
           // leaf but existing entry. No-op
+          inserted = false;
         }
       } else {
         // not a leaf entry, so add an intermediate node
         PathTreeEntry entry = children.get(name);
         if (entry == null) {
-          // new entry
-          entry = new PathTreeEntry(p);
+          // new entry but not a leaf entry. Don't calculate a path.
+          entry = new PathTreeEntry(null);
           children.put(name, entry);
         }
-        // at this point we have the path tree entry for the child elt
+        // at this point we have the path tree entry for the child element
         // we are also confident that the iterator has an entry
         // so recurse down
-        entry.addChild(elements, p);
+        inserted = entry.addChild(elements, child);
       }
+      return inserted;
     }
 
     /**
      * Recursive listing of all leaf nodes.
      * @param leaves list to add entries to
      */
-    private void enumLeafNodes(List<Path> leaves) {
+    void leaves(Collection<Path> leaves) {
       if (isLeaf()) {
-        leaves.add(dir);
+        // the root of the tree won't have a path, so don't add it.
+        if (path != null && !path.isRoot()) {
+          leaves.add(path);
+        }
       } else {
         for (PathTreeEntry pathTreeEntry : children.values()) {
-          pathTreeEntry.enumLeafNodes(leaves);
+          pathTreeEntry.leaves(leaves);
         }
       }
     }

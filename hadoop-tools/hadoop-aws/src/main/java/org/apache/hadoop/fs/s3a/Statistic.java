@@ -55,6 +55,8 @@ public enum Statistic {
       "Calls of createNonRecursive()"),
   INVOCATION_DELETE(CommonStatisticNames.OP_DELETE,
       "Calls of delete()"),
+  INVOCATION_BULK_DELETE("op_bulk_delete",
+      "Calls of bulkDeleteFiles()"),
   INVOCATION_EXISTS(CommonStatisticNames.OP_EXISTS,
       "Calls of exists()"),
   INVOCATION_GET_FILE_STATUS(CommonStatisticNames.OP_GET_FILE_STATUS,
