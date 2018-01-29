@@ -54,7 +54,8 @@ public interface BulkIO {
    * </pre>
    *
    * <ol>
-   *   <i>All paths in the list must consist of files.</i>
+   *   <i>All paths in the list which resolve to a entry
+   *   must refer to files.</i>
    *   <li>If a directory is included in the list, the outcome will be one of:
    *   reject, ignore.</li>
    *   <li>The operation must not be expected to be atomic.</li>
@@ -68,8 +69,17 @@ public interface BulkIO {
    *   or they may be filtered.</li>
    *   <li>There's no guarantee that for small sets of files, it is any
    *   faster at all.</li>
+   *   <li>It is not an error if a listed file does not exist.</li>
+   *   <li>If a path which does not exist is deleted, the filesystem
+   *   <i>may</i> still create a fake directory marker where its
+   *   parent directory was.</li>
    * </ol>
-   *
+   * The directory marker is relevant for object stores which create them.
+   * For performance, the list of files to create may not be probed before
+   * a bulk delete request is issued, yet afterwards the store is
+   * expected to contain the parent directories, if present.
+   * Accordingly, an implementation may create an empty marker dir for all
+   * paths passed in, even if they don't refer to files.
    * @param filesToDelete (possibly empty) list of files to delete
    * @return the number of files deleted.
    * @throws IOException a failure.

@@ -33,9 +33,8 @@ import org.slf4j.Logger;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.commit.MagicCommitPaths;
+import org.apache.hadoop.fs.s3a.s3guard.MetadataStore;
 import org.apache.hadoop.fs.store.BulkIO;
-
-import static org.apache.hadoop.fs.s3a.S3AUtils.translateException;
 
 /**
  * This performs the bulk IO so that it is isolated for testing.
@@ -58,11 +57,11 @@ class S3ABulkOperations implements BulkIO {
   }
 
   @Retries.RetryTranslated
-  private int maybeMkdirLeafNodes(PathTreeEntry pathTreeEntry)
+  private int maybeMkdirLeafNodes(PathTree pathTreeEntry)
       throws IOException {
     List<Path> paths = new ArrayList<>(getBulkDeleteFilesLimit());
     pathTreeEntry.leaves(paths);
-    LOG.info("Found {} directories to maybe create", paths.size());
+    LOG.info("Found {} directories to consider creating", paths.size());
     int actualCount = 0;
     for (Path path : paths) {
       if (owner.createFakeDirectoryIfNecessary(path)) {
@@ -82,32 +81,40 @@ class S3ABulkOperations implements BulkIO {
       return 0;
     }
     int deleteLimit = getBulkDeleteFilesLimit();
-    Preconditions.checkArgument(pathCount > deleteLimit,
-        "Too many files to delete (%d) limit is (%d)",
+    Preconditions.checkArgument(pathCount <= deleteLimit,
+        "Too many files to delete (%s) limit is (%s)",
         deleteLimit, pathCount);
     int deleteCount;
 
-    if (deleteLimit == 1) {
-      // the limit size will be 1 here, we know its not an empty list, so
-      // go with it
-      // and we know that this already blocks root delete operations.
+    if (deleteLimit == 1 || pathCount == 1) {
+      // optimized path for a single entry, either because that's the limit
+      // or there is just one file
       owner.delete(filesToDelete.get(0), false);
       deleteCount = 1;
     } else {
-      List<DeleteObjectsRequest.KeyVersion> keys = new ArrayList<>(pathCount);
+      List<DeleteObjectsRequest.KeyVersion> deleteRequest =
+          new ArrayList<>(pathCount);
       Map<String, Path> pathMap = new HashMap<>(pathCount);
-      PathTreeEntry pathTree = prepareFilesForDeletion(filesToDelete,
-          keys,
+      PathTree pathTree = prepareFilesForDeletion(filesToDelete,
+          deleteRequest,
           pathMap);
+      deleteCount = deleteRequest.size();
 
-      // remove the keys.
+      // delete the keys.
       // This does not rebuild any fake directories; these are handled next.
       Invoker.once("Bulk delete", "",
           () -> {
-            owner.removeKeys(keys, true, false);
+            LOG.info("Deleting {} objects", deleteRequest.size());
+            owner.removeKeys(deleteRequest, true, false);
+            MetadataStore metadataStore = owner.getMetadataStore();
+            if (metadataStore != null) {
+              LOG.info("Deleting metastore references", deleteRequest.size());
+              for (Path path : pathMap.values()) {
+                metadataStore.delete(path);
+              }
+            }
             maybeMkdirLeafNodes(pathTree);
           });
-      deleteCount = pathMap.size();
     }
     return deleteCount;
   }
@@ -116,33 +123,35 @@ class S3ABulkOperations implements BulkIO {
    * Prepare the files for deletion by building the datastructures
    * needed for the request and afterwards.
    * @param filesToDelete [in]: list of files
-   * @param keys [out]: list of the keys of all paths to be used in
+   * @param deleteRequest [out]: list of the keys of all paths to be used in
    * building the S3 API delete request.
    * @param pathMap map of keys to path for later use.
    * @return the tree of paths needed to identify directories to
    * maybe add mock markers to.
    */
   @VisibleForTesting
-  PathTreeEntry prepareFilesForDeletion(final List<Path> filesToDelete,
-      final List<DeleteObjectsRequest.KeyVersion> keys,
+  PathTree prepareFilesForDeletion(final List<Path> filesToDelete,
+      final List<DeleteObjectsRequest.KeyVersion> deleteRequest,
       final Map<String, Path> pathMap) {
     // this is a tree which is built up for mkdirs.
     // it is only for directories
     // root path is null.
-    PathTreeEntry pathTree = new PathTreeEntry(new Path("/"));
+    PathTree pathTree = new PathTree(new Path("/"));
     for (Path path : filesToDelete) {
       Preconditions.checkArgument(path.isAbsolute(),
           "Path %s is not absolute", path);
-      String k = owner.pathToKey(path);
-      Preconditions.checkArgument(!isRootKey(k),
+      String key = owner.pathToKey(path);
+      Preconditions.checkArgument(!isRootKey(key),
           "Cannot delete the root path");
-      if (null != pathMap.put(k, path)) {
+      if (null == pathMap.put(key, path)) {
         // not in the path map; so add it to the list of entries
         // in the delete request.
-        keys.add(new DeleteObjectsRequest.KeyVersion(k));
-        List<String> pathElements = splitPathToElements(path.getParent());
+        LOG.debug("Adding {} to delete request", key);
+        deleteRequest.add(new DeleteObjectsRequest.KeyVersion(key));
+        Path parent = path.getParent();
+        List<String> pathElements = splitPathToElements(parent);
         if (!pathElements.isEmpty()) {
-          pathTree.addChild(pathElements.iterator(), path);
+          pathTree.addChild(pathElements.iterator(), parent);
         }
       }
     }
@@ -155,11 +164,13 @@ class S3ABulkOperations implements BulkIO {
 
   /**
    * Split a path to elements.
-   *
+   * This references MagicCommitter code; its isolated so that
+   * any backport to branch-2 only needs to inline one method.
    * @param path path
    * @return a list of elements within it.
    */
-  static List<String> splitPathToElements(Path path) {
+  @VisibleForTesting
+  public static List<String> splitPathToElements(Path path) {
     return MagicCommitPaths.splitPathToElements(path);
   }
 
@@ -195,10 +206,10 @@ class S3ABulkOperations implements BulkIO {
    * it's justified.
    */
   @VisibleForTesting
-  static class PathTreeEntry {
+  public static class PathTree {
 
     /** Children hashmap */
-    private final Map<String, PathTreeEntry> children;
+    private final Map<String, PathTree> children;
 
     /**
      * Path of entry; will be null if the entry was added to the tree
@@ -210,12 +221,12 @@ class S3ABulkOperations implements BulkIO {
      * Create an entry with the given directory.
      * @param path directory.
      */
-    PathTreeEntry(final Path path) {
+    public PathTree(final Path path) {
       this.path = path;
       children = new HashMap<>();
     }
 
-    public Map<String, PathTreeEntry> getChildren() {
+    public Map<String, PathTree> getChildren() {
       return children;
     }
 
@@ -223,12 +234,21 @@ class S3ABulkOperations implements BulkIO {
       return path;
     }
 
+    @Override
+    public String toString() {
+      final StringBuilder sb = new StringBuilder("PathTree{");
+      sb.append("path=").append(path);
+      sb.append("children#=").append(children.size());
+      sb.append('}');
+      return sb.toString();
+    }
+
     /**
      * Is the entry a leaf node.
      * That is: it has no children.
      * @return true if the node is a leaf.
      */
-    boolean isLeaf() {
+    public boolean isLeaf() {
       return children.isEmpty();
     }
 
@@ -238,7 +258,7 @@ class S3ABulkOperations implements BulkIO {
      * @param child path to add
      * @return true iff a child was added.
      */
-    boolean addChild(Iterator<String> elements, Path child) {
+    public boolean addChild(Iterator<String> elements, Path child) {
       Preconditions.checkArgument(elements.hasNext(),
           "Empty elements for path %s", child);
       String name = elements.next();
@@ -251,7 +271,7 @@ class S3ABulkOperations implements BulkIO {
       if (!elements.hasNext()) {
         if (!children.containsKey(name)) {
           // mew entry
-          children.put(name, new PathTreeEntry(child));
+          children.put(name, new PathTree(child));
           inserted = true;
         } else {
           // leaf but existing entry. No-op
@@ -259,10 +279,10 @@ class S3ABulkOperations implements BulkIO {
         }
       } else {
         // not a leaf entry, so add an intermediate node
-        PathTreeEntry entry = children.get(name);
+        PathTree entry = children.get(name);
         if (entry == null) {
           // new entry but not a leaf entry. Don't calculate a path.
-          entry = new PathTreeEntry(null);
+          entry = new PathTree(null);
           children.put(name, entry);
         }
         // at this point we have the path tree entry for the child element
@@ -277,14 +297,14 @@ class S3ABulkOperations implements BulkIO {
      * Recursive listing of all leaf nodes.
      * @param leaves list to add entries to
      */
-    void leaves(Collection<Path> leaves) {
+    public void leaves(Collection<Path> leaves) {
       if (isLeaf()) {
         // the root of the tree won't have a path, so don't add it.
         if (path != null && !path.isRoot()) {
           leaves.add(path);
         }
       } else {
-        for (PathTreeEntry pathTreeEntry : children.values()) {
+        for (PathTree pathTreeEntry : children.values()) {
           pathTreeEntry.leaves(leaves);
         }
       }

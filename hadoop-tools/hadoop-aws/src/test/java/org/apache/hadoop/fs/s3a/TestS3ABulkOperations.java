@@ -60,12 +60,12 @@ public class TestS3ABulkOperations extends Assert {
     return splitPathToElements(p).iterator();
   }
 
-  private S3ABulkOperations.PathTreeEntry root;
+  private PathTree root;
 
   @Before
   public void setup() throws Exception {
 
-    root = new S3ABulkOperations.PathTreeEntry(new Path("/"));
+    root = new PathTree(new Path("/"));
   }
 
   @Test
@@ -112,20 +112,20 @@ public class TestS3ABulkOperations extends Assert {
   }
 
 
-  private S3ABulkOperations.PathTreeEntry childOf(
-      S3ABulkOperations.PathTreeEntry entry, String key) {
+  private PathTree childOf(
+      PathTree entry, String key) {
     return entry.getChildren().get(key);
   }
 
-  private S3ABulkOperations.PathTreeEntry assertChildOf(
-      S3ABulkOperations.PathTreeEntry entry, String key) {
-    S3ABulkOperations.PathTreeEntry child = childOf(entry, key);
+  private PathTree assertChildOf(
+      PathTree entry, String key) {
+    PathTree child = childOf(entry, key);
     assertNotNull("Child not found " + key, child);
     return child;
   }
 
   private Set<Path> leaves(
-      S3ABulkOperations.PathTreeEntry tree) {
+      PathTree tree) {
     HashSet<Path> leaves = new HashSet<>();
     tree.leaves(leaves);
     return leaves;
@@ -138,7 +138,7 @@ public class TestS3ABulkOperations extends Assert {
    * @return the leaves as a set.
    */
   private Set<Path> verifyLeavesEqual(
-      S3ABulkOperations.PathTreeEntry t,
+      PathTree t,
       Path... paths) {
     Set<Path> pathSet = new HashSet<Path>(Arrays.asList(paths));
     Set<Path> leaves = leaves(t);

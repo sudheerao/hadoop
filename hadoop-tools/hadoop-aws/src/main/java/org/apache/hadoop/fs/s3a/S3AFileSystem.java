@@ -1396,6 +1396,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   private void deleteObjects(DeleteObjectsRequest deleteRequest)
       throws MultiObjectDeleteException, AmazonClientException, IOException {
     incrementWriteOperations();
+    LOG.debug("Deleting {} objects",
+        deleteRequest.getKeys().size());
     try {
       invoker.retryUntranslated("delete",
           DELETE_CONSIDERED_IDEMPOTENT,
