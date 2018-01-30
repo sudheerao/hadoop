@@ -31,24 +31,69 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathIOException;
 import org.apache.hadoop.fs.s3a.commit.MagicCommitPaths;
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStore;
 import org.apache.hadoop.fs.store.BulkIO;
 
 /**
- * This performs the bulk IO so that it is isolated for testing.
+ * This performs the bulk IO so that it is isolated for testing
+ * and easier backporting.
  */
-class S3ABulkOperations implements BulkIO {
+@InterfaceStability.Unstable
+@InterfaceAudience.Private
+@VisibleForTesting
+public class S3ABulkOperations implements BulkIO {
 
   private static final Logger LOG = S3AFileSystem.LOG;
 
+  /**
+   * Error message for non-abs paths: {@value}.
+   */
+  @VisibleForTesting
+  public static final String ERR_PATH_NOT_ABSOLUTE = "Path is not absolute";
+
+  /**
+   * Error message for trying to delete the root path: {@value}.
+   */
+  @VisibleForTesting
+  public static final String ERR_CANNOT_DELETE_ROOT
+      = "Cannot delete root path";
+
+  /**
+   * Error text when the number of entries in the batch is bigger than that
+   * allowed: {@value}.
+   */
+  @VisibleForTesting
+  public static final String ERR_TOO_MANY_FILES_TO_DELETE
+      = "Too many files to delete";
+
+  /**
+   * Error text when bulk delete has been disabled: {@value}.
+   */
+  @VisibleForTesting
+  public static final String ERR_BULK_DELETE_DISABLED = "Bulk Delete disabled";
+
+  /** Owning filesystem. */
   private final S3AFileSystem owner;
+
+  /** Size of delete pages. */
   private final int pageSize;
 
+  /**
+   * Constructor.
+   * @param owner owning filesystem.
+   * @param pageSize page size for bulk deletes
+   */
   public S3ABulkOperations(final S3AFileSystem owner, final int pageSize) {
     this.owner = owner;
-    this.pageSize = pageSize;
+    Preconditions.checkArgument(pageSize <= S3AFileSystem.MAX_ENTRIES_TO_DELETE,
+        "Bulk Delete Page size out of range: %s", pageSize);
+    this.pageSize = pageSize > 0 ? pageSize: 0;
+    LOG.debug("Bulk delete page size is {}", this.pageSize);
   }
 
   @Override
@@ -56,34 +101,21 @@ class S3ABulkOperations implements BulkIO {
     return pageSize;
   }
 
-  @Retries.RetryTranslated
-  private int maybeMkdirLeafNodes(PathTree pathTreeEntry)
-      throws IOException {
-    List<Path> paths = new ArrayList<>(getBulkDeleteFilesLimit());
-    pathTreeEntry.leaves(paths);
-    LOG.info("Found {} directories to consider creating", paths.size());
-    int actualCount = 0;
-    for (Path path : paths) {
-      if (owner.createFakeDirectoryIfNecessary(path)) {
-        actualCount++;
-      }
-    }
-    LOG.info("Created {} directories", actualCount);
-    return actualCount;
-  }
-
   @Override // BulkIO
   @Retries.RetryTranslated
   public int bulkDeleteFiles(final List<Path> filesToDelete) throws IOException {
+
     int pathCount = filesToDelete.size();
     if (pathCount == 0) {
       LOG.debug("No paths to delete");
       return 0;
     }
     int deleteLimit = getBulkDeleteFilesLimit();
+    Preconditions.checkArgument(deleteLimit > 0,
+        ERR_BULK_DELETE_DISABLED);
     Preconditions.checkArgument(pathCount <= deleteLimit,
-        "Too many files to delete (%s) limit is (%s)",
-        deleteLimit, pathCount);
+        ERR_TOO_MANY_FILES_TO_DELETE + " (%s) limit is (%s)",
+        pathCount, deleteLimit);
     int deleteCount;
 
     if (deleteLimit == 1 || pathCount == 1) {
@@ -106,14 +138,15 @@ class S3ABulkOperations implements BulkIO {
           () -> {
             LOG.info("Deleting {} objects", deleteRequest.size());
             owner.removeKeys(deleteRequest, true, false);
-            MetadataStore metadataStore = owner.getMetadataStore();
-            if (metadataStore != null) {
-              LOG.info("Deleting metastore references", deleteRequest.size());
+            if (owner.hasMetadataStore()) {
+              MetadataStore metadataStore = owner.getMetadataStore();
+              LOG.info("Deleting {} metastore references",
+                  deleteRequest.size());
               for (Path path : pathMap.values()) {
                 metadataStore.delete(path);
               }
             }
-            maybeMkdirLeafNodes(pathTree);
+            maybeMkParentDirs(pathTree);
           });
     }
     return deleteCount;
@@ -128,21 +161,25 @@ class S3ABulkOperations implements BulkIO {
    * @param pathMap map of keys to path for later use.
    * @return the tree of paths needed to identify directories to
    * maybe add mock markers to.
+   * @throws PathIOException bad path in the list
    */
   @VisibleForTesting
   PathTree prepareFilesForDeletion(final List<Path> filesToDelete,
       final List<DeleteObjectsRequest.KeyVersion> deleteRequest,
-      final Map<String, Path> pathMap) {
+      final Map<String, Path> pathMap) throws PathIOException {
     // this is a tree which is built up for mkdirs.
     // it is only for directories
     // root path is null.
     PathTree pathTree = new PathTree(new Path("/"));
     for (Path path : filesToDelete) {
-      Preconditions.checkArgument(path.isAbsolute(),
-          "Path %s is not absolute", path);
+      if (!path.isAbsolute()) {
+        throw new PathIOException(path.toString(),
+            ERR_PATH_NOT_ABSOLUTE);
+      }
       String key = owner.pathToKey(path);
-      Preconditions.checkArgument(!isRootKey(key),
-          "Cannot delete the root path");
+      if (isRootKey(key)) {
+        throw new PathIOException(path.toString(), ERR_CANNOT_DELETE_ROOT);
+      }
       if (null == pathMap.put(key, path)) {
         // not in the path map; so add it to the list of entries
         // in the delete request.
@@ -158,8 +195,36 @@ class S3ABulkOperations implements BulkIO {
     return pathTree;
   }
 
-  private boolean isRootKey(final String k) {
-    return k.isEmpty() || "/".equals(k);
+  /**
+   * Extract the leaf nodes of the tree and create fake directories there,
+   * if needed.
+   * @param pathTree tree
+   * @return the number of directories created.
+   * @throws IOException failure
+   */
+  @Retries.RetryTranslated
+  private int maybeMkParentDirs(PathTree pathTree)
+      throws IOException {
+    List<Path> paths = new ArrayList<>(getBulkDeleteFilesLimit());
+    pathTree.leaves(paths);
+    LOG.info("Number of directories to try creating: {}", paths.size());
+    int actualCount = 0;
+    for (Path path : paths) {
+      if (owner.createFakeDirectoryIfNecessary(path)) {
+        actualCount++;
+      }
+    }
+    LOG.info("Number of created directories: {} ", actualCount);
+    return actualCount;
+  }
+
+  /**
+   * Probe a key for being root.
+   * @param key key to check
+   * @return true if the key is for the root element.
+   */
+  private boolean isRootKey(final String key) {
+    return key.isEmpty() || "/".equals(key);
   }
 
   /**
@@ -226,6 +291,10 @@ class S3ABulkOperations implements BulkIO {
       children = new HashMap<>();
     }
 
+    /**
+     * Get the child map.
+     * @return the children.
+     */
     public Map<String, PathTree> getChildren() {
       return children;
     }
@@ -238,13 +307,13 @@ class S3ABulkOperations implements BulkIO {
     public String toString() {
       final StringBuilder sb = new StringBuilder("PathTree{");
       sb.append("path=").append(path);
-      sb.append("children#=").append(children.size());
+      sb.append("; children ").append(children.size());
       sb.append('}');
       return sb.toString();
     }
 
     /**
-     * Is the entry a leaf node.
+     * Is the entry a leaf node?
      * That is: it has no children.
      * @return true if the node is a leaf.
      */

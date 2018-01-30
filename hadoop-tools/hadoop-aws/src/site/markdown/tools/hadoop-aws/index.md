@@ -1702,4 +1702,36 @@ cluster and Amazon S3.
 See [Copying Data Between a Cluster and Amazon S3](https://hortonworks.github.io/hdp-aws/s3-copy-data/index.html)
 for details on S3 copying specifically.
 
+1. Don't use `--atomic`
+1. Incremental `-update` operations don't check file checksums, only that a file exists.
 
+To reduce S3 throttling on the `-update -delete` operation, DistCP use a special
+bulk delete API which will issue bulk delete requests to S3. This uses the
+S3A bulk delete command, and issues requests in pages, with the size of 
+a page set in `fs.s3a.experimental.bulkdelete.pagesize`
+
+ 
+
+```xml
+<property>
+  <name>fs.s3a.experimental.bulkdelete.pagesize</name>
+  <value>1000</value>
+  <description>Size of pages in bulk delete. Range 0-1000, where 0 means
+   "disabled"</description>
+</property>
+```
+
+Setting the page size to 0 disables the bulk delete operation and reverts to
+the original one-by-one delete.
+
+```xml
+<property>
+  <name>fs.s3a.experimental.bulkdelete.pagesize</name>
+  <value>0</value>
+  <description>Size of pages in bulk delete. Range 0-1000, where 0 means
+   "disabled"</description>
+</property>
+```
+
+If `fs.s3a.multiobjectdelete.enable` is false, then bulk delete operations
+are disabled here as well as in directory deletion.

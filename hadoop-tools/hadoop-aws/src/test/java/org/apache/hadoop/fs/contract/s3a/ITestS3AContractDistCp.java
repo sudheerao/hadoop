@@ -48,6 +48,8 @@ public class ITestS3AContractDistCp extends AbstractContractDistCpTest {
     Configuration newConf = super.createConfiguration();
     newConf.setLong(MULTIPART_SIZE, MULTIPART_SETTING);
     newConf.set(FAST_UPLOAD_BUFFER, FAST_UPLOAD_BUFFER_DISK);
+    // set a small page size to force distcp into multipage bulk IO
+    newConf.setInt(EXPERIMENTAL_BULKDELETE_PAGESIZE, 2);
     // patch in S3Guard options
     maybeEnableS3Guard(newConf);
     return newConf;

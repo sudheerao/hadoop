@@ -854,6 +854,36 @@ public class ContractTestUtils extends Assert {
   }
 
   /**
+   * Assert that a varargs list of paths exist.
+   * @param fs filesystem
+   * @param message message for exceptions
+   * @param paths paths
+   * @throws IOException IO failure
+   */
+  public static void assertPathsExist(FileSystem fs,
+      String message,
+      Path... paths) throws IOException {
+    for (Path path : paths) {
+      assertPathExists(fs, message, path);
+    }
+  }
+
+  /**
+   * Assert that a varargs list of paths do not exist.
+   * @param fs filesystem
+   * @param message message for exceptions
+   * @param paths paths
+   * @throws IOException IO failure
+   */
+  public static void assertPathsDoNotExist(FileSystem fs,
+      String message,
+      Path... paths) throws IOException {
+    for (Path path : paths) {
+      assertPathDoesNotExist(fs, "", path);
+    }
+  }
+
+  /**
    * Create a dataset for use in the tests; all data is in the range
    * base to (base+modulo-1) inclusive.
    * @param len length of data

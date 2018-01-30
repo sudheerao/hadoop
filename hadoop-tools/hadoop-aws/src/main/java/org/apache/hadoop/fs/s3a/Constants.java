@@ -542,4 +542,11 @@ public final class Constants {
    */
   public static final String RETRY_THROTTLE_INTERVAL_DEFAULT = "500ms";
 
+  /**
+   * Experimental page size for bulk deletes.
+   * Value: {@value}
+   */
+  @InterfaceStability.Unstable
+  public static final String EXPERIMENTAL_BULKDELETE_PAGESIZE =
+      "fs.s3a.experimental.bulkdelete.pagesize";
 }

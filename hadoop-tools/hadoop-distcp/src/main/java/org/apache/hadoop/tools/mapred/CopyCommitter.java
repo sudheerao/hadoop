@@ -386,15 +386,22 @@ public class CopyCommitter extends FileOutputCommitter {
       Text trgtRelPath = new Text();
 
       FileSystem targetFS = targetFinalPath.getFileSystem(conf);
-      boolean useBulkDelete = targetFS instanceof BulkIO;
-      int window = 0;
+      int pageSize = 0;
       boolean showProgress = false;
       List<Path> deletePage = null;
       BulkIO bulkDelete = null;
-      if (useBulkDelete) {
+      boolean useBulkDelete = false;
+      if (targetFS instanceof BulkIO) {
         bulkDelete = (BulkIO) targetFS;
-        window = bulkDelete.getBulkDeleteFilesLimit();
-        deletePage = new ArrayList<>();
+        pageSize = bulkDelete.getBulkDeleteFilesLimit();
+        LOG.info("Destination filesystem supports bulk deletes, "
+            + "maximum size " + pageSize);
+        if (pageSize <= 0) {
+          LOG.info("Bulk delete is disabled");
+        } else {
+          useBulkDelete = true;
+          deletePage = new ArrayList<>();
+        }
       }
 
       boolean srcAvailable = sourceReader.next(srcRelPath, srcFileStatus);
@@ -419,7 +426,7 @@ public class CopyCommitter extends FileOutputCommitter {
           }
         } else {
           deletePage.add(trgtFileStatus.getPath());
-          if (deletePage.size() == window) {
+          if (deletePage.size() == pageSize) {
             showProgress = true;
             LOG.info("Initiating bulk delete of size " + deletePage.size());
             deletedEntries += bulkDelete.bulkDeleteFiles(deletePage);

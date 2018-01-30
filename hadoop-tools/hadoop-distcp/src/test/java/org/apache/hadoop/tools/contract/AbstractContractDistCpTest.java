@@ -83,10 +83,58 @@ public abstract class AbstractContractDistCpTest
     mkdirs(remoteFS, remoteDir);
   }
 
+  protected FileSystem getLocalFS() {
+    return localFS;
+  }
+
+  protected FileSystem getRemoteFS() {
+    return remoteFS;
+  }
+
+  protected Path getLocalDir() {
+    return localDir;
+  }
+
+  protected Path getRemoteDir() {
+    return remoteDir;
+  }
+
   @Test
-  public void deepDirectoryStructureToRemote() throws Exception {
+  public void deepDirectoryStructureToRemoteWithSync() throws Exception {
     describe("copy a deep directory structure from local to remote");
-    deepDirectoryStructure(localFS, localDir, remoteFS, remoteDir);
+    Path outputDir = deepDirectoryStructure(localFS, localDir, remoteFS, remoteDir);
+
+    describe("Now do an incremental update with deletion of missing files");
+    Path srcDir = localDir;
+    // same path setup as in deepDirectoryStructure()
+    Path inputDir = new Path(srcDir, "inputDir");
+    Path inputSubDir1 = new Path(inputDir, "subDir1");
+    Path inputSubDir2 = new Path(inputDir, "subDir2/subDir3");
+    Path inputFile1 = new Path(inputDir, "file1");
+    Path inputFile2 = new Path(inputSubDir1, "file2");
+    Path inputFile3 = new Path(inputSubDir2, "file3");
+    localFS.delete(inputFile2, false);
+    localFS.delete(inputFile3, false);
+    // add one new file
+    Path inputFile4 = new Path(inputSubDir2, "file4");
+    ContractTestUtils.touch(localFS, inputFile4);
+    runDistCp(buildWithStandardOptions(
+        new DistCpOptions.Builder(
+        Collections.singletonList(inputDir), outputDir)
+        .withDeleteMissing(true)
+        .withSyncFolder(true)
+        .withOverwrite(false)));
+    Path outputSubDir1 = new Path(outputDir, "subDir1");
+    Path outputSubDir2 = new Path(outputDir, "subDir2/subDir3");
+    Path outputFile1 = new Path(outputDir, "file1");
+    Path outputFile2 = new Path(outputSubDir1, "file2");
+    Path outputFile3 = new Path(outputSubDir2, "file3");
+    Path outputFile4 = new Path(outputSubDir2, "file4");
+
+    ContractTestUtils.assertPathsExist(remoteFS, "existing  and new files",
+        outputFile1, outputFile4);
+    ContractTestUtils.assertPathsDoNotExist(remoteFS,
+        "DistCP should have deleted", outputFile2, outputFile3);
   }
 
   @Test
@@ -114,9 +162,10 @@ public abstract class AbstractContractDistCpTest
    * @param srcDir source directory
    * @param dstFS destination FileSystem
    * @param dstDir destination directory
+   * @return the target directory of the copy
    * @throws Exception if there is a failure
    */
-  private void deepDirectoryStructure(FileSystem srcFS, Path srcDir,
+  private Path deepDirectoryStructure(FileSystem srcFS, Path srcDir,
       FileSystem dstFS, Path dstDir) throws Exception {
     Path inputDir = new Path(srcDir, "inputDir");
     Path inputSubDir1 = new Path(inputDir, "subDir1");
@@ -140,6 +189,7 @@ public abstract class AbstractContractDistCpTest
         new Path(target, "inputDir/subDir1/file2"), data2);
     verifyFileContents(dstFS,
         new Path(target, "inputDir/subDir2/subDir3/file3"), data3);
+    return target;
   }
 
   /**
@@ -183,12 +233,26 @@ public abstract class AbstractContractDistCpTest
    * @throws Exception if there is a failure
    */
   private void runDistCp(Path src, Path dst) throws Exception {
-    DistCpOptions options = new DistCpOptions.Builder(
-        Collections.singletonList(src), dst).build();
+    runDistCp(buildWithStandardOptions(
+        new DistCpOptions.Builder(Collections.singletonList(src), dst)));
+  }
+
+  private void runDistCp(final DistCpOptions options) throws Exception {
     Job job = new DistCp(conf, options).execute();
     assertNotNull("Unexpected null job returned from DistCp execution.", job);
     assertTrue("DistCp job did not complete.", job.isComplete());
     assertTrue("DistCp job did not complete successfully.", job.isSuccessful());
+  }
+
+  /**
+   * Add any standard options and then build.
+   * @param builder DistCp option builder
+   * @return the build options
+   */
+  private DistCpOptions buildWithStandardOptions(DistCpOptions.Builder builder) {
+    return builder
+        .withNumListstatusThreads(8)
+        .build();
   }
 
   /**

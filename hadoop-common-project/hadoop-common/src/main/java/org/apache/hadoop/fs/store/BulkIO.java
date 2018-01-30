@@ -35,6 +35,8 @@ public interface BulkIO {
 
   /**
    * Return the maximum delete page size.
+   * Calling {@link #bulkDeleteFiles(List)} with a list size greater
+   * than this limit will be rejected.
    * @return a value greater than 0 if bulk delete is supported.
    */
   int getBulkDeleteFilesLimit();
@@ -50,25 +52,25 @@ public interface BulkIO {
    *
    * Postconditions for a successfully completed operation
    * <pre>
-   *   FS' = FS where not exists(FS', f) forall f in files
+   *   FS' = FS where forall f in files:
+   *      not exists(FS', f) and isDirectory(FS', parent(f))
    * </pre>
    *
    * <ol>
    *   <i>All paths in the list which resolve to a entry
    *   must refer to files.</i>
-   *   <li>If a directory is included in the list, the outcome will be one of:
-   *   reject, ignore.</li>
+   *   <li>If a directory is included in the list, the outcome is undefined.</li>
    *   <li>The operation must not be expected to be atomic.</li>
    *   <li>If an error occurs, the state of the filesystem is undefined.
    *   Some, all or none of the other files may have been deleted.</li>
-   *   <li>It is not required to be O(1), only that it should scale better.
-   *   than a sequence of individual file delete operations.</li>
    *   <li>It is not expected that the changes in the operation
    *   will be isolated from other, concurrent changes to the FS.</li>
    *   <li>Duplicates may result in multiple attempts to delete the file,
    *   or they may be filtered.</li>
-   *   <li>There's no guarantee that for small sets of files, it is any
-   *   faster at all.</li>
+   *   <li>It is not required to be O(1), only that it should scale better.
+   *   than a sequence of individual file delete operations.</li>
+   *   <li>There's no guarantee that for small sets of files bulk deletion
+   *   is faster than single deletes. It may even be slower.</li>
    *   <li>It is not an error if a listed file does not exist.</li>
    *   <li>If a path which does not exist is deleted, the filesystem
    *   <i>may</i> still create a fake directory marker where its
@@ -81,8 +83,10 @@ public interface BulkIO {
    * Accordingly, an implementation may create an empty marker dir for all
    * paths passed in, even if they don't refer to files.
    * @param filesToDelete (possibly empty) list of files to delete
-   * @return the number of files deleted.
-   * @throws IOException a failure.
+   * @return the number of files included in the filesystem delete request after
+   * duplicates were discarded.
+   * @throws IOException IO failure.
+   * @throws IllegalArgumentException precondition failure
    */
   int bulkDeleteFiles(List<Path> filesToDelete) throws IOException;
 }

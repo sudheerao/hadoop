@@ -197,7 +197,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   private boolean allowAuthoritative;
 
   // The maximum number of entries that can be deleted in any call to s3
-  private static final int MAX_ENTRIES_TO_DELETE = 1000;
+  static final int MAX_ENTRIES_TO_DELETE = 1000;
   private String blockOutputBuffer;
   private S3ADataBlocks.BlockFactory blockFactory;
   private int blockOutputActiveBlocks;
@@ -268,7 +268,10 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       longBytesOption(conf, FS_S3A_BLOCK_SIZE, DEFAULT_BLOCKSIZE, 1);
       enableMultiObjectsDelete = conf.getBoolean(ENABLE_MULTI_DELETE, true);
       bulkOperations = new S3ABulkOperations(this,
-          enableMultiObjectsDelete ? MAX_ENTRIES_TO_DELETE : 1);
+          enableMultiObjectsDelete ?
+              conf.getInt(EXPERIMENTAL_BULKDELETE_PAGESIZE,
+                  MAX_ENTRIES_TO_DELETE)
+              : 0);
       readAhead = longBytesOption(conf, READAHEAD_RANGE,
           DEFAULT_READAHEAD_RANGE, 0);
 
