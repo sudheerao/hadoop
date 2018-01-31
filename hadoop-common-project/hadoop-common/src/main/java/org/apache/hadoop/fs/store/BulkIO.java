@@ -34,7 +34,7 @@ import org.apache.hadoop.fs.Path;
 public interface BulkIO {
 
   /**
-   * Return the maximum delete page size.
+   * Return the maximum bulk delete page size.
    * Calling {@link #bulkDeleteFiles(List)} with a list size greater
    * than this limit will be rejected.
    * @return a value greater than 0 if bulk delete is supported.
@@ -46,7 +46,7 @@ public interface BulkIO {
    *
    * Preconditions:
    * <pre>
-   *   files = list of Path
+   *   files == list of Path
    *   forall f in files: not exists(FS, f) or isFile(FS, f)
    * </pre>
    *
@@ -58,9 +58,10 @@ public interface BulkIO {
    *
    * <ol>
    *   <i>All paths in the list which resolve to a entry
-   *   must refer to files.</i>
-   *   <li>If a directory is included in the list, the outcome is undefined.</li>
-   *   <li>The operation must not be expected to be atomic.</li>
+   *   MUST refer to files.</i>
+   *   <li>If a directory is included in the list, the outcome
+   *   is undefined.</li>
+   *   <li>The operation is unlikely  be atomic.</li>
    *   <li>If an error occurs, the state of the filesystem is undefined.
    *   Some, all or none of the other files may have been deleted.</li>
    *   <li>It is not expected that the changes in the operation

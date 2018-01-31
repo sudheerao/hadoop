@@ -418,11 +418,13 @@ public class CopyCommitter extends FileOutputCommitter {
           boolean result = targetFS.delete(trgtFileStatus.getPath(), true)
               || !targetFS.exists(trgtFileStatus.getPath());
           if (result) {
-            LOG.info("Deleted " + trgtFileStatus.getPath() + " - Missing at source");
+            LOG.info("Deleted " + trgtFileStatus.getPath()
+                + " - Missing at source");
             deletedEntries++;
             showProgress = true;
           } else {
-            throw new IOException("Unable to delete " + trgtFileStatus.getPath());
+            throw new IOException("Unable to delete "
+                + trgtFileStatus.getPath());
           }
         } else {
           deletePage.add(trgtFileStatus.getPath());

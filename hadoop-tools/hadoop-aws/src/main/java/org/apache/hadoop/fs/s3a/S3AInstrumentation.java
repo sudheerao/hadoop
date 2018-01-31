@@ -134,6 +134,7 @@ public class S3AInstrumentation implements Closeable, MetricsSource {
       = new S3GuardInstrumentation();
 
   private static final Statistic[] COUNTERS_TO_CREATE = {
+      INVOCATION_BULK_DELETE,
       INVOCATION_COPY_FROM_LOCAL_FILE,
       INVOCATION_CREATE,
       INVOCATION_CREATE_NON_RECURSIVE,

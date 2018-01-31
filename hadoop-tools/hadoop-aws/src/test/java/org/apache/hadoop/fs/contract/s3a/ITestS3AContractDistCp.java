@@ -18,12 +18,22 @@
 
 package org.apache.hadoop.fs.contract.s3a;
 
+import org.junit.Assert;
+
 import static org.apache.hadoop.fs.s3a.Constants.*;
 import static org.apache.hadoop.fs.s3a.S3ATestConstants.SCALE_TEST_TIMEOUT_MILLIS;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.maybeEnableS3Guard;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.s3a.S3AFileSystem;
+import org.apache.hadoop.fs.s3a.S3ATestUtils;
+import org.apache.hadoop.fs.s3a.Statistic;
 import org.apache.hadoop.tools.contract.AbstractContractDistCpTest;
+
+import static org.apache.hadoop.fs.s3a.Statistic.*;
+import static org.apache.hadoop.fs.s3a.S3ATestUtils.*;
 
 /**
  * Contract test suite covering S3A integration with DistCp.
@@ -58,5 +68,23 @@ public class ITestS3AContractDistCp extends AbstractContractDistCpTest {
   @Override
   protected S3AContract createContract(Configuration conf) {
     return new S3AContract(conf);
+  }
+
+  /**
+   * Wrap the update code with an assertion to verify that the
+   * bulk delete call was called at least once.
+   * This is needed to verify that the new delete path was used
+   * @param outputDir output directory used by the initial distcp
+   */
+  @Override
+  protected void updateDeepDirectoryStructure(final Path outputDir)
+      throws Exception {
+    S3AFileSystem remoteFS = (S3AFileSystem) getRemoteFS();
+    MetricDiff bulkDeleteDiff = new MetricDiff(remoteFS,
+        Statistic.INVOCATION_BULK_DELETE);
+    super.updateDeepDirectoryStructure(outputDir);
+    long bulkInvocations = bulkDeleteDiff.diff();
+    Assert.assertNotEquals("Bulk Delete not invoked on " + remoteFS,
+        0, bulkInvocations);
   }
 }

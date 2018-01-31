@@ -30,8 +30,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import org.apache.hadoop.fs.Path;
-import static org.apache.hadoop.fs.s3a.S3ABulkOperations.*;
 
+import static org.apache.hadoop.fs.s3a.S3ABulkOperations.PathTree;
+import static org.apache.hadoop.fs.s3a.S3ABulkOperations.splitPathToElements;
 
 /**
  * Unit tests for {@link S3ABulkOperations}, specifically
@@ -42,13 +43,19 @@ public class TestS3ABulkOperations extends Assert {
   static final Path R = new Path("s3a://bucket/");
 
   private final Path a = p(R, "a");
+
   private final Path b = p(R, "b");
+
   private final Path c = p(R, "c");
 
   private final Path ad = p(a, "d");
+
   private final Path adx = p(ad, "x");
+
   private final Path ady = p(ad, "y");
+
   private final Path ae = p(a, "e");
+
   private final Path af = p(a, "f");
 
 
@@ -64,7 +71,6 @@ public class TestS3ABulkOperations extends Assert {
 
   @Before
   public void setup() throws Exception {
-
     root = new PathTree(new Path("/"));
   }
 
@@ -101,7 +107,7 @@ public class TestS3ABulkOperations extends Assert {
     assertAdded(splitPathToElements(p).iterator(), p);
   }
 
-  private void assertAdded(Path...paths) {
+  private void assertAdded(Path... paths) {
     for (Path path : paths) {
       assertAdded(path);
     }
@@ -167,7 +173,7 @@ public class TestS3ABulkOperations extends Assert {
 
   /**
    * Add a parent, then a child.
-   * @throws Throwable
+   * Expect only the "a/d" path to be a leaf node.
    */
   @Test
   public void testChildUnderParent() throws Throwable {
@@ -179,7 +185,7 @@ public class TestS3ABulkOperations extends Assert {
 
   /**
    * Add a parent, then a child.
-   * @throws Throwable
+   * Expect only the "a/d" path to be a leaf node.
    */
   @Test
   public void testDuplicateChildren() throws Throwable {
@@ -191,7 +197,6 @@ public class TestS3ABulkOperations extends Assert {
 
   /**
    * Add a child node, then a parent; parent isn't added.
-   * @throws Throwable
    */
   @Test
   public void testParentOverChild() throws Throwable {
@@ -215,7 +220,7 @@ public class TestS3ABulkOperations extends Assert {
   }
 
   /**
-   * Adding the root entry is not permitted with the root sequence
+   * Adding the root entry is not permitted with the root sequence.
    */
   @Test(expected = IllegalArgumentException.class)
   public void testAddRoot() throws Throwable {
@@ -223,7 +228,7 @@ public class TestS3ABulkOperations extends Assert {
   }
 
   /**
-   * Abuse the class by adding the root entry under a path
+   * Abuse the class by adding the root entry under a path.
    */
   @Test(expected = IllegalArgumentException.class)
   public void testAddRootWithKey() throws Throwable {
@@ -240,7 +245,7 @@ public class TestS3ABulkOperations extends Assert {
   }
 
   /**
-   * the iterator passed in must not be empty
+   * The iterator passed in must not be empty.
    */
   @Test(expected = IllegalArgumentException.class)
   public void testRejectEmptyIterator() throws Throwable {
@@ -249,7 +254,7 @@ public class TestS3ABulkOperations extends Assert {
   }
 
   /**
-   * the iterator passed in must not be empty
+   * The iterator value for the child must not be "".
    */
   @Test(expected = IllegalArgumentException.class)
   public void testRejectEmptyStringIterator() throws Throwable {

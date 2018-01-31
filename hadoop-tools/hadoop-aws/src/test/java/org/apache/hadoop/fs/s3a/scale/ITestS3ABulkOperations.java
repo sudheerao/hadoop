@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.collect.Lists;
+import org.junit.Assume;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -240,18 +241,30 @@ public class ITestS3ABulkOperations extends S3AScaleTestBase {
 
   @Test
   public void testDeleteEmptyDirectory() throws Throwable {
-    describe("Expect a directory marker deletion to be ignored");
+    describe("Expect a directory marker deletion to be ignored"
+        + " without S3Guard");
     Path dir = path(getMethodName());
     mkdirs(dir);
-    expectBulkDelete(1, dir);
-    assertIsDirectory(dir);
+    expectBulkDelete(1, dir, dir);
+    if (!getFileSystem().hasMetadataStore()) {
+      assertIsDirectory(dir);
+    }
   }
+
+  /**
+   * This test is skipped with S3Guard on as it does a forbidden action:
+   * delete a directory without deleting children.
+   * The API says "don't do this"; without S3Guard it is a no-op.
+   */
   @Test
   public void testDeleteNonEmptyDirectory() throws Throwable {
+    Assume.assumeTrue(!getFileSystem().hasMetadataStore());
     describe("Expect a directory marker deletion to be ignored");
     Path dir = path(getMethodName());
     Path child = touch(new Path(dir, "child"));
-    expectBulkDelete(1, dir);
+    // include two entries in the request to force into the bulk delete
+    // codepath
+    expectBulkDelete(1, dir, dir);
     assertIsFile(child);
     assertIsDirectory(dir);
   }

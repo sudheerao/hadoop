@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.s3a;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -92,7 +93,7 @@ public class S3ABulkOperations implements BulkIO {
     this.owner = owner;
     Preconditions.checkArgument(pageSize <= S3AFileSystem.MAX_ENTRIES_TO_DELETE,
         "Bulk Delete Page size out of range: %s", pageSize);
-    this.pageSize = pageSize > 0 ? pageSize: 0;
+    this.pageSize = pageSize > 0 ? pageSize : 0;
     LOG.debug("Bulk delete page size is {}", this.pageSize);
   }
 
@@ -101,9 +102,26 @@ public class S3ABulkOperations implements BulkIO {
     return pageSize;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * Notes
+   * <ol>
+   *   <li>There are no checks for objects existing before the delete.</li>
+   *   <li>And parent directories are always created.</li>
+   *   <li>If a directory path is passed in, S3Guard gets inconsistent,
+   *   as it still has child entries under the deleted tombstone marker.</li>
+   * </ol>
+   *
+   * @param filesToDelete (possibly empty) list of files to delete
+   * @return the number of entries submitted for deletion, which may be greater
+   * than the number for objects deleted.
+   * @throws IOException
+   */
   @Override // BulkIO
   @Retries.RetryTranslated
-  public int bulkDeleteFiles(final List<Path> filesToDelete) throws IOException {
+  public int bulkDeleteFiles(final List<Path> filesToDelete)
+      throws IOException {
 
     int pathCount = filesToDelete.size();
     if (pathCount == 0) {
@@ -208,6 +226,8 @@ public class S3ABulkOperations implements BulkIO {
     List<Path> paths = new ArrayList<>(getBulkDeleteFilesLimit());
     pathTree.leaves(paths);
     LOG.info("Number of directories to try creating: {}", paths.size());
+    // shuffle around a bit for extra
+    Collections.shuffle(paths);
     int actualCount = 0;
     for (Path path : paths) {
       if (owner.createFakeDirectoryIfNecessary(path)) {
@@ -253,7 +273,7 @@ public class S3ABulkOperations implements BulkIO {
    *   <li>Split each path up into elements.</li>
    *   <li>Add to a tree using each element as the name of the node.</li>
    * </ol>
-   * Later, {@link #enumLeafNodes(List)} can be used to enumerate all leaf
+   * Later, {@link #leaves(Collection)} can be used to enumerate all leaf
    * nodes, which can then be created.
    *
    * It is a requirement that all leaf nodes must have a path field, but
@@ -273,7 +293,7 @@ public class S3ABulkOperations implements BulkIO {
   @VisibleForTesting
   public static class PathTree {
 
-    /** Children hashmap */
+    /** Children hashmap. */
     private final Map<String, PathTree> children;
 
     /**

@@ -102,8 +102,19 @@ public abstract class AbstractContractDistCpTest
   @Test
   public void deepDirectoryStructureToRemoteWithSync() throws Exception {
     describe("copy a deep directory structure from local to remote");
-    Path outputDir = deepDirectoryStructure(localFS, localDir, remoteFS, remoteDir);
+    Path outputDir = deepDirectoryStructure(localFS, localDir, remoteFS,
+        remoteDir);
+    updateDeepDirectoryStructure(outputDir);
+  }
 
+  /**
+   * This is executed as part of
+   * {@link #deepDirectoryStructureToRemoteWithSync()}; it's designed to be
+   * overiddeable or wrappable by subclasses.
+   * @param outputDir output directory used by the initial distcp
+   */
+  protected void updateDeepDirectoryStructure(final Path outputDir)
+      throws Exception {
     describe("Now do an incremental update with deletion of missing files");
     Path srcDir = localDir;
     // same path setup as in deepDirectoryStructure()
@@ -249,7 +260,8 @@ public abstract class AbstractContractDistCpTest
    * @param builder DistCp option builder
    * @return the build options
    */
-  private DistCpOptions buildWithStandardOptions(DistCpOptions.Builder builder) {
+  private DistCpOptions buildWithStandardOptions(
+      DistCpOptions.Builder builder) {
     return builder
         .withNumListstatusThreads(8)
         .build();
