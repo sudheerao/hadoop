@@ -777,8 +777,18 @@ S3 Extended Request ID: iHUUtXUSiNz4kv3Bdk/hf9F+wjPt8GIVvBHx/HEfCBYkn7W6zmpvbA3X
 Invalid arn (Service: Amazon S3; Status Code: 400; Error Code: KMS.NotFoundException; Request ID: 708284CF60EE233F)
 ```
 
-This is due to either, the KMS key id is entered incorrectly, or the KMS key id
+This is due to either: the KMS key id is entered incorrectly, or the KMS key id
 is in a different region than the S3 bucket being used.
+
+### Using SSE-KMS `AccessDeniedException` "403 Forbidden"
+
+When trying to read SEE-KMS-encrypted data, the client gets a
+`java.nio.AccessDeniedException` with the error 403/Forbidden, usually
+in a `getFileStatus()` call.
+
+This appears to mean that the caller doesn't have the permissions to access
+the key with which the data was encrypted, so cannot read it. 
+
 
 ### Using SSE-C "Bad Request"
 
