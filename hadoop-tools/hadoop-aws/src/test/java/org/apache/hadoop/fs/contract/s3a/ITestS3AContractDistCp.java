@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -19,21 +19,19 @@
 package org.apache.hadoop.fs.contract.s3a;
 
 import org.junit.Assert;
-
-import static org.apache.hadoop.fs.s3a.Constants.*;
-import static org.apache.hadoop.fs.s3a.S3ATestConstants.SCALE_TEST_TIMEOUT_MILLIS;
-import static org.apache.hadoop.fs.s3a.S3ATestUtils.maybeEnableS3Guard;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
-import org.apache.hadoop.fs.s3a.S3ATestUtils;
 import org.apache.hadoop.fs.s3a.Statistic;
 import org.apache.hadoop.tools.contract.AbstractContractDistCpTest;
 
-import static org.apache.hadoop.fs.s3a.Statistic.*;
+import static org.apache.hadoop.fs.s3a.Constants.*;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.*;
+import static org.apache.hadoop.fs.s3a.S3ATestConstants.SCALE_TEST_TIMEOUT_MILLIS;
+
 
 /**
  * Contract test suite covering S3A integration with DistCp.
@@ -42,6 +40,8 @@ import static org.apache.hadoop.fs.s3a.S3ATestUtils.*;
  */
 public class ITestS3AContractDistCp extends AbstractContractDistCpTest {
 
+  private static final Logger LOG =
+      LoggerFactory.getLogger(ITestS3AContractDistCp.class);
   private static final long MULTIPART_SETTING = MULTIPART_MIN_SIZE;
 
   @Override
@@ -57,7 +57,6 @@ public class ITestS3AContractDistCp extends AbstractContractDistCpTest {
   protected Configuration createConfiguration() {
     Configuration newConf = super.createConfiguration();
     newConf.setLong(MULTIPART_SIZE, MULTIPART_SETTING);
-    newConf.set(FAST_UPLOAD_BUFFER, FAST_UPLOAD_BUFFER_DISK);
     // set a small page size to force distcp into multipage bulk IO
     newConf.setInt(EXPERIMENTAL_BULKDELETE_PAGESIZE, 2);
     // patch in S3Guard options
@@ -86,5 +85,6 @@ public class ITestS3AContractDistCp extends AbstractContractDistCpTest {
     long bulkInvocations = bulkDeleteDiff.diff();
     Assert.assertNotEquals("Bulk Delete not invoked on " + remoteFS,
         0, bulkInvocations);
+    LOG.info("FS summary: {}", remoteFS);
   }
 }

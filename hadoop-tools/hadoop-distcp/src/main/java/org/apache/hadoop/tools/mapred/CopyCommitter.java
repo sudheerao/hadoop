@@ -18,8 +18,6 @@
 
 package org.apache.hadoop.tools.mapred;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.store.BulkIO;
 import org.apache.hadoop.fs.FileStatus;
@@ -50,6 +48,9 @@ import java.util.EnumSet;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * The CopyCommitter class is DistCp's OutputCommitter implementation. It is
  * responsible for handling the completion/cleanup of the DistCp run.
@@ -63,7 +64,8 @@ import java.util.List;
  *  5. Cleanup of any partially copied files, from previous, failed attempts.
  */
 public class CopyCommitter extends FileOutputCommitter {
-  private static final Log LOG = LogFactory.getLog(CopyCommitter.class);
+  private static final Logger LOG =
+      LoggerFactory.getLogger(CopyCommitter.class);
 
   private final TaskAttemptContext taskAttemptContext;
   private boolean syncFolder = false;
@@ -340,6 +342,7 @@ public class CopyCommitter extends FileOutputCommitter {
   private void deleteMissing(Configuration conf) throws IOException {
     LOG.info("-delete option is enabled. About to remove entries from " +
         "target that are missing in source");
+    long listingStart = System.currentTimeMillis();
 
     // Sort the source-file listing alphabetically.
     Path sourceListing = new Path(conf.get(DistCpConstants.CONF_LABEL_LISTING_FILE_PATH));
@@ -378,7 +381,12 @@ public class CopyCommitter extends FileOutputCommitter {
 
     // Walk both source and target file listings.
     // Delete all from target that doesn't also exist on source.
+    long deletionStart = System.currentTimeMillis();
+    LOG.info("Listing completed in {}",
+        formatDuration(deletionStart - listingStart));
+
     long deletedEntries = 0;
+    long deletedDirectories = 0;
     try {
       CopyListingFileStatus srcFileStatus = new CopyListingFileStatus();
       Text srcRelPath = new Text();
@@ -395,7 +403,7 @@ public class CopyCommitter extends FileOutputCommitter {
         bulkDelete = (BulkIO) targetFS;
         pageSize = bulkDelete.getBulkDeleteFilesLimit();
         LOG.info("Destination filesystem supports bulk deletes, "
-            + "maximum size " + pageSize);
+            + "maximum size {}", pageSize);
         if (pageSize <= 0) {
           LOG.info("Bulk delete is disabled");
         } else {
@@ -414,23 +422,32 @@ public class CopyCommitter extends FileOutputCommitter {
         if (srcAvailable && trgtRelPath.equals(srcRelPath)) continue;
 
         // Target doesn't exist at source. Delete.
-        if (!useBulkDelete) {
-          boolean result = targetFS.delete(trgtFileStatus.getPath(), true)
-              || !targetFS.exists(trgtFileStatus.getPath());
+
+        boolean targetIsDir = trgtFileStatus.isDirectory();
+        Path targetPath = trgtFileStatus.getPath();
+        if (!useBulkDelete || targetIsDir) {
+          // either the FS doesn't support bulk delete
+          // or the path is a directory, which is implicitly a bulk operation.
+          boolean result = targetFS.delete(targetPath, true)
+              || !targetFS.exists(targetPath);
           if (result) {
-            LOG.info("Deleted " + trgtFileStatus.getPath()
-                + " - Missing at source");
+            LOG.info("Deleted {} {} - Missing at source",
+                targetIsDir ? "file" : "directory",
+                targetPath);
             deletedEntries++;
+            deletedDirectories += targetIsDir ? 1 : 0;
             showProgress = true;
           } else {
             throw new IOException("Unable to delete "
-                + trgtFileStatus.getPath());
+                + targetPath);
           }
         } else {
-          deletePage.add(trgtFileStatus.getPath());
+          // bulk delete of a file
+          LOG.info("Queueing for bulk delete file {}", targetPath);
+          deletePage.add(targetPath);
           if (deletePage.size() == pageSize) {
             showProgress = true;
-            LOG.info("Initiating bulk delete of size " + deletePage.size());
+            LOG.info("Initiating bulk delete of size {}",  deletePage.size());
             deletedEntries += bulkDelete.bulkDeleteFiles(deletePage);
             deletePage.clear();
           } else {
@@ -447,14 +464,33 @@ public class CopyCommitter extends FileOutputCommitter {
       }
       // end of the loop: there may still be some bulk delete files to write
       if (useBulkDelete) {
-        LOG.info("Initiating final bulk delete of size " + deletePage.size());
+        LOG.info("Initiating final bulk delete of size {}", deletePage.size());
         deletedEntries += bulkDelete.bulkDeleteFiles(deletePage);
       }
     } finally {
       IOUtils.closeStream(sourceReader);
       IOUtils.closeStream(targetReader);
     }
-    LOG.info("Deleted " + deletedEntries + " from target: " + targets.get(0));
+    long deletionEnd = System.currentTimeMillis();
+    long deletedFileCount = deletedEntries - deletedDirectories;
+    LOG.info("Deleted from target: {} entries: files: {} directories: {}",
+        targets.get(0), deletedFileCount, deletedDirectories);
+    LOG.info("Time to delete: {}",
+        formatDuration(deletionEnd - deletionStart));
+  }
+
+  /**
+   * Take a duration and return a human-readable duration of
+   * hours:minutes:seconds.millis
+   * @param duration to process
+   * @return a string for logging.
+   */
+  private String formatDuration(long duration) {
+    long seconds = (duration / 1000);
+    long minutes = (seconds / 60);
+    long hours = (minutes / 60);
+    return String.format("%d:%02d:%02d.%03d",
+        hours, minutes % 60, seconds % 60, duration % 1000);
   }
 
   private void commitData(Configuration conf) throws IOException {

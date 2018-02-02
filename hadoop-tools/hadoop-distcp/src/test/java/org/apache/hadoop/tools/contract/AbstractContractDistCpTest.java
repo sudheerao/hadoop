@@ -110,7 +110,7 @@ public abstract class AbstractContractDistCpTest
   /**
    * This is executed as part of
    * {@link #deepDirectoryStructureToRemoteWithSync()}; it's designed to be
-   * overiddeable or wrappable by subclasses.
+   * overidden or wrapped by subclasses which wish to add more assertions.
    * @param outputDir output directory used by the initial distcp
    */
   protected void updateDeepDirectoryStructure(final Path outputDir)
@@ -121,14 +121,20 @@ public abstract class AbstractContractDistCpTest
     Path inputDir = new Path(srcDir, "inputDir");
     Path inputSubDir1 = new Path(inputDir, "subDir1");
     Path inputSubDir2 = new Path(inputDir, "subDir2/subDir3");
+    Path inputSubDir4 = new Path(inputDir, "subDir4/subDir4");
     Path inputFile1 = new Path(inputDir, "file1");
     Path inputFile2 = new Path(inputSubDir1, "file2");
     Path inputFile3 = new Path(inputSubDir2, "file3");
+    Path inputFile4 = new Path(inputSubDir4, "file4");
+    Path inputFile5 = new Path(inputSubDir4, "file5");
+
     localFS.delete(inputFile2, false);
     localFS.delete(inputFile3, false);
+    // delete all of subdir4
+    localFS.delete(inputSubDir4, true);
     // add one new file
-    Path inputFile4 = new Path(inputSubDir2, "file4");
-    ContractTestUtils.touch(localFS, inputFile4);
+    Path inputFileNew1 = new Path(inputSubDir2, "newfile1");
+    ContractTestUtils.touch(localFS, inputFileNew1);
     runDistCp(buildWithStandardOptions(
         new DistCpOptions.Builder(
         Collections.singletonList(inputDir), outputDir)
@@ -137,6 +143,7 @@ public abstract class AbstractContractDistCpTest
         .withOverwrite(false)));
     Path outputSubDir1 = new Path(outputDir, "subDir1");
     Path outputSubDir2 = new Path(outputDir, "subDir2/subDir3");
+    Path outputSubDir4 = new Path(inputDir, "subDir4/subDir4");
     Path outputFile1 = new Path(outputDir, "file1");
     Path outputFile2 = new Path(outputSubDir1, "file2");
     Path outputFile3 = new Path(outputSubDir2, "file3");
@@ -145,7 +152,9 @@ public abstract class AbstractContractDistCpTest
     ContractTestUtils.assertPathsExist(remoteFS, "existing  and new files",
         outputFile1, outputFile4);
     ContractTestUtils.assertPathsDoNotExist(remoteFS,
-        "DistCP should have deleted", outputFile2, outputFile3);
+        "DistCP should have deleted",
+        outputFile2, outputFile3, outputSubDir4);
+
   }
 
   @Test
@@ -181,9 +190,12 @@ public abstract class AbstractContractDistCpTest
     Path inputDir = new Path(srcDir, "inputDir");
     Path inputSubDir1 = new Path(inputDir, "subDir1");
     Path inputSubDir2 = new Path(inputDir, "subDir2/subDir3");
+    Path inputSubDir4 = new Path(inputDir, "subDir4/subDir4");
     Path inputFile1 = new Path(inputDir, "file1");
     Path inputFile2 = new Path(inputSubDir1, "file2");
     Path inputFile3 = new Path(inputSubDir2, "file3");
+    Path inputFile4 = new Path(inputSubDir4, "file4");
+    Path inputFile5 = new Path(inputSubDir4, "file5");
     mkdirs(srcFS, inputSubDir1);
     mkdirs(srcFS, inputSubDir2);
     byte[] data1 = dataset(100, 33, 43);
@@ -192,6 +204,8 @@ public abstract class AbstractContractDistCpTest
     createFile(srcFS, inputFile2, true, data2);
     byte[] data3 = dataset(300, 53, 63);
     createFile(srcFS, inputFile3, true, data3);
+    createFile(srcFS, inputFile4, true, dataset(400, 53, 63));
+    createFile(srcFS, inputFile5, true, dataset(500, 53, 63));
     Path target = new Path(dstDir, "outputDir");
     runDistCp(inputDir, target);
     ContractTestUtils.assertIsDirectory(dstFS, target);
