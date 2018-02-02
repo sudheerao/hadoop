@@ -432,7 +432,7 @@ public class CopyCommitter extends FileOutputCommitter {
               || !targetFS.exists(targetPath);
           if (result) {
             LOG.info("Deleted {} {} - Missing at source",
-                targetIsDir ? "file" : "directory",
+                targetIsDir ? "directory": "file",
                 targetPath);
             deletedEntries++;
             deletedDirectories += targetIsDir ? 1 : 0;
