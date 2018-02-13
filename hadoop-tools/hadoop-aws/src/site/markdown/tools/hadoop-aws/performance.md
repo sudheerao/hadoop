@@ -14,8 +14,8 @@
 
 # Maximizing Performance when working with the S3A Connector
 
+<!-- MACRO{toc|fromDepth=0|toDepth=3} -->
 
-<!-- MACRO{toc|fromDepth=0|toDepth=5} -->
 
 ## <a name="introduction"></a> Introduction
 
@@ -65,7 +65,7 @@ MapReduce, Hive and Spark, as well as DistCP.
 Experiment with using it to see what speedup it delivers.
 
 
-##<a name="fadvise"></a> Improving data input performance through fadvise
+## <a name="fadvise"></a> Improving data input performance through fadvise
 
 The S3A Filesystem client supports the notion of input policies, similar
 to that of the Posix `fadvise()` API call. This tunes the behavior of the S3A
@@ -272,7 +272,7 @@ killer.
 
 * Do not use the `-atomic` option
 * The `-append` operation is not supported on S3; avoid.
-* `-p` S3 doesn't have a POSIX-style permission model; this will fail.
+* `-p` S3 does not have a POSIX-style permission model; this will fail.
 
 
 ### DistCP: Parameters to Tune
@@ -334,7 +334,7 @@ the S3 bucket/shard.
 </property>
 ```
 
-## <a name="rm"></a> hadoop shell commands fs -rm
+## <a name="rm"></a> hadoop shell commands `fs -rm`
 
 The `hadoop fs -rm` command can rename the file under `.Trash` rather than
 deleting it. Use `-skipTrash` to eliminate that step.
@@ -352,7 +352,7 @@ data loss.
 ```
 
 
-## <a name="load balancing"></a>Improving S3 load-balancing behavior
+## <a name="load balancing"></a> Improving S3 load-balancing behavior
 
 Amazon S3 uses a set of front-end servers to provide access to the underlying data.
 The choice of which front-end server to use is handled via load-balancing DNS
@@ -372,7 +372,7 @@ To work with AWS better, set the DNS time-to-live of an application which
 works with S3 to something lower. 
 See [AWS documentation](http://docs.aws.amazon.com/AWSSdkDocsJava/latest/DeveloperGuide/java-dg-jvm-ttl.html).
 
-## <a name="network_performance"></a>Troubleshooting network performance
+## <a name="network_performance"></a> Troubleshooting network performance
 
 An example of this is covered in [HADOOP-13871](https://issues.apache.org/jira/browse/HADOOP-13871).
 
@@ -426,7 +426,7 @@ the AWS KMS Key Management Service, which comes with its own
 These default to 1200/second for an account, across all keys and all uses of
 them, which, for S3 means: across all buckets with data encrypted with SSE-KMS.
 
-### <a name="minimizing_throttling"> Tips to Keep Throttling down
+### <a name="minimizing_throttling"></a> Tips to Keep Throttling down
 
 If you are seeing a lot of throttling responses on a large scale
 operation like a `distcp` copy, *reduce* the number of processes trying
@@ -448,7 +448,7 @@ If you believe that you are reaching these limits, you may be able to
 get them increased.
 Consult [the KMS Rate Limit documentation](http://docs.aws.amazon.com/kms/latest/developerguide/limits.html).
 
-### <a name="s3guard_throttling"> S3Guard and Throttling
+### <a name="s3guard_throttling"></a> S3Guard and Throttling
 
 
 S3Guard uses DynamoDB for directory and file lookups;
@@ -469,7 +469,7 @@ If you are using DistCP for a large backup to/from a S3Guarded bucket, it is
 actually possible to increase the capacity for the duration of the operation.
 
 
-##  <a name="coding"> Best Practises for Code
+## <a name="coding"></a> Best Practises for Code
 
 Here are some best practises if you are writing applications to work with
 S3 or any other object store through the Hadoop APIs.
