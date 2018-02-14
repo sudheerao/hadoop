@@ -230,7 +230,6 @@ None: directories are created on demand.
 Rename task attempt path to task committed path.
 
 ```python
-
 def needsTaskCommit(fs, jobAttemptPath, taskAttemptPath, dest):
   return fs.exists(taskAttemptPath)
 
@@ -276,7 +275,7 @@ def commitJob(fs, jobAttemptDir, dest):
 (See below for details on `mergePaths()`)
 
 
-A failure during job abort cannot be recovered from except by re-executing
+A failure during job commit cannot be recovered from except by re-executing
 the entire query:
 
 ```python
@@ -307,12 +306,28 @@ def cleanupJob(fs, dest):
 ```
 
 
-### Job Recovery
+### Job Recovery Before `commitJob()`
 
-1. Data under task committed paths is retained
-1. All directories under `$dest/_temporary/$appAttemptId/_temporary/` are deleted.
+For all committers, the recovery process takes place in the application
+master. 
+1. The job history file of the previous attempt is loaded and scanned
+to determine which tasks were recorded as having succeeded.
+1. For each successful task, the job committer has its `recoverTask()` method
+invoked with a `TaskAttemptContext` built from the previous attempt's details.
+1. If the method does not raise an exception, it is considered to have been
+recovered, and not to be re-executed.
+1. All other tasks are queued for execution.
 
-Uncommitted/unexecuted tasks are (re)executed.
+For the v1 committer, task recovery is straightforward.
+The directory of the committed task from the previous attempt is
+moved under the directory of the current application attempt.
+
+```python
+def recoverTask(tac): 
+  oldAttemptId = appAttemptId - 1
+  fs.rename('$dest/_temporary/oldAttemptId/${tac.taskId}',
+    '$dest/_temporary/appAttemptId/${tac.taskId}')
+``` 
 
 This significantly improves time to recover from Job driver (here MR AM) failure.
 The only lost work is that of all tasks in progress -those which had generated
@@ -329,6 +344,11 @@ Fast queries not only have a lower risk of failure, they can recover from
 failure simply by rerunning the entire job. This is implicitly the strategy
 in Spark, which does not attempt to recover any in-progress jobs. The faster
 your queries, the simpler your recovery strategy needs to be.
+
+### Job Recovery During `commitJob()`
+
+This is not possible; a failure during job commit requires the entire job
+to be reexecuted after cleaning up the destination directory.
 
 ### `mergePaths(FileSystem fs, FileStatus src, Path dest)` Algorithm
 
@@ -368,7 +388,7 @@ def mergePathsV1(fs, src, dest) :
       fs.rename(src.getPath(), dest)
 ```
 
-## v2 commit algorithm
+## The v2 Commit Algorithm
 
 
 The v2 algorithm directly commits task output into the destination directory.
@@ -505,12 +525,31 @@ Cost: `O(1)` for normal filesystems, `O(files)` for object stores.
 As no data is written to the destination directory, a task can be cleaned up
 by deleting the task attempt directory.
 
-### v2 Job Recovery
+### v2 Job Recovery Before `commitJob()`
 
-Because the data has been renamed into the destination directory, it is nominally
-recoverable. However, this assumes that the number and name of generated
-files are constant on retried tasks.
 
+Because the data has been renamed into the destination directory, all tasks
+recorded as having being committed have no recovery needed at all:
+
+```python
+def recoverTask(tac): 
+``` 
+
+All active and queued tasks are scheduled for execution.
+
+There is a weakness here, the same one on a failure during `commitTask()`: 
+it is only safe to repeat a task which failed during that commit operation
+if the name of all generated files are constant across all task attempts.
+
+If the Job AM fails while a task attempt has been instructed to commit,
+and that commit is not recorded as having completed, the state of that
+in-progress task is unknown...really it isn't be safe to recover the
+job at this point. 
+
+
+### v2 Job Recovery During `commitJob()`
+
+This is straightforward: `commitJob()` is re-invoked.
 
 ## How MapReduce uses the committer in a task
 
