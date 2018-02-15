@@ -694,7 +694,7 @@ Possible causes for this
 1. A proxy server is doing bad things to the data.
 1. Some signing problem, especially with third-party S3-compatible object stores.
 
-This is generally a very rare occurrence.
+This is a very, very rare occurrence.
 
 If the problem is a signing one, try changing the signature algorithm.
 
@@ -710,7 +710,7 @@ only that it has been known to make the problem go away "once"
 
 ### `AWSS3IOException` The Content-MD5 you specified did not match what we received
 
-Reads work, but writes, even `mkdir`, fails:
+Reads work, but writes, even `mkdir`, fail:
 
 ``` 
 org.apache.hadoop.fs.s3a.AWSS3IOException: copyFromLocalFile(file:/tmp/hello.txt, s3a://bucket/hello.txt)
@@ -754,6 +754,8 @@ Caused by: com.amazonaws.services.s3.model.AmazonS3Exception:
 This stack trace was seen when interacting with a third-party S3 store whose
 expectations of headers related to the AWS V4 signing mechanism was not
 compatible with that of the specific AWS SDK Hadoop was using.
+
+Workaround: revert to V2 signing.
 
 ```xml
 <property>
