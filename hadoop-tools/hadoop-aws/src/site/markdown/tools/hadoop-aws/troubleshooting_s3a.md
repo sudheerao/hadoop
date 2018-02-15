@@ -645,7 +645,122 @@ Again, we believe this is caused by the connection to S3 being broken.
 It may go away if the operation is retried.
 
 
-## Miscellaneous Errors
+## <a name="other"></a> Other Errors
+
+### <a name="integrity"></a> `SdkClientException` Unable to verify integrity of data upload
+
+Something has happened to the data as it was uploaded.
+
+```
+Caused by: org.apache.hadoop.fs.s3a.AWSClientIOException: saving output on dest/_task_tmp.-ext-10000/_tmp.000000_0:
+    com.amazonaws.AmazonClientException: Unable to verify integrity of data upload.
+    Client calculated content hash (contentMD5: L75PalQk0CIhTp04MStVOA== in base 64)
+    didn't match hash (etag: 37ace01f2c383d6b9b3490933c83bb0f in hex) calculated by Amazon S3.
+    You may need to delete the data stored in Amazon S3.
+    (metadata.contentMD5: L75PalQk0CIhTp04MStVOA==, md5DigestStream: null,
+    bucketName: ext2, key: dest/_task_tmp.-ext-10000/_tmp.000000_0):
+  at org.apache.hadoop.fs.s3a.S3AUtils.translateException(S3AUtils.java:144)
+  at org.apache.hadoop.fs.s3a.S3AOutputStream.close(S3AOutputStream.java:121)
+  at org.apache.hadoop.fs.FSDataOutputStream$PositionCache.close(FSDataOutputStream.java:72)
+  at org.apache.hadoop.fs.FSDataOutputStream.close(FSDataOutputStream.java:106)
+  at org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat$1.close(HiveIgnoreKeyTextOutputFormat.java:99)
+  at org.apache.hadoop.hive.ql.exec.FileSinkOperator$FSPaths.closeWriters(FileSinkOperator.java:190)
+  ... 22 more
+Caused by: com.amazonaws.AmazonClientException: Unable to verify integrity of data upload.
+  Client calculated content hash (contentMD5: L75PalQk0CIhTp04MStVOA== in base 64)
+  didn't match hash (etag: 37ace01f2c383d6b9b3490933c83bb0f in hex) calculated by Amazon S3.
+  You may need to delete the data stored in Amazon S3.
+  (metadata.contentMD5: L75PalQk0CIhTp04MStVOA==, md5DigestStream: null, 
+  bucketName: ext2, key: dest/_task_tmp.-ext-10000/_tmp.000000_0)
+  at com.amazonaws.services.s3.AmazonS3Client.putObject(AmazonS3Client.java:1492)
+  at com.amazonaws.services.s3.transfer.internal.UploadCallable.uploadInOneChunk(UploadCallable.java:131)
+  at com.amazonaws.services.s3.transfer.internal.UploadCallable.call(UploadCallable.java:123)
+  at com.amazonaws.services.s3.transfer.internal.UploadMonitor.call(UploadMonitor.java:139)
+  at com.amazonaws.services.s3.transfer.internal.UploadMonitor.call(UploadMonitor.java:47)
+  ... 4 more
+```
+
+As it uploads data to S3, the AWS SDK builds up an MD5 checksum of what was
+PUT/POSTed. When S3 returns the checksum of the uploaded data, that is compared
+with the local checksum. If there is a mismatch, this error is reported.
+
+The uploaded data is already on S3 and will stay there, though if this happens
+during a multipart upload, it may not be visible (but still billed: clean up your
+multipart uploads via the `hadoop s3guard uploads` command).
+
+Possible causes for this
+
+1. A (possibly transient) network problem, including hardware faults.
+1. A proxy server is doing bad things to the data.
+1. Some signing problem, especially with third-party S3-compatible object stores.
+
+This is generally a very rare occurrence.
+
+If the problem is a signing one, try changing the signature algorithm.
+
+```xml
+<property>
+  <name>fs.s3a.signing-algorithm</name>
+  <value>S3SignerType</value>
+</property>
+```
+
+We cannot make any promises that it will work, 
+only that it has been known to make the problem go away "once"
+
+### `AWSS3IOException` The Content-MD5 you specified did not match what we received
+
+Reads work, but writes, even `mkdir`, fails:
+
+``` 
+org.apache.hadoop.fs.s3a.AWSS3IOException: copyFromLocalFile(file:/tmp/hello.txt, s3a://bucket/hello.txt)
+    on file:/tmp/hello.txt: 
+    The Content-MD5 you specified did not match what we received.
+    (Service: Amazon S3; Status Code: 400; Error Code: BadDigest; Request ID: 4018131225),
+    S3 Extended Request ID: null
+  at org.apache.hadoop.fs.s3a.S3AUtils.translateException(S3AUtils.java:127)
+	at org.apache.hadoop.fs.s3a.S3AUtils.translateException(S3AUtils.java:69)
+	at org.apache.hadoop.fs.s3a.S3AFileSystem.copyFromLocalFile(S3AFileSystem.java:1494)
+	at org.apache.hadoop.tools.cloudup.Cloudup.uploadOneFile(Cloudup.java:466)
+	at org.apache.hadoop.tools.cloudup.Cloudup.access$000(Cloudup.java:63)
+	at org.apache.hadoop.tools.cloudup.Cloudup$1.call(Cloudup.java:353)
+	at org.apache.hadoop.tools.cloudup.Cloudup$1.call(Cloudup.java:350)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:511)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1142)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:617)
+	at java.lang.Thread.run(Thread.java:748)
+Caused by: com.amazonaws.services.s3.model.AmazonS3Exception:
+    The Content-MD5 you specified did not match what we received.
+    (Service: Amazon S3; Status Code: 400; Error Code: BadDigest; Request ID: 4018131225),
+    S3 Extended Request ID: null
+  at com.amazonaws.http.AmazonHttpClient.handleErrorResponse(AmazonHttpClient.java:1307)
+	at com.amazonaws.http.AmazonHttpClient.executeOneRequest(AmazonHttpClient.java:894)
+	at com.amazonaws.http.AmazonHttpClient.executeHelper(AmazonHttpClient.java:597)
+	at com.amazonaws.http.AmazonHttpClient.doExecute(AmazonHttpClient.java:363)
+	at com.amazonaws.http.AmazonHttpClient.executeWithTimer(AmazonHttpClient.java:329)
+	at com.amazonaws.http.AmazonHttpClient.execute(AmazonHttpClient.java:308)
+	at com.amazonaws.services.s3.AmazonS3Client.invoke(AmazonS3Client.java:3659)
+	at com.amazonaws.services.s3.AmazonS3Client.putObject(AmazonS3Client.java:1422)
+	at com.amazonaws.services.s3.transfer.internal.UploadCallable.uploadInOneChunk(UploadCallable.java:131)
+	at com.amazonaws.services.s3.transfer.internal.UploadCallable.call(UploadCallable.java:123)
+	at com.amazonaws.services.s3.transfer.internal.UploadMonitor.call(UploadMonitor.java:139)
+	at com.amazonaws.services.s3.transfer.internal.UploadMonitor.call(UploadMonitor.java:47)
+	at org.apache.hadoop.fs.s3a.BlockingThreadPoolExecutorService$CallableWithPermitRelease.call(BlockingThreadPoolExecutorService.java:239)
+	... 4 more
+```
+
+This stack trace was seen when interacting with a third-party S3 store whose
+expectations of headers related to the AWS V4 signing mechanism was not
+compatible with that of the specific AWS SDK Hadoop was using.
+
+```xml
+<property>
+  <name>fs.s3a.signing-algorithm</name>
+  <value>S3SignerType</value>
+</property>
+```
 
 ### When writing data: "java.io.FileNotFoundException: Completing multi-part upload"
 

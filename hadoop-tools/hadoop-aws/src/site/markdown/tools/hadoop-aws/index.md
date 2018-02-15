@@ -835,7 +835,9 @@ options are covered in [Testing](./testing.md).
 <property>
   <name>fs.s3a.signing-algorithm</name>
   <description>Override the default signing algorithm so legacy
-    implementations can still be used</description>
+    implementations can still be used.
+    Values: S3SignerType, AWSS3V4SignerType, AWS3SignerType
+    </description>
 </property>
 
 <property>
