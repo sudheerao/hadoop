@@ -237,7 +237,7 @@ to the S3 store is so high that the disk IO becomes the bottleneck.
 This can have a tangible benefit when working with on-premise S3-compatible
 object stores with very high bandwidth to servers. 
 
-It is very easy to run out of memory when buffering to disk; the option
+It is very easy to run out of memory when buffering to it; the option
 `fs.s3a.fast.upload.active.blocks"` exists to tune how many active blocks
 a single output stream writing to S3 may have queued at a time.
 
@@ -247,7 +247,7 @@ the larger the block size, the more likely you will run out of memory.
 ## <a name="distcp"></a> DistCP
 
 DistCP can be slow, especially if the parameters and options for the operation
-aren't tuned for working with S3.
+are not tuned for working with S3.
 
 To exacerbate the issue, DistCP invariably puts heavy load against the 
 bucket being worked with, which will cause S3 to throttle requests.
@@ -270,7 +270,7 @@ DistCp's `-atomic` option copies up data into a directory, then renames
 it into place, which is the where the copy takes place. This is a performance
 killer.
 
-* Do not use the `-atomic` option
+* Do not use the `-atomic` option.
 * The `-append` operation is not supported on S3; avoid.
 * `-p` S3 does not have a POSIX-style permission model; this will fail.
 
