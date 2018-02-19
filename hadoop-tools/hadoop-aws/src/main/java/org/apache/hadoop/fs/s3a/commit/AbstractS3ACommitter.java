@@ -292,7 +292,7 @@ public abstract class AbstractS3ACommitter extends PathOutputCommitter {
     final StringBuilder sb = new StringBuilder(
         "AbstractS3ACommitter{");
     sb.append("role=").append(role);
-    sb.append(", name").append(getName());
+    sb.append(", name=").append(getName());
     sb.append(", outputPath=").append(getOutputPath());
     sb.append(", workPath=").append(workPath);
     sb.append('}');
@@ -667,7 +667,7 @@ public abstract class AbstractS3ACommitter extends PathOutputCommitter {
       String action,
       IOException ex) throws IOException {
     if (suppress) {
-      LOG.info(action, ex);
+      LOG.debug(action, ex);
     } else {
       throw ex;
     }
