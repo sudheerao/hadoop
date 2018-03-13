@@ -36,6 +36,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathExistsException;
+import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.fs.s3a.commit.AbstractS3ACommitter;
 import org.apache.hadoop.fs.s3a.commit.CommitConstants;
@@ -500,6 +502,13 @@ public class StagingCommitter extends AbstractS3ACommitter {
           listAndFilter(attemptFS,
               wrappedJobAttemptPath, false,
               HIDDEN_FILE_FILTER));
+    } catch (FileNotFoundException e) {
+      // this can mean the job was aborted early on, so don't confuse people
+      // with long stack traces that aren't the underlying problem.
+      LOG.debug("Pending upload directory not found: {}", e.toString());
+      if (!suppressExceptions) {
+        throw e;
+      }
     } catch (IOException e) {
       // unable to work with endpoint, if suppressing errors decide our actions
       maybeIgnore(suppressExceptions, "Listing pending uploads", e);
@@ -833,6 +842,44 @@ public class StagingCommitter extends AbstractS3ACommitter {
           getConfictModeOption(context, fsConf));
     }
     return conflictResolution;
+  }
+
+  /**
+   * Generate a {@link PathExistsException} because the destination exists.
+   * Lists some of the child entries first, to help diagnose the problem.
+   * @param path path which exists
+   * @param description description (usually task/job ID)
+   * @return an exception to throw
+   */
+  protected PathExistsException failDestinationExists(Path path,
+      final String description) {
+
+    LOG.error("{}: Failing commit by job {} to write"
+            + " to existing output path {}.",
+        description,
+        getJobContext().getJobID(), path);
+    // now do an emergency jump of the first 10 entries, just to keep
+    // callers happy
+    try {
+      RemoteIterator<LocatedFileStatus> lf
+          = getDestFS().listFiles(path, true);
+      int limit = 10;
+      LOG.info("Partial Directory listing");
+      while (limit > 0 && lf.hasNext()) {
+        limit--;
+        LocatedFileStatus status = lf.next();
+        LOG.info("{}: {}",
+            status.getPath(),
+            status.isDirectory()
+                ? " dir"
+                : ("file size " + status.getLen() + " bytes"));
+      }
+    } catch (IOException e) {
+      LOG.info("Discarding exception raised in path listing: " + e);
+      LOG.debug("stack trace ", e);
+    }
+    return new PathExistsException(path.toString(),
+        description + ": " + InternalCommitterConstants.E_DEST_EXISTS);
   }
 
   /**
