@@ -505,10 +505,7 @@ public class StagingCommitter extends AbstractS3ACommitter {
     } catch (FileNotFoundException e) {
       // this can mean the job was aborted early on, so don't confuse people
       // with long stack traces that aren't the underlying problem.
-      LOG.debug("Pending upload directory not found: {}", e.toString());
-      if (!suppressExceptions) {
-        throw e;
-      }
+      maybeIgnore(suppressExceptions, "Pending upload directory not found", e);
     } catch (IOException e) {
       // unable to work with endpoint, if suppressing errors decide our actions
       maybeIgnore(suppressExceptions, "Listing pending uploads", e);
@@ -851,19 +848,19 @@ public class StagingCommitter extends AbstractS3ACommitter {
    * @param description description (usually task/job ID)
    * @return an exception to throw
    */
-  protected PathExistsException failDestinationExists(Path path,
+  protected PathExistsException failDestinationExists(final Path path,
       final String description) {
 
     LOG.error("{}: Failing commit by job {} to write"
             + " to existing output path {}.",
         description,
         getJobContext().getJobID(), path);
-    // now do an emergency jump of the first 10 entries, just to keep
-    // callers happy
+    // List the first 10 descendants, to give some details
+    // on what is wrong but not overload things if there are many files.
     try {
+      int limit = 10;
       RemoteIterator<LocatedFileStatus> lf
           = getDestFS().listFiles(path, true);
-      int limit = 10;
       LOG.info("Partial Directory listing");
       while (limit > 0 && lf.hasNext()) {
         limit--;

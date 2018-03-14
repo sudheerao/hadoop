@@ -656,7 +656,7 @@ public abstract class AbstractS3ACommitter extends PathOutputCommitter {
   }
 
   /**
-   * Execute an operation; maybe suppress any raised IOException.
+   * Log or rethrow a caught IOException.
    * @param suppress should raised IOEs be suppressed?
    * @param action action (for logging when the IOE is suppressed.
    * @param ex  exception
