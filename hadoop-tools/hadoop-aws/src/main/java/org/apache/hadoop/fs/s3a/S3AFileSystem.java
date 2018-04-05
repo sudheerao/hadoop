@@ -66,6 +66,8 @@ import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.SSECustomerKey;
+import com.amazonaws.services.s3.model.SelectObjectContentRequest;
+import com.amazonaws.services.s3.model.SelectObjectContentResult;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import com.amazonaws.services.s3.model.UploadPartResult;
 import com.amazonaws.services.s3.transfer.Copy;
@@ -104,6 +106,9 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.s3a.commit.CommitConstants;
 import org.apache.hadoop.fs.s3a.commit.PutTracker;
 import org.apache.hadoop.fs.s3a.commit.MagicCommitIntegration;
+import org.apache.hadoop.fs.s3a.select.SelectBinding;
+import org.apache.hadoop.fs.s3a.select.SelectConstants;
+import org.apache.hadoop.fs.s3a.select.SelectInputStream;
 import org.apache.hadoop.fs.s3a.s3guard.DirListingMetadata;
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStoreListFilesIterator;
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStore;
@@ -206,6 +211,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
   private AWSCredentialProviderList credentials;
 
   private S3Guard.ITtlTimeProvider ttlTimeProvider;
+
+  private SelectBinding selectBinding;
 
   /** Add any deprecated keys. */
   @SuppressWarnings("deprecation")
@@ -350,6 +357,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
       long authDirTtl = conf.getLong(METADATASTORE_AUTHORITATIVE_DIR_TTL,
           DEFAULT_METADATASTORE_AUTHORITATIVE_DIR_TTL);
       ttlTimeProvider = new S3Guard.TtlTimeProvider(authDirTtl);
+      selectBinding = new SelectBinding(this);
     } catch (AmazonClientException e) {
       throw translateException("initializing ", new Path(name), e);
     }
@@ -702,6 +710,15 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
    */
   public FSDataInputStream open(Path f, int bufferSize)
       throws IOException {
+    // special select() call.
+    Configuration conf = getConf();
+    if (!conf.get(SelectConstants.SELECT_EXPRESSION, "").isEmpty()) {
+      // this is a select call
+      return select(f,
+          conf.get(SelectConstants.SELECT_EXPRESSION),
+          conf);
+    }
+
     entryPoint(INVOCATION_OPEN);
     LOG.debug("Opening '{}' for reading; input policy = {}", f, inputPolicy);
     final FileStatus fileStatus = getFileStatus(f);
@@ -711,20 +728,29 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
     }
 
     return new FSDataInputStream(
-        new S3AInputStream(new S3AReadOpContext(hasMetadataStore(),
-            invoker,
-            s3guardInvoker,
-            statistics,
-            instrumentation,
-            fileStatus),
-            new S3ObjectAttributes(bucket,
-                pathToKey(f),
-                serverSideEncryptionAlgorithm,
-                getServerSideEncryptionKey(bucket, getConf())),
+        new S3AInputStream(
+            createReadContext(fileStatus),
+            createObjectAttributes(f),
             fileStatus.getLen(),
             s3,
             readAhead,
             inputPolicy));
+  }
+
+  private S3AReadOpContext createReadContext(final FileStatus fileStatus) {
+    return new S3AReadOpContext(hasMetadataStore(),
+        invoker,
+        s3guardInvoker,
+        statistics,
+        instrumentation,
+        fileStatus);
+  }
+
+  private S3ObjectAttributes createObjectAttributes(final Path f) {
+    return new S3ObjectAttributes(bucket,
+        pathToKey(f),
+        serverSideEncryptionAlgorithm,
+        getServerSideEncryptionKey(bucket, getConf()));
   }
 
   /**
@@ -1231,6 +1257,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
   public S3AStorageStatistics getStorageStatistics() {
     return storageStatistics;
   }
+
 
   /**
    * Request object metadata; increments counters in the process.
@@ -3342,6 +3369,10 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
       // capability depends on FS configuration
       return isMagicCommitEnabled();
 
+    case SelectConstants.S3_SELECT_CAPABILITY:
+      // select is only supported if enabled
+      return selectBinding.isEnabled();
+
     default:
       return false;
     }
@@ -3368,5 +3399,88 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
   @VisibleForTesting
   protected void setTtlTimeProvider(S3Guard.ITtlTimeProvider ttlTimeProvider) {
     this.ttlTimeProvider = ttlTimeProvider;
+  }
+
+  /**
+   * This is a proof of concept of a select API.
+   * Once a proper factory mechanism for opening files is added to the
+   * FileSystem APIs, this will be deleted <i>without any warning</i>.
+   * @param source path to source data
+   * @param expression select expression
+   * @param conf config to extract other query options from
+   * @return the stream of the results
+   * @throws IOException IO failure
+   */
+  @InterfaceStability.Unstable
+  @InterfaceAudience.LimitedPrivate("S3 Select testing")
+  public FSDataInputStream select(final Path source,
+      final String expression,
+      final Configuration conf)
+      throws IOException {
+    entryPoint(OBJECT_SELECT_REQUESTS);
+    requireSelectSupport();
+    final Path path = makeQualified(source);
+    final FileStatus fileStatus = getFileStatus(source);
+    if (fileStatus.isDirectory()) {
+      throw new FileNotFoundException("Can't open " + path
+          + " because it is a directory");
+    }
+    return new FSDataInputStream(
+        new SelectInputStream(
+            createReadContext(fileStatus),
+            createObjectAttributes(path),
+            select(
+                path,
+                selectBinding.buildSelectRequest(
+                    path,
+                    expression,
+                    conf))));
+
+  }
+
+  /**
+   * Create a S3 Select request for the destination path.
+   * This does not build the query.
+   * @param path pre-qualified path for query
+   * @return the request
+   */
+  public SelectObjectContentRequest newSelectRequest(Path path) {
+    SelectObjectContentRequest request = new SelectObjectContentRequest();
+    request.setBucketName(getBucket());
+    request.setKey(pathToKey(path));
+    return request;
+  }
+
+  /**
+   * Issue an S3 Select call.
+   * @param source source for selection
+   * @param request Select request to issue.
+   * @return response
+   * @throws IOException failure
+   */
+  @Retries.RetryTranslated
+  public SelectObjectContentResult select(
+      final Path source,
+      final SelectObjectContentRequest request)
+      throws IOException {
+    requireSelectSupport();
+    Preconditions.checkArgument(bucket.equals(request.getBucketName()),
+        "wrong bucket: %s", request.getBucketName());
+    LOG.info("Initiating select call {} {}",
+        source, request.getExpression());
+    return invoker.retry(
+        "Select: \""+ request.getExpression() + "\"",
+        source.toString(),
+        true,
+        () -> getAmazonS3Client().selectObjectContent(request));
+  }
+
+  /**
+   * Verify the FS supports S3 Select.
+   * @throws IllegalArgumentException if not.
+   */
+  private void requireSelectSupport() {
+    Preconditions.checkState(selectBinding.isEnabled(),
+        "S3 Select not supported");
   }
 }

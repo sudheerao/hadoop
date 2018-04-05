@@ -238,6 +238,12 @@ public final class S3AUtils {
         ioe.initCause(ase);
         break;
 
+      // method not allowed; seen on S3 Select.
+      // treated as a bad request
+      case 405:
+        ioe = new AWSBadRequestException(message, s3Exception);
+        break;
+
       // out of range. This may happen if an object is overwritten with
       // a shorter one while it is being read.
       case 416:
