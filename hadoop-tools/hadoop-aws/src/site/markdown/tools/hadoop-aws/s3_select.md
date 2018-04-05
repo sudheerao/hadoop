@@ -117,7 +117,7 @@ Amazon themselves.
 
 * Use single quotes for all constants, not double quotes.
 * All CSV column values are strings unless cast to a type
-* Simple SELECT calls, no LIMIT, COUNT, JOIN, etc.
+* Simple SELECT calls, no JOIN.
 
 ### CSV formats
 
