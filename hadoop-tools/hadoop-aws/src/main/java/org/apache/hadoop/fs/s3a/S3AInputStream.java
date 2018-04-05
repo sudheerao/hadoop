@@ -82,8 +82,8 @@ public class S3AInputStream extends FSInputStream implements CanSetReadahead {
   private static final Logger LOG =
       LoggerFactory.getLogger(S3AInputStream.class);
   private final S3AInstrumentation.InputStreamStatistics streamStatistics;
-  private S3AEncryptionMethods serverSideEncryptionAlgorithm;
-  private String serverSideEncryptionKey;
+  private final S3AEncryptionMethods serverSideEncryptionAlgorithm;
+  private final String serverSideEncryptionKey;
   private S3AInputPolicy inputPolicy;
   private long readahead = Constants.DEFAULT_READAHEAD_RANGE;
 
