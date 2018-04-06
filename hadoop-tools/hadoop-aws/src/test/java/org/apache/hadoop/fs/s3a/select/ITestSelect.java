@@ -42,6 +42,7 @@ import org.apache.hadoop.fs.s3a.Statistic;
 import static org.apache.hadoop.fs.s3a.select.SelectConstants.*;
 import static org.apache.hadoop.fs.s3a.select.SelectBinding.*;
 
+import static org.apache.hadoop.fs.s3a.select.CsvFile.*;
 import static org.hamcrest.CoreMatchers.*;
 
 /**
@@ -60,11 +61,7 @@ public class ITestSelect extends AbstractS3ATestBase {
 
   protected static final String ENTRY_0002 = "\"entry-0002\"";
 
-  private static long ALL_QUOTES = 0x7fffffff;
-
-  private static long NO_QUOTES = 0;
-
-  private static int ALL_ROWS = 10;
+  private static final int ALL_ROWS = 10;
 
   protected static final int ROWS_WITH_HEADER = ALL_ROWS + 1;
 
@@ -99,7 +96,7 @@ public class ITestSelect extends AbstractS3ATestBase {
   }
 
   /**
-   * Base CSV file is headers
+   * Base CSV file is headers.
    * <pre>
    * "ID": index of the row
    * "date": date as Date.toString
@@ -333,7 +330,7 @@ public class ITestSelect extends AbstractS3ATestBase {
   }
 
   /**
-   * Build the SQL statement, using String.Format rules
+   * Build the SQL statement, using String.Format rules.
    * @param template template
    * @param args arguments for the template
    * @return the template to use

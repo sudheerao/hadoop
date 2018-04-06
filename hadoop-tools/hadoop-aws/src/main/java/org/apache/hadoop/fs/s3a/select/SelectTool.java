@@ -19,9 +19,9 @@
 package org.apache.hadoop.fs.s3a.select;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.List;
 import java.util.Locale;
@@ -30,7 +30,7 @@ import java.util.Scanner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -59,7 +59,7 @@ import static org.apache.hadoop.fs.s3a.select.SelectConstants.*;
 public class SelectTool extends S3GuardTool {
 
   private static final Logger LOG =
-      LoggerFactory.getLogger(SelectInputStream.class);
+      LoggerFactory.getLogger(SelectTool.class);
 
   public static final String NAME = "select";
 
@@ -67,7 +67,7 @@ public class SelectTool extends S3GuardTool {
 
   private static final String USAGE = NAME
       + " [OPTIONS] [-limit lines] [-header (use|none|ignore)]"
-      + " [-out file]"
+      + " [-out path]"
       + " [-compression (gzip|none)]"
       + "  <PATH> <SELECT QUERY>\n"
       + "\t" + PURPOSE + "\n\n";
@@ -125,10 +125,10 @@ public class SelectTool extends S3GuardTool {
       initialConf.set(HEADER, header, "cli");
     }
     String output = command.getOptValue(OPT_OUTPUT);
-    File outfile = null;
+    Path destPath = null;
     if (isNotEmpty(output)) {
-      outfile = new File(output).getAbsoluteFile();
-      println(out, "Saving output to %s", outfile);
+      destPath = new Path(output);
+      println(out, "Saving output to %s", destPath);
     }
     String lineLimitArg = command.getOptValue(OPT_LIMIT);
     if (isNotEmpty(lineLimitArg)) {
@@ -166,9 +166,10 @@ public class SelectTool extends S3GuardTool {
     // open and scan the stream.
     try (FSDataInputStream stream = fs.open(path)) {
 
-      if (outfile == null) {
+      if (destPath == null) {
         // logging to console
 
+        @SuppressWarnings("IOResourceOpenedButNotSafelyClosed")
         Scanner scanner =
             new Scanner(
                 new BufferedReader(
@@ -180,9 +181,13 @@ public class SelectTool extends S3GuardTool {
           println(out, "%s", l);
         }
       } else {
-        // straight dump of whole file, no interpretation of line ends or
-        // anything else
-        FileUtils.copyInputStreamToFile(stream, outfile);
+        // straight dump of whole file; no line counting
+        FileSystem destFS = destPath.getFileSystem(getConf());
+        try(OutputStream destStream = destFS.createFile(destPath)
+            .overwrite(true)
+            .build()) {
+          IOUtils.copy(stream, destStream);
+        }
       }
 
       // close the stream.
@@ -196,7 +201,7 @@ public class SelectTool extends S3GuardTool {
           - bytesReadOrig;
 
       // generate a meaningful result depending on the operation
-      String result = outfile == null
+      String result = destPath == null
           ? String.format("%s lines", lines)
           : String.format("%s bytes", bytesRead);
 

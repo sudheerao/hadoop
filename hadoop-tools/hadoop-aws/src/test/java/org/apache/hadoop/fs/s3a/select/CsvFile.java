@@ -34,10 +34,10 @@ class CsvFile implements Closeable {
 
 
   /** constant to quote all columns. */
-  public static long ALL_QUOTES = 0x7fffffff;
+  public static final long ALL_QUOTES = 0x7fffffff;
 
   /** quote nothing. */
-  public static long NO_QUOTES = 0;
+  public static final long NO_QUOTES = 0;
 
   private final Path path;
 
@@ -49,7 +49,7 @@ class CsvFile implements Closeable {
 
   private final String quote;
 
-  public CsvFile(final FileSystem fs,
+  CsvFile(final FileSystem fs,
       final Path path,
       boolean overwrite,
       final String separator,

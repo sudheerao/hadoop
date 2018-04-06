@@ -90,6 +90,7 @@ public abstract class S3GuardTool extends Configured implements Tool {
       "\t" + Prune.NAME + " - " + Prune.PURPOSE + "\n" +
       "\t" + SetCapacity.NAME + " - " + SetCapacity.PURPOSE + "\n" +
       "\t" + SelectTool.NAME + " - " + SelectTool.PURPOSE + "\n";
+
   private static final String DATA_IN_S3_IS_PRESERVED
       = "(all data in S3 is preserved)";
 
@@ -247,7 +248,8 @@ public abstract class S3GuardTool extends Configured implements Tool {
    * @param forceCreate override the auto-creation setting to true.
    * @return a initialized metadata store.
    */
-  protected MetadataStore initMetadataStore(boolean forceCreate) throws IOException {
+  protected MetadataStore initMetadataStore(boolean forceCreate)
+      throws IOException {
     if (getStore() != null) {
       return getStore();
     }
@@ -1427,7 +1429,9 @@ public abstract class S3GuardTool extends Configured implements Tool {
    * @param format format string
    * @param args optional arguments
    */
-  protected static void println(PrintStream out, String format, Object... args) {
+  protected static void println(PrintStream out,
+      String format,
+      Object... args) {
     out.println(String.format(format, args));
   }
 
