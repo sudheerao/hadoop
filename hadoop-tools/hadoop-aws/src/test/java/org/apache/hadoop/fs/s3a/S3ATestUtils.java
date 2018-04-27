@@ -33,6 +33,7 @@ import org.apache.hadoop.fs.s3a.commit.CommitConstants;
 import org.apache.hadoop.fs.s3a.s3guard.DynamoDBClientFactory;
 import org.apache.hadoop.fs.s3a.s3guard.DynamoDBLocalClientFactory;
 import org.apache.hadoop.fs.s3a.s3guard.S3Guard;
+import org.apache.hadoop.fs.s3native.S3xLoginHelper;
 
 import org.hamcrest.core.Is;
 import org.junit.Assert;
@@ -43,8 +44,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.List;
@@ -487,6 +490,57 @@ public final class S3ATestUtils {
             return c.toString();
           }
         });
+  }
+
+  /**
+   * From a a normal FS URI/path and a configuration containing
+   * authentication secrets, either directly or in a JCEKS file, generate
+   * a new URI which embeds the secrets. These are correctly encoded so as
+   * to keep AWS happy.
+   * <i>Important: these are very sensitive. DO NOT LOG</i>
+   * @param original original URI
+   * @param accessKey AWS access key
+   * @param secretKey AWS secret key
+   * @return the secrets
+   * @throws UnsupportedEncodingException encoding problem
+   */
+
+  public static URI createUriWithEmbeddedSecrets(URI original, Configuration conf)
+      throws IOException {
+    S3xLoginHelper.Login login = S3AUtils.getAWSAccessKeys(original, conf);
+    return createUriWithEmbeddedSecrets(original, login.getUser(),
+        login.getPassword());
+  }
+
+  /**
+   * From a a normal FS URI/path and a pair of authentication secrets, generate
+   * a new URI which embeds the secrets. These are correctly encoded so as
+   * to keep AWS happy.
+   * <i>Important: these are very sensitive. DO NOT LOG</i>
+   * @param original original URI
+   * @param accessKey AWS access key
+   * @param secretKey AWS secret key
+   * @return the secrets
+   * @throws UnsupportedEncodingException encoding problem
+   */
+  public static URI createUriWithEmbeddedSecrets(URI original,
+      String accessKey,
+      String secretKey) throws UnsupportedEncodingException {
+    String encodedSecretKey = URLEncoder.encode(secretKey, "UTF-8");
+    String formattedString = String.format("%s://%s:%s@%s/%s/",
+        original.getScheme(),
+        accessKey,
+        encodedSecretKey,
+        original.getHost(),
+        original.getPath());
+    URI testURI;
+    try {
+      testURI = new Path(formattedString).toUri();
+    } catch (IllegalArgumentException e) {
+      // inner cause is stripped to keep any secrets out of stack traces
+      throw new IllegalArgumentException("Could not encode Path");
+    }
+    return testURI;
   }
 
   /**

@@ -25,6 +25,8 @@ import org.junit.Test;
 import java.net.URI;
 import java.net.URISyntaxException;
 
+import static org.apache.hadoop.fs.s3native.S3xLoginHelper.*;
+
 /**
  * Test how URIs and login details are extracted from URIs.
  */
@@ -41,8 +43,16 @@ public class TestS3xLoginHelper extends Assert {
   public static final String PAPLUS_RAW = "pa" + P_RAW;
 
   public static final URI WITH_USER_AND_PASS = uri("s3a://user:pass@bucket");
-  public static final Path PATH_WITH_LOGIN =
-      new Path(uri("s3a://user:pass@bucket/dest"));
+
+  protected static final URI URI_WITH_LOGIN
+      = uri("s3a://user:pass@bucket/dest");
+
+  public static final Path PATH_WITH_LOGIN = new Path(URI_WITH_LOGIN);
+
+  protected static final URI CANONICAL_PATH_URI = uri("s3a://bucket:80/dest");
+
+  public static final Path CANONICAL_PATH_WITHOUT_LOGIN =
+      new Path(CANONICAL_PATH_URI);
 
   public static final URI WITH_SLASH_IN_PASS = uri(
       "s3a://user:" + PASLASHSLASH + "@bucket");
@@ -55,6 +65,8 @@ public class TestS3xLoginHelper extends Assert {
   public static final URI NO_USER = uri("s3a://:pass@bucket");
   public static final URI NO_USER_NO_PASS = uri("s3a://:@bucket");
   public static final URI NO_USER_NO_PASS_TWO_COLON = uri("s3a://::@bucket");
+
+  protected static final int PORT = 80;
 
   /**
    * Construct a URI; raises an RTE if it won't parse.
@@ -205,8 +217,16 @@ public class TestS3xLoginHelper extends Assert {
   }
 
   @Test
-  public void testPathURIFixup() throws Throwable {
+  public void testSanitizeRootURI() throws Throwable {
+    URI canonicalEndpoint = canonicalizeUri(ENDPOINT, PORT);
+    assertEquals(canonicalEndpoint, sanitizeURI(WITH_USER_AND_COLON, PORT));
+    assertEquals(canonicalEndpoint, sanitizeURI(NO_USER_NO_PASS, PORT));
+  }
 
+  @Test
+  public void testSanitizePathURI() throws Throwable {
+    assertEquals(CANONICAL_PATH_URI,
+        sanitizeURI(URI_WITH_LOGIN, PORT));
   }
 
 

@@ -336,6 +336,7 @@ public class FsShell extends Configured implements Tool {
         } else {
           displayError(cmd, e.getLocalizedMessage());
         }
+        LOG.debug("IllegalArgumentException", e);
         printUsage(System.err);
         if (instance != null) {
           printInstanceUsage(System.err, instance);

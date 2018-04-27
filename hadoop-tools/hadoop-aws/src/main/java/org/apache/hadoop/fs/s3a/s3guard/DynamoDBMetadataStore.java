@@ -75,6 +75,7 @@ import org.apache.hadoop.fs.s3a.S3AInstrumentation;
 import org.apache.hadoop.fs.s3a.S3ARetryPolicy;
 import org.apache.hadoop.fs.s3a.S3AUtils;
 import org.apache.hadoop.fs.s3a.Tristate;
+import org.apache.hadoop.fs.s3native.S3xLoginHelper;
 import org.apache.hadoop.io.retry.RetryPolicies;
 import org.apache.hadoop.io.retry.RetryPolicy;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -370,9 +371,9 @@ public class DynamoDBMetadataStore implements MetadataStore {
    * @throws IOException I/O error.
    */
   @Retries.RetryTranslated
-  private void innerDelete(final Path path, boolean tombstone)
+  private void innerDelete(final Path p, boolean tombstone)
       throws IOException {
-    checkPath(path);
+    final Path path = checkPath(p);
     LOG.debug("Deleting from table {} in region {}: {}",
         tableName, region, path);
 
@@ -398,8 +399,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
 
   @Override
   @Retries.RetryTranslated
-  public void deleteSubtree(Path path) throws IOException {
-    checkPath(path);
+  public void deleteSubtree(final Path p) throws IOException {
+    final Path path = checkPath(p);
     LOG.debug("Deleting subtree from table {} in region {}: {}",
         tableName, region, path);
 
@@ -431,9 +432,9 @@ public class DynamoDBMetadataStore implements MetadataStore {
 
   @Override
   @Retries.OnceTranslated
-  public PathMetadata get(Path path, boolean wantEmptyDirectoryFlag)
+  public PathMetadata get(final Path p, boolean wantEmptyDirectoryFlag)
       throws IOException {
-    checkPath(path);
+    final Path path = checkPath(p);
     LOG.debug("Get from table {} in region {}: {}", tableName, region, path);
     return Invoker.once("get", path.toString(),
         () -> innerGet(path, wantEmptyDirectoryFlag));
@@ -500,8 +501,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
 
   @Override
   @Retries.OnceTranslated
-  public DirListingMetadata listChildren(final Path path) throws IOException {
-    checkPath(path);
+  public DirListingMetadata listChildren(final Path p) throws IOException {
+    final Path path = checkPath(p);
     LOG.debug("Listing table {} in region {}: {}", tableName, region, path);
 
     // find the children in the table
@@ -1114,7 +1115,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
    * Validates a path object; it must be absolute, have an s3a:/// scheme
    * and contain a host (bucket) component.
    * @param path path to check
-   * @return the path passed in
+   * @return the path to use.
    */
   private Path checkPath(Path path) {
     Preconditions.checkNotNull(path);
@@ -1126,6 +1127,11 @@ public class DynamoDBMetadataStore implements MetadataStore {
         "Path %s scheme must be %s", path, Constants.FS_S3A);
     Preconditions.checkArgument(!StringUtils.isEmpty(uri.getHost()), "Path %s" +
         " is missing bucket.", path);
+    if (uri.getAuthority() != null) {
+      // path contains login details, strip
+      path = new Path(
+          S3xLoginHelper.sanitizeURI(uri, Constants.S3A_DEFAULT_PORT));
+    }
     return path;
   }
 

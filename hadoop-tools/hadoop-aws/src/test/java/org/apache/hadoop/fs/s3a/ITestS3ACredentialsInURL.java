@@ -20,6 +20,7 @@ package org.apache.hadoop.fs.s3a;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.s3native.S3xLoginHelper;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.test.LambdaTestUtils;
 
@@ -33,9 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.nio.file.AccessDeniedException;
 
 import static org.apache.hadoop.fs.s3a.Constants.AWS_CREDENTIALS_PROVIDER;
@@ -71,13 +70,13 @@ public class ITestS3ACredentialsInURL extends Assert {
     // Skip in the case of S3Guard with DynamoDB because it cannot get
     // credentials for its own use if they're only in S3 URLs
     assumeS3GuardState(false, conf);
-
-    String accessKey = conf.get(Constants.ACCESS_KEY);
-    String secretKey = conf.get(Constants.SECRET_KEY);
     String fsname = conf.getTrimmed(TEST_FS_S3A_NAME, "");
-    Assume.assumeNotNull(fsname, accessKey, secretKey);
     URI original = new URI(fsname);
-    URI secretsURI = createUriWithEmbeddedSecrets(original,
+    S3xLoginHelper.Login login = S3AUtils.getAWSAccessKeys(original, conf);
+    String accessKey = login.getUser();
+    String secretKey = login.getPassword();
+    Assume.assumeNotNull(accessKey, secretKey);
+    URI secretsURI = S3ATestUtils.createUriWithEmbeddedSecrets(original,
         accessKey, secretKey);
     if (secretKey.contains("/")) {
       assertTrue("test URI encodes the / symbol", secretsURI.toString().
@@ -132,7 +131,7 @@ public class ITestS3ACredentialsInURL extends Assert {
     Assume.assumeNotNull(fsname);
     assumeS3GuardState(false, conf);
     URI original = new URI(fsname);
-    URI testURI = createUriWithEmbeddedSecrets(original, "user", "//");
+    URI testURI = S3ATestUtils.createUriWithEmbeddedSecrets(original, "user", "//");
 
     conf.set(TEST_FS_S3A_NAME, testURI.toString());
     LambdaTestUtils.intercept(AccessDeniedException.class,
@@ -142,23 +141,4 @@ public class ITestS3ACredentialsInURL extends Assert {
         });
   }
 
-  private URI createUriWithEmbeddedSecrets(URI original,
-      String accessKey,
-      String secretKey) throws UnsupportedEncodingException {
-    String encodedSecretKey = URLEncoder.encode(secretKey, "UTF-8");
-    String formattedString = String.format("%s://%s:%s@%s/%s/",
-        original.getScheme(),
-        accessKey,
-        encodedSecretKey,
-        original.getHost(),
-        original.getPath());
-    URI testURI;
-    try {
-      testURI = new Path(formattedString).toUri();
-    } catch (IllegalArgumentException e) {
-      // inner cause is stripped to keep any secrets out of stack traces
-      throw new IllegalArgumentException("Could not encode Path");
-    }
-    return testURI;
-  }
 }

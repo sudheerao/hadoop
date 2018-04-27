@@ -157,21 +157,33 @@ public final class S3xLoginHelper {
   public static URI canonicalizeUri(URI uri, int defaultPort) {
     if (uri.getPort() == -1 && defaultPort > 0) {
       // reconstruct the uri with the default port set
-      try {
-        uri = new URI(uri.getScheme(),
-            null,
-            uri.getHost(),
-            defaultPort,
-            uri.getPath(),
-            uri.getQuery(),
-            uri.getFragment());
-      } catch (URISyntaxException e) {
-        // Should never happen!
-        throw new AssertionError("Valid URI became unparseable: " +
-            uri);
-      }
+      uri = sanitizeURI(uri, defaultPort);
     }
 
+    return uri;
+  }
+
+  /**
+   * Given a URI, return a sanitized one, which is implicitly canonicalized.
+   * @param uri the URI to sanitize
+   * @param defaultPort default port to use in canonicalized URI if the input
+   *     URI has no port and this value is greater than 0
+   * @return a new, canonicalized URI.
+   */
+  public static URI sanitizeURI(URI uri, final int defaultPort) {
+    try {
+      uri = new URI(uri.getScheme(),
+          null,
+          uri.getHost(),
+          defaultPort,
+          uri.getPath(),
+          uri.getQuery(),
+          uri.getFragment());
+    } catch (URISyntaxException e) {
+      // Should never happen!
+      throw new AssertionError("Valid URI became unparseable: " +
+          uri);
+    }
     return uri;
   }
 
