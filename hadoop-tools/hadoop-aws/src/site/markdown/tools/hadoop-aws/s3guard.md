@@ -846,8 +846,24 @@ region as the bucket being used.
 
 The IO load of clients of the (shared) DynamoDB table was exceeded.
 
-Currently S3Guard doesn't do any throttling and retries here; the way to address
-this is to increase capacity via the AWS console or the `set-capacity` command.
+### Error when running `set-capacity`: `org.apache.hadoop.fs.s3a.AWSServiceThrottledException: ProvisionTable`
+
+
+
+```
+org.apache.hadoop.fs.s3a.AWSServiceThrottledException: ProvisionTable on s3guard-example:
+com.amazonaws.services.dynamodbv2.model.LimitExceededException:
+Subscriber limit exceeded: Provisioned throughput decreases are limited within a given UTC day.
+After the first 4 decreases, each subsequent decrease in the same UTC day can be performed at most once every 3600 seconds. 
+Number of decreases today: 6.
+Last decrease at Wednesday, July 25, 2018 8:48:14 PM UTC.
+Next decrease can be made at Wednesday, July 25, 2018 9:48:14 PM UTC 
+```
+
+There's are limit on how often you can change the capacity of an DynamoDB table;
+if you call set-capacity too often, it fails. Wait until the after the time indicated
+and try again.
+
 
 ## Other Topics
 

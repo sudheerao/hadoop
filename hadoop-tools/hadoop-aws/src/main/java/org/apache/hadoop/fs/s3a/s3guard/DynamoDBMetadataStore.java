@@ -34,8 +34,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -234,8 +234,15 @@ public class DynamoDBMetadataStore implements MetadataStore {
       Invoker.NO_OP
   );
 
-  /** Data access can have its own policies. */
-  private Invoker dataAccess;
+  /** Invoker for read operations. */
+  private Invoker readOp;
+
+  /** Invoker for write operations. */
+  private Invoker writeOp;
+
+  private final AtomicLong readThrottleEvents = new AtomicLong(0);
+  private final AtomicLong writeThrottleEvents = new AtomicLong(0);
+  private final AtomicLong batchWriteCapacityExceededEvents = new AtomicLong(0);
 
   /**
    * Total limit on the number of throttle events after which
@@ -382,12 +389,9 @@ public class DynamoDBMetadataStore implements MetadataStore {
    * @param config configuration for data access
    */
   private void initDataAccessRetries(Configuration config) {
-    int maxRetries = config.getInt(S3GUARD_DDB_MAX_RETRIES,
-        S3GUARD_DDB_MAX_RETRIES_DEFAULT);
-    dataAccessRetryPolicy = RetryPolicies
-        .exponentialBackoffRetry(maxRetries, MIN_RETRY_SLEEP_MSEC,
-            TimeUnit.MILLISECONDS);
-    dataAccess = new Invoker(dataAccessRetryPolicy, this::retryEvent);
+    dataAccessRetryPolicy = new S3GuardDataAccessRetryPolicy(config);
+    readOp = new Invoker(dataAccessRetryPolicy, this::readRetryEvent);
+    writeOp = new Invoker(dataAccessRetryPolicy, this::writeRetryEvent);
   }
 
   @Override
@@ -428,11 +432,17 @@ public class DynamoDBMetadataStore implements MetadataStore {
     if (tombstone) {
       Item item = PathMetadataDynamoDBTranslation.pathMetadataToItem(
           new DDBPathMetadata(PathMetadata.tombstone(path)));
-      invoker.retry("Put tombstone", path.toString(), idempotent,
+      writeOp.retry(
+          "Put tombstone",
+          path.toString(),
+          idempotent,
           () -> table.putItem(item));
     } else {
       PrimaryKey key = pathToKey(path);
-      invoker.retry("Delete key", path.toString(), idempotent,
+      writeOp.retry(
+          "Delete key",
+          path.toString(),
+          idempotent,
           () -> table.deleteItem(key));
     }
   }
@@ -456,28 +466,37 @@ public class DynamoDBMetadataStore implements MetadataStore {
     }
   }
 
-  @Retries.OnceRaw
-  private Item getConsistentItem(PrimaryKey key) {
+  /**
+   * Get a consistent view of an item
+   * @param path path to look up in the database
+   * @return the result
+   * @throws IOException failure
+   */
+  @Retries.RetryTranslated
+  private Item getConsistentItem(final Path path) throws IOException {
+    PrimaryKey key = pathToKey(path);
     final GetItemSpec spec = new GetItemSpec()
         .withPrimaryKey(key)
         .withConsistentRead(true); // strictly consistent read
-    return table.getItem(spec);
+    return readOp.retry("get",
+        path.toString(),
+        true,
+        () -> table.getItem(spec));
   }
 
   @Override
-  @Retries.OnceTranslated
+  @Retries.RetryTranslated
   public DDBPathMetadata get(Path path) throws IOException {
     return get(path, false);
   }
 
   @Override
-  @Retries.OnceTranslated
+  @Retries.RetryTranslated
   public DDBPathMetadata get(Path path, boolean wantEmptyDirectoryFlag)
       throws IOException {
     checkPath(path);
     LOG.debug("Get from table {} in region {}: {}", tableName, region, path);
-    return Invoker.once("get", path.toString(),
-        () -> innerGet(path, wantEmptyDirectoryFlag));
+    return innerGet(path, wantEmptyDirectoryFlag);
   }
 
   /**
@@ -487,9 +506,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
    *   MetadataStore that it should try to compute the empty directory flag.
    * @return metadata for {@code path}, {@code null} if not found
    * @throws IOException IO problem
-   * @throws AmazonClientException dynamo DB level problem
    */
-  @Retries.OnceRaw
+  @Retries.RetryTranslated
   private DDBPathMetadata innerGet(Path path, boolean wantEmptyDirectoryFlag)
       throws IOException {
     final DDBPathMetadata meta;
@@ -498,7 +516,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
       meta =
           new DDBPathMetadata(makeDirStatus(username, path));
     } else {
-      final Item item = getConsistentItem(pathToKey(path));
+      final Item item = getConsistentItem(path);
       meta = itemToPathMetadata(item, username);
       LOG.debug("Get from table {} in region {} returning for {}: {}",
           tableName, region, path, meta);
@@ -513,7 +531,10 @@ public class DynamoDBMetadataStore implements MetadataStore {
             .withConsistentRead(true)
             .withFilterExpression(IS_DELETED + " = :false")
             .withValueMap(deleteTrackingValueMap);
-        final ItemCollection<QueryOutcome> items = table.query(spec);
+        final ItemCollection<QueryOutcome> items = readOp.retry("get",
+                path.toString(),
+                true,
+                () -> table.query(spec));
         boolean hasChildren = items.iterator().hasNext();
         // When this class has support for authoritative
         // (fully-cached) directory listings, we may also be able to answer
@@ -541,13 +562,16 @@ public class DynamoDBMetadataStore implements MetadataStore {
   }
 
   @Override
-  @Retries.OnceTranslated
+  @Retries.RetryTranslated
   public DirListingMetadata listChildren(final Path path) throws IOException {
     checkPath(path);
     LOG.debug("Listing table {} in region {}: {}", tableName, region, path);
 
     // find the children in the table
-    return Invoker.once("listChildren", path.toString(),
+    return readOp.retry(
+        "listChildren",
+        path.toString(),
+        true,
         () -> {
           final QuerySpec spec = new QuerySpec()
               .withHashKey(pathToParentKeyAttribute(path))
@@ -635,25 +659,25 @@ public class DynamoDBMetadataStore implements MetadataStore {
       }
     }
 
-    Invoker.once("move", tableName,
-        () -> processBatchWriteRequest(null, pathMetadataToItem(newItems)));
+    processBatchWriteRequest(null, pathMetadataToItem(newItems));
   }
 
   /**
    * Helper method to issue a batch write request to DynamoDB.
    *
-   * The retry logic here is limited to repeating the write operations
-   * until all items have been written; there is no other attempt
-   * at recovery/retry. Throttling is handled internally.
+   * As well as retrying on the operation invocation, incomplete
+   * batches are retried until all have been deleted.
    * @param keysToDelete primary keys to be deleted; can be null
    * @param itemsToPut new items to be put; can be null
+   * @return the number of iterations needed to complete the call.
    */
-  @Retries.OnceRaw("Outstanding batch items are updated with backoff")
-  private void processBatchWriteRequest(PrimaryKey[] keysToDelete,
+  @Retries.RetryTranslated("Outstanding batch items are updated with backoff")
+  private int processBatchWriteRequest(PrimaryKey[] keysToDelete,
       Item[] itemsToPut) throws IOException {
     final int totalToDelete = (keysToDelete == null ? 0 : keysToDelete.length);
     final int totalToPut = (itemsToPut == null ? 0 : itemsToPut.length);
     int count = 0;
+    int batches = 0;
     while (count < totalToDelete + totalToPut) {
       final TableWriteItems writeItems = new TableWriteItems(tableName);
       int numToDelete = 0;
@@ -678,16 +702,30 @@ public class DynamoDBMetadataStore implements MetadataStore {
         count += numToPut;
       }
 
-      BatchWriteItemOutcome res = dynamoDB.batchWriteItem(writeItems);
+      // if there's a retry and another process updates things then it's not
+      // quite idempotent, but this was the case anyway
+      batches++;
+      BatchWriteItemOutcome res = writeOp.retry(
+          "batch write", "",true,
+          () -> dynamoDB.batchWriteItem(writeItems));
       // Check for unprocessed keys in case of exceeding provisioned throughput
       Map<String, List<WriteRequest>> unprocessed = res.getUnprocessedItems();
       int retryCount = 0;
       while (!unprocessed.isEmpty()) {
+        batchWriteCapacityExceededEvents.incrementAndGet();
+        batches++;
         retryBackoff(retryCount++);
-        res = dynamoDB.batchWriteItemUnprocessed(unprocessed);
+        // use a different reference to keep the compiler quiet
+        final Map<String, List<WriteRequest>> upx = unprocessed;
+        res = writeOp.retry(
+            "batch write",
+            "",
+            true,
+            () -> dynamoDB.batchWriteItemUnprocessed(upx));
         unprocessed = res.getUnprocessedItems();
       }
     }
+    return batches;
   }
 
   /**
@@ -737,7 +775,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
   }
 
   @Override
-  @Retries.OnceRaw
+  @Retries.RetryTranslated
   public void put(Collection<PathMetadata> metas) throws IOException {
     innerPut(pathMetaToDDBPathMeta(metas));
   }
@@ -767,7 +805,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
     // first existent ancestor
     Path path = meta.getFileStatus().getPath().getParent();
     while (path != null && !path.isRoot()) {
-      final Item item = getConsistentItem(pathToKey(path));
+      final Item item = getConsistentItem(path);
       if (!itemExists(item)) {
         final FileStatus status = makeDirStatus(path, username);
         metasToPut.add(new DDBPathMetadata(status, Tristate.FALSE, false,
@@ -806,7 +844,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
    * @throws IOException IO problem
    */
   @Override
-  @Retries.OnceTranslated("retry(listFullPaths); once(batchWrite)")
+  @Retries.RetryTranslated("retry(listFullPaths); once(batchWrite)")
   public void put(DirListingMetadata meta) throws IOException {
     LOG.debug("Saving to table {} in region {}: {}", tableName, region, meta);
 
@@ -817,15 +855,16 @@ public class DynamoDBMetadataStore implements MetadataStore {
             false, meta.isAuthoritative());
 
     // First add any missing ancestors...
-    final Collection<DDBPathMetadata> metasToPut = invoker.retry(
-        "paths to put", path.toString(), true,
+    final Collection<DDBPathMetadata> metasToPut = writeOp.retry(
+        "paths to put",
+        path.toString(),
+        true,
         () -> fullPathsToPut(ddbPathMeta));
 
     // next add all children of the directory
     metasToPut.addAll(pathMetaToDDBPathMeta(meta.getListing()));
 
-    Invoker.once("put", path.toString(),
-        () -> processBatchWriteRequest(null, pathMetadataToItem(metasToPut)));
+    processBatchWriteRequest(null, pathMetadataToItem(metasToPut));
   }
 
   @Override
@@ -855,7 +894,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
     LOG.info("Deleting DynamoDB table {} in region {}", tableName, region);
     Preconditions.checkNotNull(dynamoDB, "Not connected to DynamoDB");
     try {
-      table.delete();
+      invoker.retry("delete", null, true,
+          () -> table.delete());
       table.waitForDelete();
     } catch (ResourceNotFoundException rnfe) {
       LOG.info("ResourceNotFoundException while deleting DynamoDB table {} in "
@@ -873,16 +913,20 @@ public class DynamoDBMetadataStore implements MetadataStore {
     }
   }
 
-  @Retries.OnceRaw
+  @Retries.RetryTranslated
   private ItemCollection<ScanOutcome> expiredFiles(long modTime,
-      String keyPrefix) {
+      String keyPrefix) throws IOException {
     String filterExpression =
         "mod_time < :mod_time and begins_with(parent, :parent)";
     String projectionExpression = "parent,child";
     ValueMap map = new ValueMap()
         .withLong(":mod_time", modTime)
         .withString(":parent", keyPrefix);
-    return table.scan(filterExpression, projectionExpression, null, map);
+    return readOp.retry(
+        "scan",
+        keyPrefix,
+        true,
+        () -> table.scan(filterExpression, projectionExpression, null, map));
   }
 
   @Override
@@ -891,8 +935,15 @@ public class DynamoDBMetadataStore implements MetadataStore {
     prune(modTime, "/");
   }
 
+  /**
+   * Prune files, in batches. There's a sleep between each batch.
+   * @param modTime Oldest modification time to allow
+   * @param keyPrefix The prefix for the keys that should be removed
+   * @throws IOException Any IO/DDB failure.
+   * @throws InterruptedIOException if there was an interruption during the process.
+   */
   @Override
-  @Retries.OnceRaw("once(batchWrite)")
+  @Retries.RetryTranslated("once(batchWrite)")
   public void prune(long modTime, String keyPrefix) throws IOException {
     int itemCount = 0;
     try {
@@ -925,7 +976,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
           deletionBatch.clear();
         }
       }
-      if (deletionBatch.size() > 0) {
+      // final batch of deletes
+      if (!deletionBatch.isEmpty()) {
         Thread.sleep(delay);
         processBatchWriteRequest(pathToKey(deletionBatch), null);
 
@@ -1222,6 +1274,11 @@ public class DynamoDBMetadataStore implements MetadataStore {
   }
 
   @VisibleForTesting
+  public String getTableName() {
+    return tableName;
+  }
+
+  @VisibleForTesting
   DynamoDB getDynamoDB() {
     return dynamoDB;
   }
@@ -1336,6 +1393,38 @@ public class DynamoDBMetadataStore implements MetadataStore {
   }
 
   /**
+   * Callback on a read operation retried.
+   * @param text text of the operation
+   * @param ex exception
+   * @param attempts number of attempts
+   * @param idempotent is the method idempotent (this is assumed to be true)
+   */
+  void readRetryEvent(
+      String text,
+      IOException ex,
+      int attempts,
+      boolean idempotent) {
+    readThrottleEvents.incrementAndGet();
+    retryEvent(text, ex, attempts, true);
+  }
+
+  /**
+   * Callback  on a write operation retried.
+   * @param text text of the operation
+   * @param ex exception
+   * @param attempts number of attempts
+   * @param idempotent is the method idempotent (this is assumed to be true)
+   */
+  void writeRetryEvent(
+      String text,
+      IOException ex,
+      int attempts,
+      boolean idempotent) {
+    writeThrottleEvents.incrementAndGet();
+    retryEvent(text, ex, attempts, idempotent);
+  }
+
+  /**
    * Callback from {@link Invoker} when an operation is retried.
    * @param text text of the operation
    * @param ex exception
@@ -1377,4 +1466,26 @@ public class DynamoDBMetadataStore implements MetadataStore {
     }
   }
 
+  /**
+   * Get the count of read throttle events.
+   * @return the current count of read throttle events.
+   */
+  @VisibleForTesting
+  public long getReadThrottleEventCount() {
+    return readThrottleEvents.get();
+  }
+
+  /**
+   * Get the count of write throttle events.
+   * @return the current count of write throttle events.
+   */
+  @VisibleForTesting
+  public long getWriteThrottleEventCount() {
+    return writeThrottleEvents.get();
+  }
+
+  @VisibleForTesting
+  public long getBatchWriteCapacityExceededCount() {
+    return batchWriteCapacityExceededEvents.get();
+  }
 }

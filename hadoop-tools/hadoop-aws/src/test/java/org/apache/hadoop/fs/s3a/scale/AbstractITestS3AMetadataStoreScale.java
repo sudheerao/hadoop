@@ -22,7 +22,10 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.S3AFileStatus;
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStore;
 import org.apache.hadoop.fs.s3a.s3guard.PathMetadata;
+
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +41,7 @@ import static org.apache.hadoop.fs.contract.ContractTestUtils.NanoTimer;
  * Could be separated from S3A code, but we're using the S3A scale test
  * framework for convenience.
  */
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public abstract class AbstractITestS3AMetadataStoreScale extends
     S3AScaleTestBase {
   private static final Logger LOG = LoggerFactory.getLogger(
@@ -60,7 +64,7 @@ public abstract class AbstractITestS3AMetadataStoreScale extends
   public abstract MetadataStore createMetadataStore() throws IOException;
 
   @Test
-  public void testPut() throws Throwable {
+  public void test_010_Put() throws Throwable {
     describe("Test workload of put() operations");
 
     // As described in hadoop-aws site docs, count parameter is used for
@@ -83,7 +87,7 @@ public abstract class AbstractITestS3AMetadataStoreScale extends
   }
 
   @Test
-  public void testMoves() throws Throwable {
+  public void test_020_Moves() throws Throwable {
     describe("Test workload of batched move() operations");
 
     // As described in hadoop-aws site docs, count parameter is used for
