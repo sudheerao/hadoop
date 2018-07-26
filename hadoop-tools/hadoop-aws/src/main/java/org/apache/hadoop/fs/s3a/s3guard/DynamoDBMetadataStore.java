@@ -328,7 +328,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
     initDataAccessRetries(conf);
 
     // set up a full retry policy
-    invoker = new Invoker(new S3ARetryPolicy(conf),
+    invoker = new Invoker(new S3GuardDataAccessRetryPolicy(conf),
         this::retryEvent
     );
 
@@ -467,8 +467,9 @@ public class DynamoDBMetadataStore implements MetadataStore {
   }
 
   /**
-   * Get a consistent view of an item
+   * Get a consistent view of an item.
    * @param path path to look up in the database
+   * @param path entry
    * @return the result
    * @throws IOException failure
    */
@@ -844,7 +845,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
    * @throws IOException IO problem
    */
   @Override
-  @Retries.RetryTranslated("retry(listFullPaths); once(batchWrite)")
+  @Retries.RetryTranslated
   public void put(DirListingMetadata meta) throws IOException {
     LOG.debug("Saving to table {} in region {}: {}", tableName, region, meta);
 
@@ -1487,5 +1488,10 @@ public class DynamoDBMetadataStore implements MetadataStore {
   @VisibleForTesting
   public long getBatchWriteCapacityExceededCount() {
     return batchWriteCapacityExceededEvents.get();
+  }
+
+  @VisibleForTesting
+  public Invoker getInvoker() {
+    return invoker;
   }
 }

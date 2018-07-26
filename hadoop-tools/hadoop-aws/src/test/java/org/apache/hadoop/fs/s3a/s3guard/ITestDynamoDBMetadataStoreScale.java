@@ -67,6 +67,10 @@ public class ITestDynamoDBMetadataStoreScale
 
   private static final long BATCH_SIZE = 25;
 
+  /**
+   * IO Units for batch size; this sets the size to use for IO capacity.
+   * Value: {@value}.
+   */
   private static final long SMALL_IO_UNITS = BATCH_SIZE / 4;
 
   private DynamoDBMetadataStore ddbms;
@@ -82,9 +86,9 @@ public class ITestDynamoDBMetadataStoreScale
 
   private ProvisionedThroughputDescription originalCapacity;
 
-  private int threads = 100;
+  private final static int THREADS = 100;
 
-  private final int operationsPerThread = 200;
+  private final static int OPERATIONS_PER_THREAD = 50;
 
   /**
    * Create the metadata store. The table and region are determined from
@@ -115,13 +119,13 @@ public class ITestDynamoDBMetadataStoreScale
         StringUtils.isNotEmpty(region));
     conf.set(S3GUARD_DDB_REGION_KEY, region);
     conf.set(S3GUARD_DDB_RETRY_INTERVAL, "10ms");
-    conf.set(S3GUARD_DDB_MAX_RETRIES, "2");
+    conf.set(S3GUARD_DDB_MAX_RETRIES, "5");
+    conf.set(MAX_ERROR_RETRIES, "1");
 
     DynamoDBMetadataStore ms = new DynamoDBMetadataStore();
     ms.initialize(conf);
     return ms;
   }
-
 
   @Override
   public void setup() throws Exception {
@@ -186,7 +190,7 @@ public class ITestDynamoDBMetadataStoreScale
   @Test
   public void test_030_BatchedWriteExceedsProvisioned() throws Exception {
 
-    final long iterations = 5;
+    final long iterations = 15;
     List<PathMetadata> toCleanup = new ArrayList<>();
 
     // Fail if someone changes a constant we depend on
@@ -212,15 +216,6 @@ public class ITestDynamoDBMetadataStoreScale
         ddbms.put(pm);
         toCleanup.add(pm);
         pruneItems++;
-
-        // now do an aggressive series of lookups within each iteration
-        for (int j = 0; j < 500; j++) {
-          ddbms.get(longPath);
-        }
-        for (int j = 0; j < 20; j++) {
-          ddbms.listChildren(longPath.getParent());
-        }
-
         // Having hard time reproducing Exceeded exception with put, also
         // try occasional prune, which was the only stack trace I've seen
         // (on JIRA)
@@ -229,10 +224,12 @@ public class ITestDynamoDBMetadataStoreScale
           ddbms.prune(Long.MAX_VALUE /* all files */);
           pruneItems = 0;
         }
+        throttles.update();
+        if (throttles.isThrottlingDetected()) {
+          LOG.info("Throttling deteced, finishing: " + throttles);
+          break;
+        }
       }
-
-      throttles.complete();
-
     } finally {
       describe("Cleaning up table %s", tableName);
       for (PathMetadata pm : toCleanup) {
@@ -252,7 +249,7 @@ public class ITestDynamoDBMetadataStoreScale
     try {
       ddbms.put(metadata);
       execute("get",
-          operationsPerThread,
+          OPERATIONS_PER_THREAD,
           () -> ddbms.get(path),
           true);
     } finally {
@@ -270,7 +267,7 @@ public class ITestDynamoDBMetadataStoreScale
     try {
       Path parent = path.getParent();
       execute("list",
-          operationsPerThread,
+          OPERATIONS_PER_THREAD,
           () -> {
             ddbms.listChildren(parent);
           },
@@ -283,6 +280,8 @@ public class ITestDynamoDBMetadataStoreScale
   /**
    * Execute a set of operations in parallel, collect throttling statistics
    * and return them.
+   * This execution will complete as soon as throttling is detected.
+   * This ensures that the tests do not run for longer than they should.
    * @param operation string for messages.
    * @param operationsPerThread number of times per thread to invoke the action.
    * @param action action to invoke.
@@ -295,55 +294,73 @@ public class ITestDynamoDBMetadataStoreScale
       throws Exception {
 
     final ContractTestUtils.NanoTimer timer = new ContractTestUtils.NanoTimer();
-    final ThrottleTracker throttles = new ThrottleTracker();
-    final ExecutorService executorService = Executors.newFixedThreadPool(threads);
-    final List<Callable<Integer>> tasks = new ArrayList<>(threads);
+    final ThrottleTracker tracker = new ThrottleTracker();
+    final ExecutorService executorService = Executors.newFixedThreadPool(
+        THREADS);
+    final List<Callable<ExecutionOutcome>> tasks = new ArrayList<>(THREADS);
 
     final AtomicInteger throttleExceptions = new AtomicInteger(0);
-    for (int i = 0; i < threads; i++) {
+    for (int i = 0; i < THREADS; i++) {
       tasks.add(
           () -> {
+            final ExecutionOutcome outcome = new ExecutionOutcome();
+            if (tracker.isThrottlingDetected()) {
+              outcome.skipped = true;
+              return outcome;
+            }
             final ContractTestUtils.NanoTimer t
                 = new ContractTestUtils.NanoTimer();
-            int completed = 0;
             for (int j = 0; j < operationsPerThread; j++) {
               try {
                 action.call();
-                completed++;
+                outcome.completed++;
               } catch (AWSServiceThrottledException e) {
                 // this is good
                 throttleExceptions.incrementAndGet();
                 // consider it completed
-                completed++;
+                outcome.throttleExceptions.add(e);
+                outcome.throttled++;
               } catch (Exception e) {
                 LOG.error("Failed to execute {}", operation, e);
+                outcome.exceptions.add(e);
                 break;
               }
             }
-            LOG.info("Thread completed {} with {} operations in {} millis",
-                operation, completed, t.elapsedTimeMs());
-            return completed;
+            tracker.update();
+            LOG.info("Thread completed {} with in {} millis with outcome {}: {}",
+                operation, t.elapsedTimeMs(), outcome, tracker);
+            return outcome;
           }
       );
     }
-    List<Future<Integer>> futures = executorService.invokeAll(tasks,
+    final List<Future<ExecutionOutcome>> futures =
+        executorService.invokeAll(tasks,
         getTestTimeoutMillis(), TimeUnit.MILLISECONDS);
     long elapsedMs = timer.elapsedTimeMs();
-    LOG.info("Completed {} with {}", operation, throttles);
+    LOG.info("Completed {} with {}", operation, tracker);
     LOG.info("time to execute: {} millis", elapsedMs);
 
-    for (Future<Integer> future : futures) {
+    for (Future<ExecutionOutcome> future : futures) {
       assertTrue("Future timed out", future.isDone());
     }
+    tracker.update();
+
     if (expectThrottling) {
-      throttles.assertThrottlingDetected();
+      tracker.assertThrottlingDetected();
     }
-    for (Future<Integer> future : futures) {
-      assertEquals("Future did not complete all operations",
-          operationsPerThread, future.get().intValue());
+    for (Future<ExecutionOutcome> future : futures) {
+
+      ExecutionOutcome outcome = future.get();
+      if (!outcome.exceptions.isEmpty()) {
+        throw outcome.exceptions.get(0);
+      }
+      if (!outcome.skipped) {
+        assertEquals("Future did not complete all operations",
+            operationsPerThread, outcome.completed + outcome.throttled);
+      }
     }
 
-    return throttles;
+    return tracker;
   }
 
   /**
@@ -359,12 +376,22 @@ public class ITestDynamoDBMetadataStoreScale
     ddbms.provisionTableBlocking(read, write);
   }
 
-  // Attempt do delete metadata, suppressing any errors
+  //
+
+  /**
+   * Attempt to delete metadata, suppressing any errors, and retrying on
+   * throttle events just in case some are still surfacing.
+   * @param ms store
+   * @param pm path to clean up
+   */
   private void cleanupMetadata(MetadataStore ms, PathMetadata pm) {
+    Path path = pm.getFileStatus().getPath();
     try {
-      ms.forgetMetadata(pm.getFileStatus().getPath());
+      ddbms.getInvoker().retry("clean up", path.toString(), true,
+          () -> ms.forgetMetadata(path));
     } catch (IOException ioe) {
       // Ignore.
+      LOG.info("Ignoring error while cleaning up {} in database", path, ioe);
     }
   }
 
@@ -383,15 +410,19 @@ public class ITestDynamoDBMetadataStoreScale
 
   /**
    * Something to track those throttles.
+   * The constructor sets the counters to the current count in the
+   * DDB table; a call to {@link #reset()} will set it to the latest values.
+   * The {@link #update()} will pick up the latest values to compare them with
+   * the original counts.
    */
   private class ThrottleTracker {
 
-    private final long writeThrottleEventOrig = ddbms.getWriteThrottleEventCount();
+    private long writeThrottleEventOrig = ddbms.getWriteThrottleEventCount();
 
-    private final long readThrottleEventOrig = ddbms.getReadThrottleEventCount();
+    private long readThrottleEventOrig = ddbms.getReadThrottleEventCount();
 
-    private final long batchWriteThrottleCountOrig
-        = ddbms.getBatchWriteCapacityExceededCount();
+    private long batchWriteThrottleCountOrig =
+        ddbms.getBatchWriteCapacityExceededCount();
 
     private long readThrottles;
 
@@ -399,7 +430,29 @@ public class ITestDynamoDBMetadataStoreScale
 
     private long batchThrottles;
 
-    void complete() {
+
+    public ThrottleTracker() {
+      reset();
+    }
+
+    /**
+     * Reset the counters.
+     */
+    private synchronized void reset() {
+      writeThrottleEventOrig
+          = ddbms.getWriteThrottleEventCount();
+
+      readThrottleEventOrig
+          = ddbms.getReadThrottleEventCount();
+
+      batchWriteThrottleCountOrig
+          = ddbms.getBatchWriteCapacityExceededCount();
+    }
+
+    /**
+     * update the latest throttle count; synchronized.
+     */
+    private synchronized void update() {
       readThrottles = ddbms.getReadThrottleEventCount() - readThrottleEventOrig;
       writeThrottles = ddbms.getWriteThrottleEventCount()
           - writeThrottleEventOrig;
@@ -414,9 +467,43 @@ public class ITestDynamoDBMetadataStoreScale
           readThrottles, writeThrottles, batchThrottles);
     }
 
+    /**
+     * Assert that throttling has been detected.
+     */
     public void assertThrottlingDetected() {
-      assertTrue("No throttling detected",
-          readThrottles > 0 || writeThrottles > 0 || batchThrottles > 0);
+      assertTrue("No throttling detected against " + ddbms.toString(),
+          isThrottlingDetected());
+    }
+
+    /**
+     * Has there been any throttling on an operation?
+     * @return true iff read, write or batch operations were throttled.
+     */
+    private boolean isThrottlingDetected() {
+      return readThrottles > 0 || writeThrottles > 0 || batchThrottles > 0;
+    }
+  }
+
+  /**
+   * Outcome of an threads execution operation.
+   */
+  private static class ExecutionOutcome {
+    private int completed;
+    private int throttled;
+    private boolean skipped;
+    private final List<Exception> exceptions = new ArrayList<>(1);
+    private final List<Exception> throttleExceptions = new ArrayList<>(1);
+
+    @Override
+    public String toString() {
+      final StringBuilder sb = new StringBuilder(
+          "ExecutionOutcome{");
+      sb.append("completed=").append(completed);
+      sb.append(", skipped=").append(skipped);
+      sb.append(", throttled=").append(throttled);
+      sb.append(", exception count=").append(exceptions.size());
+      sb.append('}');
+      return sb.toString();
     }
   }
 }
