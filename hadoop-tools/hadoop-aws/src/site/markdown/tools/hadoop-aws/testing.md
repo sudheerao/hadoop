@@ -985,9 +985,13 @@ are included in the scale tests executed when `-Dscale` is passed to
 the maven command line.
 
 The two S3Guard scale tests are `ITestDynamoDBMetadataStoreScale` and
-`ITestLocalMetadataStoreScale`.  To run the DynamoDB test, you will need to
-define your table name and region in your test configuration.  For example,
-the following settings allow us to run `ITestDynamoDBMetadataStoreScale` with
+`ITestLocalMetadataStoreScale`.  
+
+To run these tests, your DynamoDB table needs to be of limited capacity;
+the values in `ITestDynamoDBMetadataStoreScale` currently require a read capacity
+of 10 or less. a write capacity of 15 or more.
+
+The following settings allow us to run `ITestDynamoDBMetadataStoreScale` with
 artificially low read and write capacity provisioned, so we can judge the
 effects of being throttled by the DynamoDB service:
 
@@ -1009,22 +1013,47 @@ effects of being throttled by the DynamoDB service:
   <value>my-scale-test</value>
 </property>
 <property>
-  <name>fs.s3a.s3guard.ddb.region</name>
-  <value>us-west-2</value>
-</property>
-<property>
   <name>fs.s3a.s3guard.ddb.table.create</name>
   <value>true</value>
 </property>
 <property>
   <name>fs.s3a.s3guard.ddb.table.capacity.read</name>
-  <value>10</value>
+  <value>5</value>
 </property>
 <property>
   <name>fs.s3a.s3guard.ddb.table.capacity.write</name>
-  <value>10</value>
+  <value>5</value>
 </property>
 ```
+
+These tests verify that the invoked operations can trigger retries in the 
+S3Guard code, rather than just in the AWS SDK level, so showing that if
+SDK operations fail, they get retried. They also verify that the filesystem
+statistics are updated to record that throttling took place.
+
+*Do not panic if these tests fail to detect throttling!*
+
+These tests are unreliable as they need certain conditions to be met
+to repeatedly fail:
+
+1. You must have a low-enough latency connection to the DynamoDB store that,
+for the capacity allocated, you can overload it.
+1. The AWS Console can give you a view of what is happening here.
+1. Running a single test on its own is less likely to trigger an overload
+than trying to run the whole test suite.
+1. And running the test suite more than once, back-to-back, can also help
+overload the cluster.
+1. Stepping through with a debugger will reduce load, so may not trigger
+failures. 
+
+If the tests fail, it *probably* just means you aren't putting enough load
+on the table.
+
+These tests do not verify that the entire set of DynamoDB calls made
+during the use of a S3Guarded S3A filesystem are wrapped by retry logic.
+
+*The best way to verify resilience is to run the entire `hadoop-aws` test suite,
+or even a real application, with throttling enabled.
 
 ### Testing only: Local Metadata Store
 

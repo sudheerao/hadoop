@@ -1130,6 +1130,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
 
   /**
    * Increment a statistic by 1.
+   * This increments both the instrumentation and storage statistics.
    * @param statistic The operation to increment
    */
   protected void incrementStatistic(Statistic statistic) {
@@ -1138,6 +1139,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
 
   /**
    * Increment a statistic by a specific value.
+   * This increments both the instrumentation and storage statistics.
    * @param statistic The operation to increment
    * @param count the count to increment
    */
@@ -1174,8 +1176,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
     Statistic stat = isThrottleException(ex)
         ? STORE_IO_THROTTLED
         : IGNORED_ERRORS;
-    instrumentation.incrementCounter(stat, 1);
-    storageStatistics.incrementCounter(stat, 1);
+    incrementStatistic(stat);
   }
 
   /**
@@ -1196,6 +1197,11 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
   /**
    * Callback from {@link Invoker} when an operation against a metastore
    * is retried.
+   * Always increments the {@link Statistic#S3GUARD_METADATASTORE_RETRY}
+   * statistic/counter;
+   * if it is a throttling exception will update the associated
+   * throttled metrics/statistics.
+   *
    * @param ex exception
    * @param retries number of retries
    * @param idempotent is the method idempotent
@@ -1204,6 +1210,11 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
       int retries,
       boolean idempotent) {
     operationRetried(ex);
+    incrementStatistic(S3GUARD_METADATASTORE_RETRY);
+    if (isThrottleException(ex)) {
+      incrementStatistic(S3GUARD_METADATASTORE_THROTTLED);
+      instrumentation.addValueToQuantiles(S3GUARD_METADATASTORE_THROTTLE_RATE, 1);
+    }
   }
 
   /**

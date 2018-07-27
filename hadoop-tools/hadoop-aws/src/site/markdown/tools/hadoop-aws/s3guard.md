@@ -815,12 +815,13 @@ When an application makes more requests than
 the allocated capacity permits, the request is rejected; it is up to 
 the calling application to detect when it is being so throttled and
 react. S3Guard does this, but as a result: when the client is being
-throttled, operations are slower.
+throttled, operations are slower. This capacity throttling is averaged
+over a few minutes: a briefly overloaded table will not be throttled,
+but the rate cannot be sustained.
 
-The number of throttled operations is tracked in as one of the filesystem metrics.
-
-It is also visible in the AWS console: go the dynamodb page for the table
-and select the "metrics" tab. If the graphs of throttled read or write
+The load on a table isvisible in the AWS console: go to the
+DynamoDB page for the table and select the "metrics" tab. 
+If the graphs of throttled read or write
 requests show that a lot of throttling has taken place, then there is not
 enough allocated capacity for the applications making use of the table.
 
@@ -875,7 +876,7 @@ Having a large value for `fs.s3a.s3guard.ddb.max.retries` will ensure
 that clients of an overloaded table will not fail immediately. However
 queries may be unexpectedly slow. 
 
-If operations, especially directory operations, are slow, check the 
+If operations, especially directory operations, are slow, check the AWS
 console. It is also possible to set up AWS alerts for capacity limits
 being exceeded.
 

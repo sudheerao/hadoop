@@ -43,12 +43,16 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.StorageStatistics;
 import org.apache.hadoop.fs.contract.ContractTestUtils;
 import org.apache.hadoop.fs.s3a.AWSServiceThrottledException;
 import org.apache.hadoop.fs.s3a.S3AFileStatus;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
+import org.apache.hadoop.fs.s3a.S3AStorageStatistics;
+import org.apache.hadoop.fs.s3a.Statistic;
 import org.apache.hadoop.fs.s3a.scale.AbstractITestS3AMetadataStoreScale;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.test.GenericTestUtils;
 import org.apache.hadoop.test.LambdaTestUtils;
 
 import static org.apache.hadoop.fs.s3a.Constants.*;
@@ -76,7 +80,8 @@ public class ITestDynamoDBMetadataStoreScale
    * IO Units for batch size; this sets the size to use for IO capacity.
    * Value: {@value}.
    */
-  private static final long SMALL_IO_UNITS = BATCH_SIZE / 4;
+  private static final long MAXIMUM_READ_CAPACITY = 10;
+  private static final long MAXIMUM_WRITE_CAPACITY = 15;
 
   private DynamoDBMetadataStore ddbms;
 
@@ -87,11 +92,11 @@ public class ITestDynamoDBMetadataStoreScale
   private String tableName;
 
   /** was the provisioning changed in test_001_limitCapacity()? */
-  private boolean isProvisionedChanged;
+  private boolean isOverProvisionedForTest;
 
   private ProvisionedThroughputDescription originalCapacity;
 
-  private static final int THREADS = 20;
+  private static final int THREADS = 40;
 
   private static final int OPERATIONS_PER_THREAD = 50;
 
@@ -118,10 +123,12 @@ public class ITestDynamoDBMetadataStoreScale
     tableName = fsStore.getTableName();
     assertTrue("Null/Empty tablename in " + fsStore,
         StringUtils.isNotEmpty(tableName));
-    conf.set(S3GUARD_DDB_TABLE_NAME_KEY, tableName);
     String region = fsStore.getRegion();
     assertTrue("Null/Empty region in " + fsStore,
         StringUtils.isNotEmpty(region));
+    // create a new metastore configured to fail fast if throttling
+    // happens.
+    conf.set(S3GUARD_DDB_TABLE_NAME_KEY, tableName);
     conf.set(S3GUARD_DDB_REGION_KEY, region);
     conf.set(S3GUARD_DDB_THROTTLE_RETRY_INTERVAL, "50ms");
     conf.set(S3GUARD_DDB_MAX_RETRIES, "2");
@@ -130,6 +137,9 @@ public class ITestDynamoDBMetadataStoreScale
 
     DynamoDBMetadataStore ms = new DynamoDBMetadataStore();
     ms.initialize(conf);
+    // wire up the owner FS so that we can make assertions about throttle
+    // events
+    ms.setOwner(fs);
     return ms;
   }
 
@@ -141,6 +151,15 @@ public class ITestDynamoDBMetadataStoreScale
     assertNotNull("table has no name", tableName);
     ddb = ddbms.getDynamoDB();
     table = ddb.getTable(tableName);
+    originalCapacity = table.describe().getProvisionedThroughput();
+
+    // If you set the same provisioned I/O as already set it throws an
+    // exception, avoid that.
+    isOverProvisionedForTest = (
+        originalCapacity.getReadCapacityUnits() > MAXIMUM_READ_CAPACITY
+            || originalCapacity.getWriteCapacityUnits() > MAXIMUM_WRITE_CAPACITY);
+    assumeFalse("Table has too much capacity: " + originalCapacity.toString(),
+        isOverProvisionedForTest);
   }
 
   @Override
@@ -150,36 +169,21 @@ public class ITestDynamoDBMetadataStoreScale
   }
 
   /**
-   * Attempt to limit capacity before any of the test cases.
-   * This can fail if the capacity change count has been exceeded.
+   * The subclass expects the superclass to be throttled; sometimes it is.
    */
   @Test
-  public void test_001_limitCapacity() throws Throwable {
-    originalCapacity = table.describe().getProvisionedThroughput();
-
-    // If you set the same provisioned I/O as already set it throws an
-    // exception, avoid that.
-    isProvisionedChanged = (
-        originalCapacity.getReadCapacityUnits() > SMALL_IO_UNITS
-            || originalCapacity.getWriteCapacityUnits() > SMALL_IO_UNITS);
-
-    if (isProvisionedChanged) {
-      // Set low provisioned I/O for dynamodb
-      describe("Provisioning dynamo tbl %s read/write -> %d/%d", tableName,
-          SMALL_IO_UNITS, SMALL_IO_UNITS);
-      try {
-        // Blocks to ensure table is back to ready state before we proceed
-        ddbms.provisionTableBlocking(SMALL_IO_UNITS, SMALL_IO_UNITS);
-      } catch (AWSServiceThrottledException e) {
-        // there's a limit to how often you can change sizes.
-        LOG.warn("Failed to set capacity: " + e, e);
-        isProvisionedChanged = false;
-        throw e;
-      }
-    } else {
-      describe("Skipping provisioning table I/O, already %d/%d",
-          SMALL_IO_UNITS, SMALL_IO_UNITS);
-      ContractTestUtils.skip("Table already small enough for load tests");
+  @Override
+  public void test_020_Moves() throws Throwable {
+    ThrottleTracker tracker = new ThrottleTracker();
+    try {
+      super.test_020_Moves();
+      } catch (AWSServiceThrottledException ex) {
+      GenericTestUtils.assertExceptionContains(
+          DynamoDBMetadataStore.HINT_DDB_IOPS_TOO_LOW,
+          ex,
+          "Expected throttling message");
+    } finally {
+      LOG.info("Statistics {}", tracker);
     }
   }
 
@@ -194,7 +198,7 @@ public class ITestDynamoDBMetadataStoreScale
    * correctly, retrying w/ smaller batch instead of surfacing exceptions.
    */
   @Test
-  public void test_035_BatchedWriteExceedsProvisioned() throws Exception {
+  public void test_030_BatchedWrite() throws Exception {
 
     final int iterations = 15;
     final ArrayList<PathMetadata> toCleanup = new ArrayList<>();
@@ -258,9 +262,9 @@ public class ITestDynamoDBMetadataStoreScale
    * as that stresses more of the code.
    */
   @Test
-  public void test_040_getThrottling() throws Throwable {
+  public void test_040_get() throws Throwable {
     // attempt to create many many get requests in parallel.
-    Path path = new Path("s3a://example.org/test_040_getThrottling");
+    Path path = new Path("s3a://example.org/get");
     S3AFileStatus status = new S3AFileStatus(true, path, "alice");
     PathMetadata metadata = new PathMetadata(status);
     ddbms.put(metadata);
@@ -279,9 +283,9 @@ public class ITestDynamoDBMetadataStoreScale
    * Ask for the version marker, which is where table init can be overloaded.
    */
   @Test
-  public void test_041_getThrottling() throws Throwable {
+  public void test_050_getVersionMarkerItem() throws Throwable {
     execute("get",
-        OPERATIONS_PER_THREAD,
+        OPERATIONS_PER_THREAD * 2,
         true,
         () -> ddbms.getVersionMarkerItem()
     );
@@ -302,9 +306,9 @@ public class ITestDynamoDBMetadataStoreScale
   }
 
   @Test
-  public void test_050_listThrottling() throws Throwable {
+  public void test_060_list() throws Throwable {
     // attempt to create many many get requests in parallel.
-    Path path = new Path("s3a://example.org/test_050_listThrottling");
+    Path path = new Path("s3a://example.org/list");
     S3AFileStatus status = new S3AFileStatus(true, path, "alice");
     PathMetadata metadata = new PathMetadata(status);
     ddbms.put(metadata);
@@ -312,13 +316,74 @@ public class ITestDynamoDBMetadataStoreScale
       Path parent = path.getParent();
       execute("list",
           OPERATIONS_PER_THREAD,
-          true, () -> {
-            ddbms.listChildren(parent);
-          }
+          true,
+          () -> ddbms.listChildren(parent)
       );
     } finally {
       retryingDelete(path);
     }
+  }
+
+  @Test
+  public void test_070_putDirMarker() throws Throwable {
+    // attempt to create many many get requests in parallel.
+    Path path = new Path("s3a://example.org/putDirMarker");
+    S3AFileStatus status = new S3AFileStatus(true, path, "alice");
+    PathMetadata metadata = new PathMetadata(status);
+    ddbms.put(metadata);
+    DirListingMetadata children = ddbms.listChildren(path.getParent());
+    try {
+      execute("list",
+          OPERATIONS_PER_THREAD,
+          true,
+          () -> ddbms.put(children)
+      );
+    } finally {
+      retryingDelete(path);
+    }
+  }
+
+  @Test
+  public void test_080_fullPathsToPut() throws Throwable {
+    // attempt to create many many get requests in parallel.
+    Path base = new Path("s3a://example.org/test_080_fullPathsToPut");
+    Path child = new Path(base, "child");
+    List<PathMetadata> pms = new ArrayList<>();
+    ddbms.put(new PathMetadata(makeDirStatus(base)));
+    ddbms.put(new PathMetadata(makeDirStatus(child)));
+    ddbms.getInvoker().retry("set up directory tree",
+        base.toString(),
+        true,
+        () -> ddbms.put(pms));
+    try {
+      PathMetadata dirData = ddbms.get(child, true);
+      execute("list",
+          OPERATIONS_PER_THREAD,
+          true,
+          () -> ddbms.fullPathsToPut(dirData)
+      );
+    } finally {
+      retryingDelete(base);
+    }
+  }
+
+  @Test
+  public void test_900_instrumentation() throws Throwable {
+    describe("verify the owner FS gets updated after throttling events");
+    // we rely on the FS being shared
+    S3AFileSystem fs = getFileSystem();
+    String fsSummary = fs.toString();
+
+    S3AStorageStatistics statistics = fs.getStorageStatistics();
+    for (StorageStatistics.LongStatistic statistic : statistics) {
+      LOG.info("{}", statistic.toString());
+    }
+    String retryKey = Statistic.S3GUARD_METADATASTORE_RETRY.getSymbol();
+    assertTrue("No increment of " + retryKey + " in " + fsSummary,
+        statistics.getLong(retryKey) > 0);
+    String throttledKey = Statistic.S3GUARD_METADATASTORE_THROTTLED.getSymbol();
+    assertTrue("No increment of " + throttledKey + " in " + fsSummary,
+        statistics.getLong(throttledKey) > 0);
   }
 
   /**
@@ -411,19 +476,6 @@ public class ITestDynamoDBMetadataStoreScale
   }
 
   /**
-   * Restore the capacity if it was set in {@link #test_001_limitCapacity}.
-   */
-  @Test
-  public void test_999_restore_capacity() throws Throwable {
-    assumeTrue("Provisioning didn't change", isProvisionedChanged);
-    long write = originalCapacity.getWriteCapacityUnits();
-    long read = originalCapacity.getReadCapacityUnits();
-    describe("Restoring dynamo tbl %s read/write -> %d/%d", tableName,
-        read, write);
-    ddbms.provisionTableBlocking(read, write);
-  }
-
-  /**
    * Attempt to delete metadata, suppressing any errors, and retrying on
    * throttle events just in case some are still surfacing.
    * @param ms store
@@ -454,7 +506,7 @@ public class ITestDynamoDBMetadataStoreScale
   }
 
   /**
-   * Something to track those throttles.
+   * Something to track throttles.
    * The constructor sets the counters to the current count in the
    * DDB table; a call to {@link #reset()} will set it to the latest values.
    * The {@link #probe()} will pick up the latest values to compare them with
@@ -510,7 +562,9 @@ public class ITestDynamoDBMetadataStoreScale
     @Override
     public String toString() {
       return String.format(
-          "Read throttle events = %d; write events = %d; batch throttles = %d",
+          "Tracker with read throttle events = %d;"
+              + " write events = %d;"
+              + " batch throttles = %d",
           readThrottles, writeThrottles, batchThrottles);
     }
 
@@ -518,7 +572,7 @@ public class ITestDynamoDBMetadataStoreScale
      * Assert that throttling has been detected.
      */
     public void assertThrottlingDetected() {
-      assertTrue("No throttling detected in tracker " + this +
+      assertTrue("No throttling detected in " + this +
               " against " + ddbms.toString(),
           isThrottlingDetected());
     }

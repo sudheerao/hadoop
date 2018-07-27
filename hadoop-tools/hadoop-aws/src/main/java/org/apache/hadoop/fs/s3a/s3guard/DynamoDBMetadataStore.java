@@ -41,8 +41,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import com.amazonaws.AmazonClientException;
-import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.document.BatchWriteItemOutcome;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
@@ -210,6 +210,13 @@ public class DynamoDBMetadataStore implements MetadataStore {
   @VisibleForTesting
   static final String TABLE = "table";
 
+  @VisibleForTesting
+  static final String HINT_DDB_IOPS_TOO_LOW
+      = " This may be because the write threshold of DynamoDB is set too low.";
+
+  @VisibleForTesting
+  static final String THROTTLING = "Throttling";
+
   private static ValueMap deleteTrackingValueMap =
       new ValueMap().withBoolean(":false", false);
 
@@ -298,8 +305,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
     Preconditions.checkNotNull(fs, "Null filesystem");
     Preconditions.checkArgument(fs instanceof S3AFileSystem,
         "DynamoDBMetadataStore only supports S3A filesystem.");
-    owner = (S3AFileSystem) fs;
-    instrumentation = owner.getInstrumentation().getS3GuardInstrumentation();
+    setOwner((S3AFileSystem) fs);
     final String bucket = owner.getBucket();
     conf = owner.getConf();
     String confRegion = conf.getTrimmed(S3GUARD_DDB_REGION_KEY);
@@ -338,6 +344,18 @@ public class DynamoDBMetadataStore implements MetadataStore {
     initTable();
 
     instrumentation.initialized();
+  }
+
+  /**
+   * Declare that this table is owned by this FS.
+   * This will bind some fields to the values provided by the owner,
+   * including wiring up the instrumentation.
+   * @param fs owner filesystem
+   */
+  void setOwner(final S3AFileSystem fs) {
+    owner = fs;
+    instrumentation = owner.getInstrumentation().getS3GuardInstrumentation();
+    username = owner.getUsername();
   }
 
   /**
@@ -643,7 +661,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
   }
 
   @Override
-  @Retries.OnceTranslated
+  @Retries.RetryTranslated
   public void move(Collection<Path> pathsToDelete,
       Collection<PathMetadata> pathsToCreate) throws IOException {
     if (pathsToDelete == null && pathsToCreate == null) {
@@ -727,7 +745,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
       while (!unprocessed.isEmpty()) {
         batchWriteCapacityExceededEvents.incrementAndGet();
         batches++;
-        retryBackoff(retryCount++);
+        retryBackoffOnBatchWrite(retryCount++);
         // use a different reference to keep the compiler quiet
         final Map<String, List<WriteRequest>> upx = unprocessed;
         res = writeOp.retry(
@@ -745,10 +763,11 @@ public class DynamoDBMetadataStore implements MetadataStore {
    * Put the current thread to sleep to implement exponential backoff
    * depending on retryCount.  If max retries are exceeded, throws an
    * exception instead.
+   *
    * @param retryCount number of retries so far
    * @throws IOException when max retryCount is exceeded.
    */
-  private void retryBackoff(int retryCount) throws IOException {
+  private void retryBackoffOnBatchWrite(int retryCount) throws IOException {
     try {
       // Our RetryPolicy ignores everything but retryCount here.
       RetryPolicy.RetryAction action = batchWriteRetryPolicy.shouldRetry(
@@ -756,11 +775,21 @@ public class DynamoDBMetadataStore implements MetadataStore {
           retryCount, 0, true);
       if (action.action == RetryPolicy.RetryAction.RetryDecision.FAIL) {
         // Create an AWSServiceThrottledException, with a fake inner cause
+        // which we fill in to look like a real exception so
+        // error messages look sensible
+        AmazonServiceException cause = new AmazonServiceException(
+            "Throttling");
+        cause.setServiceName("S3Guard");
+        cause.setStatusCode(AWSServiceThrottledException.STATUS_CODE);
+        cause.setErrorCode(THROTTLING);  // used in real AWS errors
+        cause.setErrorType(AmazonServiceException.ErrorType.Service);
+        cause.setErrorMessage(THROTTLING);
+        cause.setRequestId("n/a");
         throw new AWSServiceThrottledException(
-            String.format("Max retries exceeded (%d) for DynamoDB. This may be"
-                    + " because write threshold of DynamoDB is set too low.",
+            String.format("Max retries during batch write exceeded (%d) for DynamoDB."
+                    + HINT_DDB_IOPS_TOO_LOW,
                 retryCount),
-            new AmazonServiceException("Throttling"));
+            cause);
       } else {
         LOG.debug("Sleeping {} msec before next retry", action.delayMillis);
         Thread.sleep(action.delayMillis);
@@ -775,7 +804,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
   }
 
   @Override
-  @Retries.OnceRaw
+  @Retries.RetryTranslated
   public void put(PathMetadata meta) throws IOException {
     // For a deeply nested path, this method will automatically create the full
     // ancestry and save respective item in DynamoDB table.
@@ -807,7 +836,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
   /**
    * Helper method to get full path of ancestors that are nonexistent in table.
    */
-  @Retries.OnceRaw
+  @VisibleForTesting
+  @Retries.RetryTranslated
   private Collection<DDBPathMetadata> fullPathsToPut(DDBPathMetadata meta)
       throws IOException {
     checkPathMetadata(meta);
@@ -871,11 +901,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
             false, meta.isAuthoritative());
 
     // First add any missing ancestors...
-    final Collection<DDBPathMetadata> metasToPut = writeOp.retry(
-        "paths to put",
-        path.toString(),
-        true,
-        () -> fullPathsToPut(ddbPathMeta));
+    final Collection<DDBPathMetadata> metasToPut = fullPathsToPut(ddbPathMeta);
 
     // next add all children of the directory
     metasToPut.addAll(pathMetaToDDBPathMeta(meta.getListing()));
@@ -901,7 +927,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
 }
 
   @Override
-  @Retries.OnceTranslated
+  @Retries.RetryTranslated
   public void destroy() throws IOException {
     if (table == null) {
       LOG.info("In destroy(): no table to delete");
@@ -946,7 +972,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
   }
 
   @Override
-  @Retries.OnceRaw("once(batchWrite)")
+  @Retries.RetryTranslated
   public void prune(long modTime) throws IOException {
     prune(modTime, "/");
   }
@@ -959,7 +985,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
    * @throws InterruptedIOException if there was an interruption during the process.
    */
   @Override
-  @Retries.RetryTranslated("once(batchWrite)")
+  @Retries.RetryTranslated
   public void prune(long modTime, String keyPrefix) throws IOException {
     int itemCount = 0;
     try {
@@ -1131,10 +1157,12 @@ public class DynamoDBMetadataStore implements MetadataStore {
    * Get the version mark item in the existing DynamoDB table.
    *
    * As the version marker item may be created by another concurrent thread or
-   * process, we sleep and retry a limited times before we fail to get it.
+   * process, we sleep and retry a limited number times if the lookup returns
+   * with a null value.
+   * DDB throttling is always retried.
    */
-  @Retries.RetryTranslated
   @VisibleForTesting
+  @Retries.RetryTranslated
   Item getVersionMarkerItem() throws IOException {
     final PrimaryKey versionMarkerKey =
         createVersionMarkerPrimaryKey(VERSION_MARKER);
@@ -1160,7 +1188,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
   }
 
   /**
-   * Issue the query to get the version marker, with throttling.
+   * Issue the query to get the version marker, with throttling for overloaded
+   * DDB tables.
    * @param versionMarkerKey key to look up
    * @return the marker
    * @throws IOException failure
@@ -1257,7 +1286,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
    * @return the outcome.
    */
   @Retries.OnceRaw
-  PutItemOutcome putItem(Item item) {
+  private PutItemOutcome putItem(Item item) {
     LOG.debug("Putting item {}", item);
     return table.putItem(item);
   }
