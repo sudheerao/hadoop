@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -41,6 +42,7 @@ import java.util.stream.Collectors;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.document.BatchWriteItemOutcome;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
@@ -75,12 +77,12 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
+import org.apache.hadoop.fs.s3a.AWSServiceThrottledException;
 import org.apache.hadoop.fs.s3a.Constants;
 import org.apache.hadoop.fs.s3a.Invoker;
 import org.apache.hadoop.fs.s3a.Retries;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.fs.s3a.S3AInstrumentation;
-import org.apache.hadoop.fs.s3a.S3ARetryPolicy;
 import org.apache.hadoop.fs.s3a.S3AUtils;
 import org.apache.hadoop.fs.s3a.Tristate;
 import org.apache.hadoop.fs.s3a.auth.RolePolicies;
@@ -196,10 +198,6 @@ public class DynamoDBMetadataStore implements MetadataStore {
   public static final String E_INCOMPATIBLE_VERSION
       = "Database table is from an incompatible S3Guard version.";
 
-  /** Initial delay for retries when batched operations get throttled by
-   * DynamoDB. Value is {@value} msec. */
-  public static final long MIN_RETRY_SLEEP_MSEC = 100;
-
   @VisibleForTesting
   static final String DESCRIPTION
       = "S3Guard metadata store in DynamoDB";
@@ -223,7 +221,12 @@ public class DynamoDBMetadataStore implements MetadataStore {
   private Configuration conf;
   private String username;
 
-  private RetryPolicy dataAccessRetryPolicy;
+  /**
+   * This policy is purely for batched writes, not for processing
+   * exceptions in invoke() calls.
+   */
+  private RetryPolicy batchWriteRetryPolicy;
+
   private S3AInstrumentation.S3GuardInstrumentation instrumentation;
 
   /** Owner FS: only valid if configured with an owner FS. */
@@ -385,13 +388,23 @@ public class DynamoDBMetadataStore implements MetadataStore {
   /**
    * Set retry policy. This is driven by the value of
    * {@link Constants#S3GUARD_DDB_MAX_RETRIES} with an exponential backoff
-   * between each attempt of {@link #MIN_RETRY_SLEEP_MSEC} milliseconds.
+   * between each attempt of {@link Constants#S3GUARD_DDB_THROTTLE_RETRY_INTERVAL}
+   * milliseconds.
    * @param config configuration for data access
    */
   private void initDataAccessRetries(Configuration config) {
-    dataAccessRetryPolicy = new S3GuardDataAccessRetryPolicy(config);
-    readOp = new Invoker(dataAccessRetryPolicy, this::readRetryEvent);
-    writeOp = new Invoker(dataAccessRetryPolicy, this::writeRetryEvent);
+    batchWriteRetryPolicy = RetryPolicies
+        .exponentialBackoffRetry(
+            config.getInt(S3GUARD_DDB_MAX_RETRIES,
+                S3GUARD_DDB_MAX_RETRIES_DEFAULT),
+            conf.getTimeDuration(S3GUARD_DDB_THROTTLE_RETRY_INTERVAL,
+                S3GUARD_DDB_THROTTLE_RETRY_INTERVAL_DEFAULT,
+                TimeUnit.MILLISECONDS),
+            TimeUnit.MILLISECONDS);
+    final RetryPolicy throttledRetryRetryPolicy
+        = new S3GuardDataAccessRetryPolicy(config);
+    readOp = new Invoker(throttledRetryRetryPolicy, this::readRetryEvent);
+    writeOp = new Invoker(throttledRetryRetryPolicy, this::writeRetryEvent);
   }
 
   @Override
@@ -532,11 +545,10 @@ public class DynamoDBMetadataStore implements MetadataStore {
             .withConsistentRead(true)
             .withFilterExpression(IS_DELETED + " = :false")
             .withValueMap(deleteTrackingValueMap);
-        final ItemCollection<QueryOutcome> items = readOp.retry("get",
+        boolean hasChildren = readOp.retry("get/hasChildren",
                 path.toString(),
                 true,
-                () -> table.query(spec));
-        boolean hasChildren = items.iterator().hasNext();
+                () -> table.query(spec).iterator().hasNext());
         // When this class has support for authoritative
         // (fully-cached) directory listings, we may also be able to answer
         // TRUE here.  Until then, we don't know if we have full listing or
@@ -739,13 +751,16 @@ public class DynamoDBMetadataStore implements MetadataStore {
   private void retryBackoff(int retryCount) throws IOException {
     try {
       // Our RetryPolicy ignores everything but retryCount here.
-      RetryPolicy.RetryAction action = dataAccessRetryPolicy.shouldRetry(null,
+      RetryPolicy.RetryAction action = batchWriteRetryPolicy.shouldRetry(
+          null,
           retryCount, 0, true);
       if (action.action == RetryPolicy.RetryAction.RetryDecision.FAIL) {
-        throw new IOException(
+        // Create an AWSServiceThrottledException, with a fake inner cause
+        throw new AWSServiceThrottledException(
             String.format("Max retries exceeded (%d) for DynamoDB. This may be"
                     + " because write threshold of DynamoDB is set too low.",
-                retryCount));
+                retryCount),
+            new AmazonServiceException("Throttling"));
       } else {
         LOG.debug("Sleeping {} msec before next retry", action.delayMillis);
         Thread.sleep(action.delayMillis);
@@ -755,7 +770,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
     } catch (IOException e) {
       throw e;
     } catch (Exception e) {
-      throw new IOException("Unexpected exception", e);
+      throw new IOException("Unexpected exception " + e, e);
     }
   }
 
@@ -950,9 +965,11 @@ public class DynamoDBMetadataStore implements MetadataStore {
     try {
       Collection<Path> deletionBatch =
           new ArrayList<>(S3GUARD_DDB_BATCH_WRITE_REQUEST_LIMIT);
-      int delay = conf.getInt(S3GUARD_DDB_BACKGROUND_SLEEP_MSEC_KEY,
-          S3GUARD_DDB_BACKGROUND_SLEEP_MSEC_DEFAULT);
-      Set<Path> parentPathSet =  new HashSet<>();
+      long delay = conf.getTimeDuration(
+          S3GUARD_DDB_BACKGROUND_SLEEP_MSEC_KEY,
+          S3GUARD_DDB_BACKGROUND_SLEEP_MSEC_DEFAULT,
+          TimeUnit.MILLISECONDS);
+      Set<Path> parentPathSet = new HashSet<>();
       for (Item item : expiredFiles(modTime, keyPrefix)) {
         DDBPathMetadata md = PathMetadataDynamoDBTranslation
             .itemToPathMetadata(item, username);
@@ -1115,18 +1132,17 @@ public class DynamoDBMetadataStore implements MetadataStore {
    *
    * As the version marker item may be created by another concurrent thread or
    * process, we sleep and retry a limited times before we fail to get it.
-   * This does not include handling any failure other than "item not found",
-   * so this method is tagged as "OnceRaw"
    */
-  @Retries.OnceRaw
-  private Item getVersionMarkerItem() throws IOException {
+  @Retries.RetryTranslated
+  @VisibleForTesting
+  Item getVersionMarkerItem() throws IOException {
     final PrimaryKey versionMarkerKey =
         createVersionMarkerPrimaryKey(VERSION_MARKER);
     int retryCount = 0;
-    Item versionMarker = table.getItem(versionMarkerKey);
+    Item versionMarker = queryVersionMarker(versionMarkerKey);
     while (versionMarker == null) {
       try {
-        RetryPolicy.RetryAction action = dataAccessRetryPolicy.shouldRetry(null,
+        RetryPolicy.RetryAction action = batchWriteRetryPolicy.shouldRetry(null,
             retryCount, 0, true);
         if (action.action == RetryPolicy.RetryAction.RetryDecision.FAIL) {
           break;
@@ -1138,9 +1154,23 @@ public class DynamoDBMetadataStore implements MetadataStore {
         throw new IOException("initTable: Unexpected exception", e);
       }
       retryCount++;
-      versionMarker = table.getItem(versionMarkerKey);
+      versionMarker = queryVersionMarker(versionMarkerKey);
     }
     return versionMarker;
+  }
+
+  /**
+   * Issue the query to get the version marker, with throttling.
+   * @param versionMarkerKey key to look up
+   * @return the marker
+   * @throws IOException failure
+   */
+  @Retries.RetryTranslated
+  private Item queryVersionMarker(final PrimaryKey versionMarkerKey)
+      throws IOException {
+    return readOp.retry("getVersionMarkerItem",
+        VERSION_MARKER, true,
+        () -> table.getItem(versionMarkerKey));
   }
 
   /**
@@ -1337,8 +1367,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
     }
     map.put("description", DESCRIPTION);
     map.put("region", region);
-    if (dataAccessRetryPolicy != null) {
-      map.put("retryPolicy", dataAccessRetryPolicy.toString());
+    if (batchWriteRetryPolicy != null) {
+      map.put("retryPolicy", batchWriteRetryPolicy.toString());
     }
     return map;
   }

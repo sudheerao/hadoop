@@ -57,6 +57,11 @@ import static org.junit.Assume.*;
 
 /**
  * Scale test for DynamoDBMetadataStore.
+ *
+ * The throttle tests aren't quite trying to verify that throttling can
+ * be recovered from, because that makes for very slow tests: you have
+ * to overload the system and them have them back of until they finally complete.
+ * Instead
  */
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class ITestDynamoDBMetadataStoreScale
@@ -86,9 +91,9 @@ public class ITestDynamoDBMetadataStoreScale
 
   private ProvisionedThroughputDescription originalCapacity;
 
-  private final static int THREADS = 100;
+  private static final int THREADS = 20;
 
-  private final static int OPERATIONS_PER_THREAD = 50;
+  private static final int OPERATIONS_PER_THREAD = 50;
 
   /**
    * Create the metadata store. The table and region are determined from
@@ -118,9 +123,10 @@ public class ITestDynamoDBMetadataStoreScale
     assertTrue("Null/Empty region in " + fsStore,
         StringUtils.isNotEmpty(region));
     conf.set(S3GUARD_DDB_REGION_KEY, region);
-    conf.set(S3GUARD_DDB_RETRY_INTERVAL, "10ms");
-    conf.set(S3GUARD_DDB_MAX_RETRIES, "5");
+    conf.set(S3GUARD_DDB_THROTTLE_RETRY_INTERVAL, "50ms");
+    conf.set(S3GUARD_DDB_MAX_RETRIES, "2");
     conf.set(MAX_ERROR_RETRIES, "1");
+    conf.set(S3GUARD_DDB_BACKGROUND_SLEEP_MSEC_KEY, "5ms");
 
     DynamoDBMetadataStore ms = new DynamoDBMetadataStore();
     ms.initialize(conf);
@@ -173,9 +179,9 @@ public class ITestDynamoDBMetadataStoreScale
     } else {
       describe("Skipping provisioning table I/O, already %d/%d",
           SMALL_IO_UNITS, SMALL_IO_UNITS);
+      ContractTestUtils.skip("Table already small enough for load tests");
     }
   }
-
 
   /**
    * Though the AWS SDK claims in documentation to handle retries and
@@ -188,16 +194,16 @@ public class ITestDynamoDBMetadataStoreScale
    * correctly, retrying w/ smaller batch instead of surfacing exceptions.
    */
   @Test
-  public void test_030_BatchedWriteExceedsProvisioned() throws Exception {
+  public void test_035_BatchedWriteExceedsProvisioned() throws Exception {
 
-    final long iterations = 15;
-    List<PathMetadata> toCleanup = new ArrayList<>();
+    final int iterations = 15;
+    final ArrayList<PathMetadata> toCleanup = new ArrayList<>();
+    toCleanup.ensureCapacity(THREADS * iterations);
 
     // Fail if someone changes a constant we depend on
     assertTrue("Maximum batch size must big enough to run this test",
         S3GUARD_DDB_BATCH_WRITE_REQUEST_LIMIT >= BATCH_SIZE);
 
-    ThrottleTracker throttles = new ThrottleTracker();
 
     // We know the dynamodb metadata store will expand a put of a path
     // of depth N into a batch of N writes (all ancestors are written
@@ -206,61 +212,99 @@ public class ITestDynamoDBMetadataStoreScale
     try {
       describe("Running %d iterations of batched put, size %d", iterations,
           BATCH_SIZE);
-      long pruneItems = 0;
-      for (long i = 0; i < iterations; i++) {
-        Path longPath = pathOfDepth(BATCH_SIZE, String.valueOf(i));
-        FileStatus status = basicFileStatus(longPath, 0, false, 12345,
-            12345);
-        PathMetadata pm = new PathMetadata(status);
 
-        ddbms.put(pm);
-        toCleanup.add(pm);
-        pruneItems++;
-        // Having hard time reproducing Exceeded exception with put, also
-        // try occasional prune, which was the only stack trace I've seen
-        // (on JIRA)
-        if (pruneItems == BATCH_SIZE) {
-          describe("pruning files");
-          ddbms.prune(Long.MAX_VALUE /* all files */);
-          pruneItems = 0;
-        }
-        throttles.update();
-        if (throttles.isThrottlingDetected()) {
-          LOG.info("Throttling deteced, finishing: " + throttles);
-          break;
-        }
-      }
+      ThrottleTracker result = execute("prune",
+          1,
+          true,
+          () -> {
+            ThrottleTracker tracker = new ThrottleTracker();
+            long pruneItems = 0;
+            for (long i = 0; i < iterations; i++) {
+              Path longPath = pathOfDepth(BATCH_SIZE, String.valueOf(i));
+              FileStatus status = basicFileStatus(longPath, 0, false, 12345,
+                  12345);
+              PathMetadata pm = new PathMetadata(status);
+              synchronized (toCleanup) {
+                toCleanup.add(pm);
+              }
+
+              ddbms.put(pm);
+
+              pruneItems++;
+
+              if (pruneItems == BATCH_SIZE) {
+                describe("pruning files");
+                ddbms.prune(Long.MAX_VALUE /* all files */);
+                pruneItems = 0;
+              }
+              if (tracker.probe()) {
+                // fail fast
+                break;
+              }
+            }
+          });
+      assertNotEquals("No batch retries in " + result,
+          0, result.batchThrottles);
     } finally {
       describe("Cleaning up table %s", tableName);
       for (PathMetadata pm : toCleanup) {
         cleanupMetadata(ddbms, pm);
       }
     }
-    LOG.info("Completed with {}", throttles);
-    throttles.assertThrottlingDetected();
   }
 
+  /**
+   * Test Get throttling including using {@link MetadataStore#get(Path, boolean)},
+   * as that stresses more of the code.
+   */
   @Test
   public void test_040_getThrottling() throws Throwable {
     // attempt to create many many get requests in parallel.
-    Path path = new Path("s3a://example.org/TODO");
+    Path path = new Path("s3a://example.org/test_040_getThrottling");
     S3AFileStatus status = new S3AFileStatus(true, path, "alice");
     PathMetadata metadata = new PathMetadata(status);
+    ddbms.put(metadata);
     try {
-      ddbms.put(metadata);
       execute("get",
           OPERATIONS_PER_THREAD,
-          () -> ddbms.get(path),
-          true);
+          true,
+          () -> ddbms.get(path, true)
+      );
     } finally {
-      ddbms.delete(path);
+      retryingDelete(path);
+    }
+  }
+
+  /**
+   * Ask for the version marker, which is where table init can be overloaded.
+   */
+  @Test
+  public void test_041_getThrottling() throws Throwable {
+    execute("get",
+        OPERATIONS_PER_THREAD,
+        true,
+        () -> ddbms.getVersionMarkerItem()
+    );
+  }
+
+  /**
+   * Cleanup with an extra bit of retry logic around it, in case things
+   * are still over the limit.
+   * @param path path
+   */
+  private void retryingDelete(final Path path) {
+    try {
+      ddbms.getInvoker().retry("Delete ", path.toString(), true,
+          () -> ddbms.delete(path));
+    } catch (IOException e) {
+      LOG.warn("Failed to delete {}: ", path, e);
     }
   }
 
   @Test
   public void test_050_listThrottling() throws Throwable {
     // attempt to create many many get requests in parallel.
-    Path path = new Path("s3a://example.org/TODO");
+    Path path = new Path("s3a://example.org/test_050_listThrottling");
     S3AFileStatus status = new S3AFileStatus(true, path, "alice");
     PathMetadata metadata = new PathMetadata(status);
     ddbms.put(metadata);
@@ -268,12 +312,12 @@ public class ITestDynamoDBMetadataStoreScale
       Path parent = path.getParent();
       execute("list",
           OPERATIONS_PER_THREAD,
-          () -> {
+          true, () -> {
             ddbms.listChildren(parent);
-          },
-          true);
+          }
+      );
     } finally {
-      ddbms.delete(path);
+      retryingDelete(path);
     }
   }
 
@@ -284,13 +328,14 @@ public class ITestDynamoDBMetadataStoreScale
    * This ensures that the tests do not run for longer than they should.
    * @param operation string for messages.
    * @param operationsPerThread number of times per thread to invoke the action.
-   * @param action action to invoke.
    * @param expectThrottling is throttling expected (and to be asserted on?)
+   * @param action action to invoke.
    * @return the throttle statistics
    */
   public ThrottleTracker execute(String operation,
       int operationsPerThread,
-      LambdaTestUtils.VoidCallable action, final boolean expectThrottling)
+      final boolean expectThrottling,
+      LambdaTestUtils.VoidCallable action)
       throws Exception {
 
     final ContractTestUtils.NanoTimer timer = new ContractTestUtils.NanoTimer();
@@ -304,18 +349,20 @@ public class ITestDynamoDBMetadataStoreScale
       tasks.add(
           () -> {
             final ExecutionOutcome outcome = new ExecutionOutcome();
-            if (tracker.isThrottlingDetected()) {
-              outcome.skipped = true;
-              return outcome;
-            }
             final ContractTestUtils.NanoTimer t
                 = new ContractTestUtils.NanoTimer();
             for (int j = 0; j < operationsPerThread; j++) {
+              if (tracker.isThrottlingDetected()) {
+                outcome.skipped = true;
+                return outcome;
+              }
               try {
                 action.call();
                 outcome.completed++;
               } catch (AWSServiceThrottledException e) {
-                // this is good
+                // this is possibly OK
+                LOG.info("Operation [{}] raised a throttled exception " + e, j, e);
+                LOG.debug(e.toString(), e);
                 throttleExceptions.incrementAndGet();
                 // consider it completed
                 outcome.throttleExceptions.add(e);
@@ -325,8 +372,8 @@ public class ITestDynamoDBMetadataStoreScale
                 outcome.exceptions.add(e);
                 break;
               }
+              tracker.probe();
             }
-            tracker.update();
             LOG.info("Thread completed {} with in {} millis with outcome {}: {}",
                 operation, t.elapsedTimeMs(), outcome, tracker);
             return outcome;
@@ -343,7 +390,7 @@ public class ITestDynamoDBMetadataStoreScale
     for (Future<ExecutionOutcome> future : futures) {
       assertTrue("Future timed out", future.isDone());
     }
-    tracker.update();
+    tracker.probe();
 
     if (expectThrottling) {
       tracker.assertThrottlingDetected();
@@ -375,8 +422,6 @@ public class ITestDynamoDBMetadataStoreScale
         read, write);
     ddbms.provisionTableBlocking(read, write);
   }
-
-  //
 
   /**
    * Attempt to delete metadata, suppressing any errors, and retrying on
@@ -412,7 +457,7 @@ public class ITestDynamoDBMetadataStoreScale
    * Something to track those throttles.
    * The constructor sets the counters to the current count in the
    * DDB table; a call to {@link #reset()} will set it to the latest values.
-   * The {@link #update()} will pick up the latest values to compare them with
+   * The {@link #probe()} will pick up the latest values to compare them with
    * the original counts.
    */
   private class ThrottleTracker {
@@ -450,14 +495,16 @@ public class ITestDynamoDBMetadataStoreScale
     }
 
     /**
-     * update the latest throttle count; synchronized.
+     * Update the latest throttle count; synchronized.
+     * @return true if throttling has been detected.
      */
-    private synchronized void update() {
+    private synchronized boolean probe() {
       readThrottles = ddbms.getReadThrottleEventCount() - readThrottleEventOrig;
       writeThrottles = ddbms.getWriteThrottleEventCount()
           - writeThrottleEventOrig;
       batchThrottles = ddbms.getBatchWriteCapacityExceededCount()
           - batchWriteThrottleCountOrig;
+      return isThrottlingDetected();
     }
 
     @Override
@@ -471,7 +518,8 @@ public class ITestDynamoDBMetadataStoreScale
      * Assert that throttling has been detected.
      */
     public void assertThrottlingDetected() {
-      assertTrue("No throttling detected against " + ddbms.toString(),
+      assertTrue("No throttling detected in tracker " + this +
+              " against " + ddbms.toString(),
           isThrottlingDetected());
     }
 
@@ -485,7 +533,7 @@ public class ITestDynamoDBMetadataStoreScale
   }
 
   /**
-   * Outcome of an threads execution operation.
+   * Outcome of a thread's execution operation.
    */
   private static class ExecutionOutcome {
     private int completed;

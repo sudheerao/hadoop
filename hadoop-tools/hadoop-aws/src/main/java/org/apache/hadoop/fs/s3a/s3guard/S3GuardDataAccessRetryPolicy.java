@@ -26,8 +26,8 @@ import org.apache.hadoop.io.retry.RetryPolicy;
 
 import static org.apache.hadoop.fs.s3a.Constants.S3GUARD_DDB_MAX_RETRIES;
 import static org.apache.hadoop.fs.s3a.Constants.S3GUARD_DDB_MAX_RETRIES_DEFAULT;
-import static org.apache.hadoop.fs.s3a.Constants.S3GUARD_DDB_RETRY_INTERVAL;
-import static org.apache.hadoop.fs.s3a.Constants.S3GUARD_DDB_RETRY_INTERVAL_DEFAULT;
+import static org.apache.hadoop.fs.s3a.Constants.S3GUARD_DDB_THROTTLE_RETRY_INTERVAL;
+import static org.apache.hadoop.fs.s3a.Constants.S3GUARD_DDB_THROTTLE_RETRY_INTERVAL_DEFAULT;
 import static org.apache.hadoop.io.retry.RetryPolicies.exponentialBackoffRetry;
 
 /**
@@ -42,8 +42,8 @@ public class S3GuardDataAccessRetryPolicy extends S3ARetryPolicy {
   protected RetryPolicy createThrottleRetryPolicy(final Configuration conf) {
     return exponentialBackoffRetry(
         conf.getInt(S3GUARD_DDB_MAX_RETRIES, S3GUARD_DDB_MAX_RETRIES_DEFAULT),
-        conf.getTimeDuration(S3GUARD_DDB_RETRY_INTERVAL,
-            S3GUARD_DDB_RETRY_INTERVAL_DEFAULT,
+        conf.getTimeDuration(S3GUARD_DDB_THROTTLE_RETRY_INTERVAL,
+            S3GUARD_DDB_THROTTLE_RETRY_INTERVAL_DEFAULT,
             TimeUnit.MILLISECONDS),
         TimeUnit.MILLISECONDS);
   }

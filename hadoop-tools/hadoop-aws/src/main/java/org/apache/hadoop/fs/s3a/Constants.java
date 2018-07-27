@@ -457,7 +457,7 @@ public final class Constants {
       "fs.s3a.s3guard.ddb.max.retries";
 
   /**
-   * Max retries on batched DynamoDB operations before giving up and
+   * Max retries on batched/throttled DynamoDB operations before giving up and
    * throwing an IOException.  Default is {@value}. See core-default.xml for
    * more detail.
    */
@@ -465,10 +465,11 @@ public final class Constants {
       DEFAULT_MAX_ERROR_RETRIES;
 
   @InterfaceStability.Unstable
-  public static final String S3GUARD_DDB_RETRY_INTERVAL =
-      "fs.s3a.s3guard.ddb.retry.interval";
-  public static final String S3GUARD_DDB_RETRY_INTERVAL_DEFAULT =
-      "250ms";
+  public static final String S3GUARD_DDB_THROTTLE_RETRY_INTERVAL =
+      "fs.s3a.s3guard.ddb.throttle.retry.interval";
+  public static final String S3GUARD_DDB_THROTTLE_RETRY_INTERVAL_DEFAULT =
+      "100ms";
+
   /**
    * Period of time (in milliseconds) to sleep between batches of writes.
    * Currently only applies to prune operations, as they are naturally a

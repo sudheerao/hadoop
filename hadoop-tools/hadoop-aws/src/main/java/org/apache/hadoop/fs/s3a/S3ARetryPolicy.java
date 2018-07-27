@@ -217,6 +217,7 @@ public class S3ARetryPolicy implements RetryPolicy {
       int retries,
       int failovers,
       boolean idempotent) throws Exception {
+    Preconditions.checkArgument(exception != null, "Null exception");
     Exception ex = exception;
     if (exception instanceof AmazonClientException) {
       // uprate the amazon client exception for the purpose of exception
