@@ -18,7 +18,6 @@
 
 package org.apache.hadoop.fs.s3a.commit.magic;
 
-
 import java.io.IOException;
 import java.net.URI;
 
@@ -38,7 +37,6 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
 import static org.apache.hadoop.fs.s3a.commit.CommitConstants.*;
 import static org.hamcrest.CoreMatchers.containsString;
-
 
 /**
  * Test the magic committer's commit protocol.

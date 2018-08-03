@@ -348,7 +348,7 @@ your queries, the simpler your recovery strategy needs to be.
 ### Job Recovery During `commitJob()`
 
 This is not possible; a failure during job commit requires the entire job
-to be reexecuted after cleaning up the destination directory.
+to be re-executed after cleaning up the destination directory.
 
 ### `mergePaths(FileSystem fs, FileStatus src, Path dest)` Algorithm
 

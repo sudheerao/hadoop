@@ -571,13 +571,13 @@ public class StagingCommitter extends AbstractS3ACommitter {
   }
 
   /**
-   * Delete the working paths of a job. Does not attempt to clean up
-   * the work of the wrapped committer.
+   * Delete the working paths of a job.
    * <ol>
    *   <li>The job attempt path</li>
-   *   <li>$dest/__temporary</li>
+   *   <li>{@code $dest/__temporary}</li>
    *   <li>the local working directory for staged files</li>
    * </ol>
+   * Does not attempt to clean up the work of the wrapped committer.
    * @param context job context
    * @throws IOException IO failure
    */
@@ -872,7 +872,7 @@ public class StagingCommitter extends AbstractS3ACommitter {
                 : ("file size " + status.getLen() + " bytes"));
       }
     } catch (IOException e) {
-      LOG.info("Discarding exception raised in path listing: " + e);
+      LOG.info("Discarding exception raised when listing {}: " + e, path);
       LOG.debug("stack trace ", e);
     }
     return new PathExistsException(path.toString(),
