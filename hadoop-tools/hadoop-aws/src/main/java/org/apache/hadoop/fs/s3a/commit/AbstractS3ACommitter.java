@@ -532,8 +532,14 @@ public abstract class AbstractS3ACommitter extends PathOutputCommitter {
              new DurationInfo(LOG, "Aborting all pending commits under %s",
                  dest)) {
       CommitOperations ops = getCommitOperations();
-      List<MultipartUpload> pending = ops
-          .listPendingUploadsUnderPath(dest);
+      List<MultipartUpload> pending;
+      try {
+        pending = ops.listPendingUploadsUnderPath(dest);
+      } catch (IOException e) {
+        // raised if the listPendingUploads call failed.
+        maybeIgnore(suppressExceptions, "aborting pending uploads", e);
+        return;
+      }
       Tasks.foreach(pending)
           .executeWith(buildThreadPool(getJobContext()))
           .suppressExceptions(suppressExceptions)
