@@ -139,7 +139,7 @@ public class ITestDynamoDBMetadataStoreScale
     ms.initialize(conf);
     // wire up the owner FS so that we can make assertions about throttle
     // events
-    ms.setOwner(fs);
+    ms.bindToOwnerFilesystem(fs);
     return ms;
   }
 

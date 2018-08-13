@@ -305,9 +305,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
     Preconditions.checkNotNull(fs, "Null filesystem");
     Preconditions.checkArgument(fs instanceof S3AFileSystem,
         "DynamoDBMetadataStore only supports S3A filesystem.");
-    setOwner((S3AFileSystem) fs);
+    bindToOwnerFilesystem((S3AFileSystem) fs);
     final String bucket = owner.getBucket();
-    conf = owner.getConf();
     String confRegion = conf.getTrimmed(S3GUARD_DDB_REGION_KEY);
     if (!StringUtils.isEmpty(confRegion)) {
       region = confRegion;
@@ -328,7 +327,6 @@ public class DynamoDBMetadataStore implements MetadataStore {
       }
       LOG.debug("Inferring DynamoDB region from S3 bucket: {}", region);
     }
-    username = owner.getUsername();
     credentials = owner.shareCredentials("s3guard");
     dynamoDB = createDynamoDB(conf, region, bucket, credentials);
 
@@ -347,13 +345,15 @@ public class DynamoDBMetadataStore implements MetadataStore {
   }
 
   /**
-   * Declare that this table is owned by this FS.
+   * Declare that this table is owned by the specific S3A FS instance.
    * This will bind some fields to the values provided by the owner,
    * including wiring up the instrumentation.
    * @param fs owner filesystem
    */
-  void setOwner(final S3AFileSystem fs) {
+  @VisibleForTesting
+  void bindToOwnerFilesystem(final S3AFileSystem fs) {
     owner = fs;
+    conf = owner.getConf();
     instrumentation = owner.getInstrumentation().getS3GuardInstrumentation();
     username = owner.getUsername();
   }
