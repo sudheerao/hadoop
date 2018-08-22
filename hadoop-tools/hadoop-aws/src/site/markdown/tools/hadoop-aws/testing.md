@@ -742,6 +742,54 @@ sequential one afterwards. The IO heavy ones must also be subclasses of
 
 This is invaluable for debugging test failures.
 
+### Keeping AWS Costs down
+
+Most of the base S3 tests are designed to use public AWS data
+(the landsat-pds bucket) for read IO, so you don't have to pay for bytes
+downloaded or long term storage costs. The scale tests do work with more data
+so will cost more as well as generally take more time to execute. 
+
+You are however billed for
+
+1. Data left in S3 after test runs.
+2. DynamoDB capacity reserved by S3Guard tables.
+3. HTTP operations on files (HEAD, LIST, GET).
+4. In-progress multipart uploads from bulk IO or S3A committer tests.
+5. Encryption/decryption using AWS KMS keys.
+
+The GET/decrypt costs are incurred on each partial read of a file,
+so random IO can cost more than sequential IO; the speedup of queries with
+columnar data usually justifies this.
+
+The DynamoDB costs come from the number of entries stores and the allocated capacity.
+
+How to keep costs down
+
+* Don't run the scale tests with large datasets; keep `fs.s3a.scale.test.huge.filesize` unset, or a few MB (minimum: 5).
+* Remove all files in the filesystem. The root tests usually do this, but
+it can be manually done:
+
+      hadoop fs -rm -r -f -skipTrash s3a://test-bucket/\*
+* Abort all outstanding uploads:
+ 
+      hadoop s3guard uploads -abort -force s3a://test-bucket/
+* If you don't need it, destroy the S3Guard DDB table.
+
+      hadoop s3guard destroy s3a://hwdev-steve-ireland-new/
+
+The S3Guard tests will automatically create the Dynamo DB table in runs with
+`-Ds3guard -Ddynamodb` set; default capacity of these buckets
+tests is very small; it keeps costs down at the expense of IO performance
+and, for test runs in or near the S3/DDB stores, throttling events.
+
+If you want to manage capacity, use `s3guard set-capacity` to increase it
+(performance) or decrease it (costs).
+For remote `hadoop-aws` test runs, the read/write capacities of "10" each should suffice;
+increase it if parallel test run logs warn of throttling.
+
+Tip: for agility, use DynamoDB autoscaling, setting the minimum to something very low (e.g 5 units), the maximum to the largest amount you are willing to pay.
+This will automatically reduce capacity when you are not running tests against
+the bucket, slowly increase it over multiple test runs, if the load justifies it.
 
 ## <a name="tips"></a> Tips
 
