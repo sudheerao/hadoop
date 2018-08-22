@@ -939,8 +939,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
       invoker.retry("delete", null, true,
           () -> table.delete());
       table.waitForDelete();
-    } catch (ResourceNotFoundException rnfe) {
-      LOG.info("ResourceNotFoundException while deleting DynamoDB table {} in "
+    } catch (FileNotFoundException rnfe) {
+      LOG.info("FileNotFoundException while deleting DynamoDB table {} in "
               + "region {}.  This may indicate that the table does not exist, "
               + "or has been deleted by another concurrent thread or process.",
           tableName, region);
@@ -950,8 +950,6 @@ public class DynamoDBMetadataStore implements MetadataStore {
           tableName, ie);
       throw new InterruptedIOException("Table " + tableName
           + " in region " + region + " has not been deleted");
-    } catch (AmazonClientException e) {
-      throw translateException("destroy", tableName, e);
     }
   }
 
