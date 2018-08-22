@@ -356,7 +356,7 @@ public class ITestDynamoDBMetadataStoreScale
         true,
         () -> ddbms.put(pms));
     try {
-      PathMetadata dirData = ddbms.get(child, true);
+      DDBPathMetadata dirData = ddbms.get(child, true);
       execute("list",
           OPERATIONS_PER_THREAD,
           true,

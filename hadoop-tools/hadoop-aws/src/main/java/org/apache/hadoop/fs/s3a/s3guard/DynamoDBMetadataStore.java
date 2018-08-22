@@ -838,7 +838,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
    */
   @VisibleForTesting
   @Retries.RetryTranslated
-  private Collection<DDBPathMetadata> fullPathsToPut(DDBPathMetadata meta)
+  Collection<DDBPathMetadata> fullPathsToPut(DDBPathMetadata meta)
       throws IOException {
     checkPathMetadata(meta);
     final Collection<DDBPathMetadata> metasToPut = new ArrayList<>();
