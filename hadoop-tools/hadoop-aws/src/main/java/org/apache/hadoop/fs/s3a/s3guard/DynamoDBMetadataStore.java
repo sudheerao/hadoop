@@ -564,9 +564,9 @@ public class DynamoDBMetadataStore implements MetadataStore {
             .withFilterExpression(IS_DELETED + " = :false")
             .withValueMap(deleteTrackingValueMap);
         boolean hasChildren = readOp.retry("get/hasChildren",
-                path.toString(),
-                true,
-                () -> table.query(spec).iterator().hasNext());
+            path.toString(),
+            true,
+            () -> table.query(spec).iterator().hasNext());
         // When this class has support for authoritative
         // (fully-cached) directory listings, we may also be able to answer
         // TRUE here.  Until then, we don't know if we have full listing or
@@ -737,7 +737,9 @@ public class DynamoDBMetadataStore implements MetadataStore {
       // quite idempotent, but this was the case anyway
       batches++;
       BatchWriteItemOutcome res = writeOp.retry(
-          "batch write", "",true,
+          "batch write",
+          "",
+          true,
           () -> dynamoDB.batchWriteItem(writeItems));
       // Check for unprocessed keys in case of exceeding provisioned throughput
       Map<String, List<WriteRequest>> unprocessed = res.getUnprocessedItems();
@@ -786,7 +788,8 @@ public class DynamoDBMetadataStore implements MetadataStore {
         cause.setErrorMessage(THROTTLING);
         cause.setRequestId("n/a");
         throw new AWSServiceThrottledException(
-            String.format("Max retries during batch write exceeded (%d) for DynamoDB."
+            String.format("Max retries during batch write exceeded" 
+                    + " (%d) for DynamoDB."
                     + HINT_DDB_IOPS_TOO_LOW,
                 retryCount),
             cause);
@@ -924,7 +927,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
       closeAutocloseables(LOG, credentials);
       credentials = null;
     }
-}
+  }
 
   @Override
   @Retries.RetryTranslated
@@ -980,7 +983,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
    * @param modTime Oldest modification time to allow
    * @param keyPrefix The prefix for the keys that should be removed
    * @throws IOException Any IO/DDB failure.
-   * @throws InterruptedIOException if there was an interruption during the process.
+   * @throws InterruptedIOException if the prune was interrupted
    */
   @Override
   @Retries.RetryTranslated

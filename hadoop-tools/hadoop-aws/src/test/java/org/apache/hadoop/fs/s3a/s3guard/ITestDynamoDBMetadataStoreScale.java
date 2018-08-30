@@ -258,7 +258,8 @@ public class ITestDynamoDBMetadataStoreScale
   }
 
   /**
-   * Test Get throttling including using {@link MetadataStore#get(Path, boolean)},
+   * Test Get throttling including using
+   * {@link MetadataStore#get(Path, boolean)},
    * as that stresses more of the code.
    */
   @Test
@@ -439,7 +440,7 @@ public class ITestDynamoDBMetadataStoreScale
               }
               tracker.probe();
             }
-            LOG.info("Thread completed {} with in {} millis with outcome {}: {}",
+            LOG.info("Thread completed {} with in {} ms with outcome {}: {}",
                 operation, t.elapsedTimeMs(), outcome, tracker);
             return outcome;
           }
@@ -527,8 +528,7 @@ public class ITestDynamoDBMetadataStoreScale
 
     private long batchThrottles;
 
-
-    public ThrottleTracker() {
+    ThrottleTracker() {
       reset();
     }
 
@@ -571,7 +571,7 @@ public class ITestDynamoDBMetadataStoreScale
     /**
      * Assert that throttling has been detected.
      */
-    public void assertThrottlingDetected() {
+    void assertThrottlingDetected() {
       assertTrue("No throttling detected in " + this +
               " against " + ddbms.toString(),
           isThrottlingDetected());
