@@ -176,8 +176,10 @@ public class ITestDynamoDBMetadataStoreScale
   public void test_020_Moves() throws Throwable {
     ThrottleTracker tracker = new ThrottleTracker();
     try {
+      // if this doesn't throttle, all is well.
       super.test_020_Moves();
-      } catch (AWSServiceThrottledException ex) {
+    } catch (AWSServiceThrottledException ex) {
+      // if the service was throttled, we ex;ect the exception text
       GenericTestUtils.assertExceptionContains(
           DynamoDBMetadataStore.HINT_DDB_IOPS_TOO_LOW,
           ex,
