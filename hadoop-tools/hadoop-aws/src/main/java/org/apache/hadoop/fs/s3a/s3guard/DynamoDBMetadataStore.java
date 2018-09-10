@@ -229,8 +229,10 @@ public class DynamoDBMetadataStore implements MetadataStore {
   private String username;
 
   /**
-   * This policy is purely for batched writes, not for processing
+   * This policy is mostly for batched writes, not for processing
    * exceptions in invoke() calls.
+   * It also has a role purpose in {@link #getVersionMarkerItem()};
+   * look at that method for the details.
    */
   private RetryPolicy batchWriteRetryPolicy;
 
@@ -1168,8 +1170,22 @@ public class DynamoDBMetadataStore implements MetadataStore {
     final PrimaryKey versionMarkerKey =
         createVersionMarkerPrimaryKey(VERSION_MARKER);
     int retryCount = 0;
+    // look for a version marker, with usual throttling/failure retries.
     Item versionMarker = queryVersionMarker(versionMarkerKey);
     while (versionMarker == null) {
+      // The marker was null.
+      // Two possibilities
+      // 1. This isn't a S3Guard table.
+      // 2. This is a S3Guard table in construction; another thread/process
+      //    is about to write/actively writing the version marker.
+      // So that state #2 is handled, batchWriteRetryPolicy is used to manage
+      // retries.
+      // This will mean that if the cause is actually #1, failure will not
+      // be immediate. As this will ultimately result in a failure to 
+      // init S3Guard and the S3A FS, this isn't going to be a performance
+      // bottleneck -simply a slightly slower failure report than would otherwise
+      // be seen.
+      // "if your settings are broken, performance is not your main issue" 
       try {
         RetryPolicy.RetryAction action = batchWriteRetryPolicy.shouldRetry(null,
             retryCount, 0, true);
@@ -1180,7 +1196,7 @@ public class DynamoDBMetadataStore implements MetadataStore {
           Thread.sleep(action.delayMillis);
         }
       } catch (Exception e) {
-        throw new IOException("initTable: Unexpected exception", e);
+        throw new IOException("initTable: Unexpected exception " + e, e);
       }
       retryCount++;
       versionMarker = queryVersionMarker(versionMarkerKey);
