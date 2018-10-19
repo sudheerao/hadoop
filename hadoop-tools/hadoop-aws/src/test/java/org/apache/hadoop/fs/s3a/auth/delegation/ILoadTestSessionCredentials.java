@@ -63,8 +63,8 @@ import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEG
  *
  * Use with caution.
  * <ol>
- *   <li>Don't run it on an AWS endpoint which other users in a shared AWS account
- *   are actively using. </li>
+ *   <li>Don't run it on an AWS endpoint which other users in a
+ *   shared AWS account are actively using. </li>
  *   <li>Don't run it on the same AWS account which is being used for
  *   any production service.</li>
  *   <li>And choose a time (weekend, etc) where the account is under-used.</li>

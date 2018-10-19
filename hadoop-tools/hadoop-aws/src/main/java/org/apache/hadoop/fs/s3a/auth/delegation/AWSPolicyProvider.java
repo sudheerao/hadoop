@@ -49,7 +49,7 @@ public interface AWSPolicyProvider {
    * Access levels.
    */
   enum AccessLevel {
-    /** Filesystem data read operations */
+    /** Filesystem data read operations. */
     READ,
     /** Data write, encryption, etc. */
     WRITE,

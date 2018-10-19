@@ -172,7 +172,7 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
   }
 
   /**
-   * Save a DT to a file
+   * Save a DT to a file.
    * @param tokenFile destination file
    * @param token token to save
    * @throws IOException failure

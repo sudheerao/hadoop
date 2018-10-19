@@ -81,6 +81,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
   private boolean stsInitAttempted;
 
   /** The STS client; created in startup if the parental credentials permit. */
+  @SuppressWarnings("FieldAccessedSynchronizedAndUnsynchronized")
   private Optional<STSClientFactory.STSClient> stsClient = Optional.empty();
 
   /**
@@ -142,8 +143,8 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
   @Override
   protected void serviceStop() throws Exception {
     super.serviceStop();
-    stsClient.ifPresent(IOUtils::closeStream);
-    stsClient = Optional.empty();
+    this.stsClient.ifPresent(IOUtils::closeStream);
+    this.stsClient = Optional.empty();
   }
 
   /**

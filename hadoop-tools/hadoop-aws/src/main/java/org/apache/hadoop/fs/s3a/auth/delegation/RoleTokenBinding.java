@@ -93,7 +93,8 @@ public class RoleTokenBinding extends SessionTokenBinding {
           LOG.error("Cannot issue delegation tokens because the credential"
               + " providers listed in " + ASSUMED_ROLE_CREDENTIALS_PROVIDER
               + " are returning session tokens");
-          return new DelegationTokenIOException(E_NO_SESSION_TOKENS_FOR_ROLE_BINDING);
+          return new DelegationTokenIOException(
+              E_NO_SESSION_TOKENS_FOR_ROLE_BINDING);
         });
     Credentials credentials = client
         .requestRole(roleArn,

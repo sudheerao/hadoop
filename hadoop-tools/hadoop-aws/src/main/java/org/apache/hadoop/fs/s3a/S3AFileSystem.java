@@ -2870,7 +2870,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * @return an optional set of KMS Key settings
    */
   private Optional<SSEAwsKeyManagementParams> generateSSEAwsKeyParams() {
-    return encryptionSecrets.maybeCreateSSEAwsKeyManagementParams();
+    return encryptionSecrets.createSSEAwsKeyManagementParams();
   }
 
   /**
@@ -2880,7 +2880,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * @return an optional customer key.
    */
   private Optional<SSECustomerKey> generateSSECustomerKey() {
-    return encryptionSecrets.maybeCreateSSECustomerKey();
+    return encryptionSecrets.createSSECustomerKey();
   }
 
   /**

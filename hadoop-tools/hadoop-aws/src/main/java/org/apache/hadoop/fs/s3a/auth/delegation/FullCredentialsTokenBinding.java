@@ -84,7 +84,7 @@ public class FullCredentialsTokenBinding extends
     } else {
       // if there are none, look for the environment variables.
       sessionCredentials = SessionCredentials.fromEnvironment(System.getenv());
-      origin += "; source = Environment variables" ;
+      origin += "; source = Environment variables";
     }
     sessionCredentials.validate("local AWS credentials");
 

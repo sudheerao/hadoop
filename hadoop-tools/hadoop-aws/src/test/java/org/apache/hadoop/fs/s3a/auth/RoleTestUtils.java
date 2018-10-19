@@ -174,7 +174,7 @@ public final class RoleTestUtils {
 
   /**
    * Get the Assumed role referenced by ASSUMED_ROLE_ARN;
-   * skip the test if it is unset
+   * skip the test if it is unset.
    * @param conf config
    * @return the string
    */

@@ -218,7 +218,7 @@ public class EncryptionSecrets implements Writable, Serializable {
    * Create SSE-C client side key encryption options on demand.
    * @return an optional key to attach to a request.
    */
-  public Optional<SSECustomerKey> maybeCreateSSECustomerKey() {
+  public Optional<SSECustomerKey> createSSECustomerKey() {
     if (hasEncryptionKey() &&
         getEncryptionMethod() == S3AEncryptionMethods.SSE_C) {
       return Optional.of(new SSECustomerKey(getEncryptionKey()));
@@ -228,10 +228,11 @@ public class EncryptionSecrets implements Writable, Serializable {
   }
 
   /**
-   * Create SSE-KMS options for a request.
+   * Create SSE-KMS options for a request, iff the encryption is SSE-KMS.
    * @return an optional SSE-KMS param to attach to a request.
    */
-  public Optional<SSEAwsKeyManagementParams> maybeCreateSSEAwsKeyManagementParams() {
+  public Optional<SSEAwsKeyManagementParams> createSSEAwsKeyManagementParams() {
+    
     //Use specified key, otherwise default to default master aws/s3 key by AWS
     if (getEncryptionMethod() == S3AEncryptionMethods.SSE_KMS) {
       if (hasEncryptionKey()) {
@@ -244,6 +245,11 @@ public class EncryptionSecrets implements Writable, Serializable {
     }
   }
 
+  /**
+   * String function returns the encryption mode but not any other
+   * secrets.
+   * @return a string safe for logging.
+   */
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder(

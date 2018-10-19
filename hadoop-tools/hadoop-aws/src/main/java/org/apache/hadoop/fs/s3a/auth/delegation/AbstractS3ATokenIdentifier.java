@@ -234,9 +234,15 @@ public abstract class AbstractS3ATokenIdentifier
    */
   @Override
   public boolean equals(final Object o) {
-    if (this == o) { return true; }
-    if (o == null || getClass() != o.getClass()) { return false; }
-    if (!super.equals(o)) { return false; }
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    if (!super.equals(o)) {
+      return false;
+    }
     final AbstractS3ATokenIdentifier that = (AbstractS3ATokenIdentifier) o;
     return created == that.created &&
         Objects.equals(uri, that.uri);

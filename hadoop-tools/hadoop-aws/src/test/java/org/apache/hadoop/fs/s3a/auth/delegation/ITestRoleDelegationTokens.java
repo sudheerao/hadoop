@@ -18,8 +18,6 @@
 
 package org.apache.hadoop.fs.s3a.auth.delegation;
 
-import java.io.IOException;
-
 import org.junit.Test;
 
 import org.apache.hadoop.conf.Configuration;
@@ -50,7 +48,9 @@ public class ITestRoleDelegationTokens extends ITestSessionDelegationTokens {
   }
 
   /**
-   * Here we required the superclass to fail
+   * Session credentials will not propagate with role tokens,
+   * so the superclass's method will fail.
+   * This subclass intercepts the exception which is expected.
    * @param fs base FS to bond to.
    * @param session session credentials from first DT.
    * @param conf config to use
@@ -64,8 +64,7 @@ public class ITestRoleDelegationTokens extends ITestSessionDelegationTokens {
       final Configuration conf) throws Exception {
     intercept(DelegationTokenIOException.class,
         E_NO_SESSION_TOKENS_FOR_ROLE_BINDING,
-        () -> super.verifyAWSSessionCredentialPropagation(fs, session, conf)
-        );
+        () -> super.verifyAWSSessionCredentialPropagation(fs, session, conf));
     return null;
   }
 

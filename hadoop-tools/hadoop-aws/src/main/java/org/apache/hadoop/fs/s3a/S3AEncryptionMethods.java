@@ -76,7 +76,7 @@ public enum S3AEncryptionMethods {
         return v;
       }
     }
-   throw new IOException(UNKNOWN_ALGORITHM + name);
+    throw new IOException(UNKNOWN_ALGORITHM + name);
   }
 
 }
