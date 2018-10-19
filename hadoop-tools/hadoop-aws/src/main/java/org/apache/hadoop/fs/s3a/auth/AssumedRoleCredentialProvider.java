@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
+import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
 import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
 import com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceException;
@@ -107,7 +108,8 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
     // build up the base provider
     Class<?>[] awsClasses = loadAWSProviderClasses(conf,
         ASSUMED_ROLE_CREDENTIALS_PROVIDER,
-        SimpleAWSCredentialsProvider.class);
+        SimpleAWSCredentialsProvider.class,
+        EnvironmentVariableCredentialsProvider.class);
     credentialsToSTS = new AWSCredentialProviderList();
     for (Class<?> aClass : awsClasses) {
       if (this.getClass().equals(aClass)) {

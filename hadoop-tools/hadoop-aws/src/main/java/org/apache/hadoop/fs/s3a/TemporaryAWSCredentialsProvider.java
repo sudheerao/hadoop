@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,21 +18,17 @@
 
 package org.apache.hadoop.fs.s3a;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.BasicSessionCredentials;
-import com.amazonaws.auth.AWSCredentials;
-import org.apache.commons.lang3.StringUtils;
-
 import java.io.IOException;
+
+import com.amazonaws.auth.AWSCredentials;
+
 import java.net.URI;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.security.ProviderUtils;
-
-import static org.apache.hadoop.fs.s3a.Constants.*;
-import static org.apache.hadoop.fs.s3a.S3AUtils.lookupPassword;
+import org.apache.hadoop.fs.s3a.auth.AbstractSessionCredentialsProvider;
+import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
 
 /**
  * Support session credentials for authenticating with AWS.
@@ -40,16 +36,18 @@ import static org.apache.hadoop.fs.s3a.S3AUtils.lookupPassword;
  * Please note that users may reference this class name from configuration
  * property fs.s3a.aws.credentials.provider.  Therefore, changing the class name
  * would be a backward-incompatible change.
+ *
+ * This credential provider must not fail in creation because that will
+ * break a chain of credential providers.
+ * Instead it
  */
 @InterfaceAudience.Public
 @InterfaceStability.Stable
-public class TemporaryAWSCredentialsProvider implements AWSCredentialsProvider {
+public class TemporaryAWSCredentialsProvider extends
+    AbstractSessionCredentialsProvider {
 
   public static final String NAME
       = "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider";
-  private String accessKey;
-  private String secretKey;
-  private String sessionToken;
 
   public TemporaryAWSCredentialsProvider(Configuration conf)
       throws IOException {
@@ -58,32 +56,24 @@ public class TemporaryAWSCredentialsProvider implements AWSCredentialsProvider {
 
   public TemporaryAWSCredentialsProvider(URI uri, Configuration conf)
       throws IOException {
-
-      // determine the bucket
-      String bucket = uri != null ? uri.getHost():  "";
-      Configuration c = ProviderUtils.excludeIncompatibleCredentialProviders(
-          conf, S3AFileSystem.class);
-      this.accessKey = lookupPassword(bucket, c, ACCESS_KEY);
-      this.secretKey = lookupPassword(bucket, c, SECRET_KEY);
-      this.sessionToken = lookupPassword(bucket, c, SESSION_TOKEN);
+    super(uri, conf);
+    // no attempt is made to call init() here as this provider isn't
+    // expected to fail-on-instantiate.
+    // instead the on-demand call in createCredentials will trigger the lookup
+    // and any failures.
   }
 
+  /**
+   * The credentials here must include a session token, else this operation
+   * will raise an exception.
+   * @param config the configuration
+   * @return temporary credentials.
+   * @throws IOException on any failure to load the credentials.
+   */
   @Override
-  public AWSCredentials getCredentials() {
-    if (!StringUtils.isEmpty(accessKey) && !StringUtils.isEmpty(secretKey)
-        && !StringUtils.isEmpty(sessionToken)) {
-      return new BasicSessionCredentials(accessKey, secretKey, sessionToken);
-    }
-    throw new CredentialInitializationException(
-        "Access key, secret key or session token is unset");
-  }
-
-  @Override
-  public void refresh() {}
-
-  @Override
-  public String toString() {
-    return getClass().getSimpleName();
+  protected AWSCredentials createCredentials(Configuration config)
+      throws IOException {
+    return SessionCredentials.load(getUri(), config).toAWSCredentials(true);
   }
 
 }

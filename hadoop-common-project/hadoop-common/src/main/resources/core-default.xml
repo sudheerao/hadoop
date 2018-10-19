@@ -1137,6 +1137,25 @@
 </property>
 
 <property>
+  <name>fs.s3a.delegation.tokens.enabled</name>
+  <value>false</value>
+  <description>Should S3A filesystems provide delegation tokens
+    for job submission requests and simlar?</description>
+</property>
+
+<property>
+  <name>fs.s3a.delegation.token.binding</name>
+  <value>org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding</value>
+  <description>
+    The class implementing delegation tokens for the S3A filesystem.
+    Options are:
+    org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding
+    org.apache.hadoop.fs.s3a.auth.delegation.FullCredentialsTokenBinding
+    and org.apache.hadoop.fs.s3a.auth.delegation.RoleTokenBinding
+  </description>
+</property>
+
+<property>
   <name>fs.s3a.connection.maximum</name>
   <value>15</value>
   <description>Controls the maximum number of simultaneous connections to S3.</description>

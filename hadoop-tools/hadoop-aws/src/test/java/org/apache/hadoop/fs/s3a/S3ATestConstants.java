@@ -137,6 +137,12 @@ public interface S3ATestConstants {
    */
   String TEST_UNIQUE_FORK_ID = "test.unique.fork.id";
   String TEST_STS_ENABLED = "test.fs.s3a.sts.enabled";
+
+  /**
+   * Endpoint for STS testing.
+   * @deprecated : Use {@link Constants#ASSUMED_ROLE_STS_ENDPOIN}
+   */
+  @Deprecated
   String TEST_STS_ENDPOINT = "test.fs.s3a.sts.endpoint";
 
   /**

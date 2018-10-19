@@ -22,6 +22,7 @@ import java.nio.file.AccessDeniedException;
 import java.util.concurrent.Callable;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import org.junit.Assume;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +31,7 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.test.GenericTestUtils;
+import org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants;
 
 import static org.apache.hadoop.fs.contract.ContractTestUtils.touch;
 import static org.apache.hadoop.fs.s3a.Constants.*;
@@ -150,6 +151,7 @@ public final class RoleTestUtils {
     conf.set(ASSUMED_ROLE_ARN, roleARN);
     conf.set(ASSUMED_ROLE_SESSION_NAME, "test");
     conf.set(ASSUMED_ROLE_SESSION_DURATION, "15m");
+    conf.unset(DelegationConstants.DELEGATION_TOKENS_ENABLED);
     disableFilesystemCaching(conf);
     return conf;
   }
@@ -170,4 +172,16 @@ public final class RoleTestUtils {
         contained, eval);
   }
 
+  /**
+   * Get the Assumed role referenced by ASSUMED_ROLE_ARN;
+   * skip the test if it is unset
+   * @param conf config
+   * @return the string
+   */
+  public static String probeForAssumedRoleARN(Configuration conf) {
+    String arn = conf.get(ASSUMED_ROLE_ARN, "");
+    Assume.assumeTrue("No ARN defined in " + ASSUMED_ROLE_ARN,
+        !arn.isEmpty());
+    return arn;
+  }
 }

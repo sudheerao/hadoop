@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.s3a;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -94,6 +95,14 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
   }
 
   /**
+   * Create with an initial list of providers.
+   * @param providerArgs provider list.
+   */
+  public AWSCredentialProviderList(AWSCredentialsProvider...providerArgs) {
+    Collections.addAll(providers, providerArgs);
+  }
+
+  /**
    * Add a new provider.
    * @param p provider
    */
@@ -135,6 +144,8 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
     for (AWSCredentialsProvider provider : providers) {
       try {
         AWSCredentials credentials = provider.getCredentials();
+        Preconditions.checkNotNull(credentials,
+            "Null credentials returned by %s", provider);
         if ((credentials.getAWSAccessKeyId() != null &&
             credentials.getAWSSecretKey() != null)
             || (credentials instanceof AnonymousAWSCredentials)) {
@@ -199,7 +210,8 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
   public String toString() {
     return "AWSCredentialProviderList[" +
         "refcount= " + refCount.get() + ": [" +
-        StringUtils.join(providers, ", ") + ']';
+        StringUtils.join(providers, ", ") + ']'
+        + (lastProvider != null ? (" last provider: " + lastProvider) : "");
   }
 
   /**
@@ -264,5 +276,13 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
         S3AUtils.closeAutocloseables(LOG, (AutoCloseable)p);
       }
     }
+  }
+
+  /**
+   * Get the size of this list.
+   * @return the number of providers in the list.
+   */
+  public int size() {
+    return providers.size();
   }
 }

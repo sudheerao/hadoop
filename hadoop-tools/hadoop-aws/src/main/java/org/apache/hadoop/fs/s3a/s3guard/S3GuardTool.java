@@ -51,8 +51,10 @@ import org.apache.hadoop.fs.s3a.MultipartUtils;
 import org.apache.hadoop.fs.s3a.S3AFileStatus;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.fs.s3a.S3AUtils;
+import org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens;
 import org.apache.hadoop.fs.s3a.commit.CommitConstants;
 import org.apache.hadoop.fs.shell.CommandFormat;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.ExitUtil;
 import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.util.Tool;
@@ -1160,6 +1162,18 @@ public abstract class S3GuardTool extends Configured implements Tool {
           printOption(out, "\tEncryption", SERVER_SIDE_ENCRYPTION_ALGORITHM,
               "none");
       printOption(out, "\tInput seek policy", INPUT_FADVISE, INPUT_FADV_NORMAL);
+
+      // look at delegation token support
+      S3ADelegationTokens dtIntegration = fs.getDtIntegration();
+      if (dtIntegration == null) {
+        println(out, "Delegation token support is disabled");
+      } else {
+        // DT is enabled
+        println(out, "Delegation Support enabled: token kind = %s",
+            dtIntegration.getTokenKind());
+        println(out, "Hadoop security mode: %s",
+            UserGroupInformation.getCurrentUser().getAuthenticationMethod());
+      }
 
       if (usingS3Guard) {
         if (commands.getOpt(UNGUARDED_FLAG)) {

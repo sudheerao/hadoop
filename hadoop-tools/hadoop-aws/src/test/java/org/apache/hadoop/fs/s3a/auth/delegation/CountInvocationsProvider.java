@@ -16,30 +16,37 @@
  * limitations under the License.
  */
 
-package org.apache.hadoop.fs.s3a;
+package org.apache.hadoop.fs.s3a.auth.delegation;
 
-import org.apache.hadoop.conf.Configuration;
+import java.util.concurrent.atomic.AtomicLong;
+
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.AWSCredentialsProvider;
+
+import org.apache.hadoop.fs.s3a.CredentialInitializationException;
 
 /**
- * Run the encryption tests against the Fast output stream.
- * This verifies that both file writing paths can encrypt their data.
+ * Simple AWS credential provider which counts how often it is invoked.
  */
+public class CountInvocationsProvider
+    implements AWSCredentialsProvider {
 
-public class ITestS3AEncryptionSSECBlockOutputStream
-    extends AbstractTestS3AEncryption {
+  public static final String NAME = CountInvocationsProvider.class.getName();
+
+  public static final AtomicLong COUNTER = new AtomicLong(0);
 
   @Override
-  protected Configuration createConfiguration() {
-    Configuration conf = super.createConfiguration();
-    conf.set(Constants.FAST_UPLOAD_BUFFER,
-        Constants.FAST_UPLOAD_BYTEBUFFER);
-    conf.set(Constants.SERVER_SIDE_ENCRYPTION_KEY,
-        "4niV/jPK5VFRHY+KNb6wtqYd4xXyMgdJ9XQJpcQUVbs=");
-    return conf;
+  public AWSCredentials getCredentials() {
+    COUNTER.incrementAndGet();
+    throw new CredentialInitializationException("no credentials");
   }
 
   @Override
-  protected S3AEncryptionMethods getSSEAlgorithm() {
-    return S3AEncryptionMethods.SSE_C;
+  public void refresh() {
+
+  }
+
+  public static long getInvocationCount() {
+    return COUNTER.get();
   }
 }

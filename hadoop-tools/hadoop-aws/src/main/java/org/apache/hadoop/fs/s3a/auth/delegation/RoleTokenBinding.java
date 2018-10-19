@@ -1,0 +1,140 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hadoop.fs.s3a.auth.delegation;
+
+import java.io.IOException;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+import com.amazonaws.services.securitytoken.model.Credentials;
+import com.google.common.base.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
+import org.apache.hadoop.fs.s3a.Retries;
+import org.apache.hadoop.fs.s3a.auth.RoleModel;
+import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
+import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+
+import static org.apache.hadoop.fs.s3a.Constants.ASSUMED_ROLE_CREDENTIALS_PROVIDER;
+import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_ROLE_ARN;
+import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.E_NO_SESSION_TOKENS_FOR_ROLE_BINDING;
+
+/**
+ * Role Token support requests an explicit role and automatically restricts
+ * that role to the given policy of the binding.
+ * The session is locked down as much as possible.
+ */
+public class RoleTokenBinding extends SessionTokenBinding {
+
+  private static final Logger LOG = LoggerFactory.getLogger(
+      RoleTokenBinding.class);
+
+  private static final RoleModel MODEL = new RoleModel();
+
+  /**
+   * Wire name of this binding includes a version marker: {@value}.
+   */
+  private static final String NAME = "RoleCredentials-001";
+
+  public static final String E_NO_ARN =
+      "No role ARN defined in " + DELEGATION_TOKEN_ROLE_ARN;
+
+  /**
+   * Constructor.
+   * Name is {@link #name}; token kind is
+   * {@link DelegationConstants#ROLE_TOKEN_KIND}.
+   */
+  public RoleTokenBinding() {
+    super(NAME, DelegationConstants.ROLE_TOKEN_KIND);
+  }
+
+  /**
+   * Create the Token Identifier.
+   * Looks for the option {@link DelegationConstants#DELEGATION_TOKEN_ROLE_ARN}
+   * in the config and fail if it is not set.
+   * @param policy the policy which will be used for the requested token.
+   * @param encryptionSecrets encryption secrets.
+   * @return the token.
+   * @throws IllegalArgumentException if there is no role defined.
+   * @throws IOException any problem acquiring the role.
+   */
+  @Override
+  @Retries.RetryTranslated
+  public AbstractS3ATokenIdentifier createTokenIdentifier(
+      final Optional<RoleModel.Policy> policy,
+      final EncryptionSecrets encryptionSecrets) throws IOException {
+    requireServiceStarted();
+    String roleArn = getConfig().get(DELEGATION_TOKEN_ROLE_ARN, "");
+    Preconditions.checkState(!roleArn.isEmpty(), E_NO_ARN);
+    String policyJson = policy.isPresent() ?
+        MODEL.toJson(policy.get()) : "";
+    final STSClientFactory.STSClient client = prepareSTSClient()
+        .orElseThrow(() -> {
+          // we've come in on a parent binding, so fail fast
+          LOG.error("Cannot issue delegation tokens because the credential"
+              + " providers listed in " + ASSUMED_ROLE_CREDENTIALS_PROVIDER
+              + " are returning session tokens");
+          return new DelegationTokenIOException(E_NO_SESSION_TOKENS_FOR_ROLE_BINDING);
+        });
+    Credentials credentials = client
+        .requestRole(roleArn,
+            UUID.randomUUID().toString(),
+            policyJson,
+            getDuration(),
+            TimeUnit.SECONDS);
+    final RoleTokenIdentifier id = new RoleTokenIdentifier(
+        getCanonicalUri(),
+        getOwnerText(),
+        new SessionCredentials(credentials),
+        encryptionSecrets);
+    id.setOrigin(AbstractS3ATokenIdentifier.createDefaultOriginMessage()
+        + " Role ARN=" + roleArn);
+    return id;
+  }
+
+  /**
+   * Returns a (wrapped) {@link MarshalledCredentialProvider} which
+   * requires the marshalled credentials to contain session secrets.
+   * @param retrievedIdentifier the incoming identifier.
+   * @return the provider chain.
+   * @throws IOException on failure
+   */
+  @Override
+  public AWSCredentialProviderList bindToTokenIdentifier(
+      final AbstractS3ATokenIdentifier retrievedIdentifier)
+      throws IOException {
+    RoleTokenIdentifier tokenIdentifier =
+        convertTokenIdentifier(retrievedIdentifier,
+            RoleTokenIdentifier.class);
+    return new AWSCredentialProviderList(
+        new MarshalledCredentialProvider(
+            getFileSystem().getUri(),
+            getConfig(),
+            tokenIdentifier.getSessionCredentials(),
+            true));
+  }
+
+  @Override
+  public AbstractS3ATokenIdentifier createIdentifier() {
+    return new RoleTokenIdentifier();
+  }
+}

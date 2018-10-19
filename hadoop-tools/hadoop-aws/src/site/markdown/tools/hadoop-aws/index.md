@@ -31,6 +31,7 @@ See also:
 * [Committing work to S3 with the "S3A Committers"](./committers.html)
 * [S3A Committers Architecture](./committer_architecture.html)
 * [Working with IAM Assumed Roles](./assumed_roles.html)
+* [S3A Delegation Token Support](./delegation_tokens.html)
 * [Testing](./testing.html)
 
 ## <a name="overview"></a> Overview

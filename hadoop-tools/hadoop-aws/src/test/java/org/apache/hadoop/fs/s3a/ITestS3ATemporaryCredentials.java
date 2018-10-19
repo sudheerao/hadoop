@@ -19,37 +19,46 @@
 package org.apache.hadoop.fs.s3a;
 
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
+import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
-import com.amazonaws.services.securitytoken.model.GetSessionTokenRequest;
-import com.amazonaws.services.securitytoken.model.GetSessionTokenResult;
 import com.amazonaws.services.securitytoken.model.Credentials;
-
-import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.test.LambdaTestUtils;
-
 import org.junit.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.test.LambdaTestUtils;
+
 import static org.apache.hadoop.fs.contract.ContractTestUtils.*;
 import static org.apache.hadoop.fs.s3a.Constants.*;
+import static org.apache.hadoop.fs.s3a.S3ATestUtils.assumeSessionTestsEnabled;
+import static org.apache.hadoop.fs.s3a.S3ATestUtils.requestSessionCredentials;
+import static org.apache.hadoop.fs.s3a.S3ATestUtils.unsetHadoopCredentialProviders;
+import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.*;
+import static org.apache.hadoop.test.LambdaTestUtils.intercept;
 
 /**
  * Tests use of temporary credentials (for example, AWS STS & S3).
- * This test extends a class that "does things to the root directory", and
- * should only be used against transient filesystems where you don't care about
- * the data.
+ *
+ * The property {@link Constants#ASSUMED_ROLE_STS_ENDPOINT} can be set to
+ * point this at different STS endpoints.
+ * This test will use the AWS credentials (if provided) for
+ * S3A tests to request temporary credentials, then attempt to use those
+ * credentials instead.
+
  */
 public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
 
   private static final Logger LOG =
       LoggerFactory.getLogger(ITestS3ATemporaryCredentials.class);
 
-  private static final String PROVIDER_CLASS
+  private static final String TEMPORARY_AWS_CREDENTIALS
       = TemporaryAWSCredentialsProvider.NAME;
 
   private static final long TEST_FILE_SIZE = 1024;
@@ -57,9 +66,22 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   private AWSCredentialProviderList credentials;
 
   @Override
+  public void setup() throws Exception {
+    super.setup();
+    assumeSessionTestsEnabled(getConfiguration());
+  }
+
+  @Override
   public void teardown() throws Exception {
     S3AUtils.closeAutocloseables(LOG, credentials);
     super.teardown();
+  }
+
+  @Override
+  protected Configuration createConfiguration() {
+    Configuration conf = super.createConfiguration();
+    conf.setBoolean(DELEGATION_TOKENS_ENABLED, true);
+    return conf;
   }
 
   /**
@@ -75,9 +97,6 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   @Test
   public void testSTS() throws IOException {
     Configuration conf = getContract().getConf();
-    if (!conf.getBoolean(TEST_STS_ENABLED, true)) {
-      skip("STS functional tests disabled");
-    }
     S3AFileSystem testFS = getFileSystem();
     credentials = testFS.shareCredentials("testSTS");
 
@@ -86,18 +105,14 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
         conf,
         bucket,
         credentials,
-        conf.getTrimmed(TEST_STS_ENDPOINT, ""), "");
-    AWSSecurityTokenService stsClient = builder.build();
-
-    if (!conf.getTrimmed(TEST_STS_ENDPOINT, "").isEmpty()) {
-      LOG.debug("STS Endpoint ={}", conf.getTrimmed(TEST_STS_ENDPOINT, ""));
-      stsClient.setEndpoint(conf.getTrimmed(TEST_STS_ENDPOINT, ""));
-    }
-    GetSessionTokenRequest sessionTokenRequest = new GetSessionTokenRequest();
-    sessionTokenRequest.setDurationSeconds(900);
-    GetSessionTokenResult sessionTokenResult;
-    sessionTokenResult = stsClient.getSessionToken(sessionTokenRequest);
-    Credentials sessionCreds = sessionTokenResult.getCredentials();
+        getStsEndpoint(conf),
+        getStsRegion(conf));
+    STSClientFactory.STSClient clientConnection =
+        STSClientFactory.createClientConnection(
+            builder.build(),
+            new Invoker(new S3ARetryPolicy(conf), Invoker.LOG_EVENT));
+    Credentials sessionCreds = clientConnection
+        .requestSessionCredentials(900, TimeUnit.SECONDS);
 
     // clone configuration so changes here do not affect the base FS.
     Configuration conf2 = new Configuration(conf);
@@ -106,11 +121,9 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     S3AUtils.clearBucketOption(conf2, bucket, SECRET_KEY);
     S3AUtils.clearBucketOption(conf2, bucket, SESSION_TOKEN);
 
-    conf2.set(ACCESS_KEY, sessionCreds.getAccessKeyId());
-    conf2.set(SECRET_KEY, sessionCreds.getSecretAccessKey());
-    conf2.set(SESSION_TOKEN, sessionCreds.getSessionToken());
+    updateConfigWithSessionCreds(conf2, new SessionCredentials(sessionCreds));
 
-    conf2.set(AWS_CREDENTIALS_PROVIDER, PROVIDER_CLASS);
+    conf2.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
 
     // with valid credentials, we can set properties.
     try(S3AFileSystem fs = S3ATestUtils.createTestFileSystem(conf2)) {
@@ -130,6 +143,16 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     }
   }
 
+  protected String getStsEndpoint(final Configuration conf) {
+    return conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT,
+            DEFAULT_ASSUMED_ROLE_STS_ENDPOINT);
+  }
+
+  protected String getStsRegion(final Configuration conf) {
+    return conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT_REGION,
+        ASSUMED_ROLE_STS_ENDPOINT_REGION_DEFAULT);
+  }
+
   @Test
   public void testTemporaryCredentialValidation() throws Throwable {
     Configuration conf = new Configuration();
@@ -139,4 +162,109 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     LambdaTestUtils.intercept(CredentialInitializationException.class,
         () -> new TemporaryAWSCredentialsProvider(conf).getCredentials());
   }
+
+  /**
+   * Test STS binding.
+   */
+  @Test
+  public void testSTSBindingforGetDelegationToken() throws Exception {
+    Configuration conf = new Configuration(getContract().getConf());
+    SessionCredentials sc = requestSessionCredentials(conf,
+        getFileSystem().getBucket());
+    sc.toAWSCredentials();
+    updateConfigWithSessionCreds(conf, sc);
+    conf.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
+
+    try (S3AFileSystem fs = S3ATestUtils.createTestFileSystem(conf)) {
+      createAndVerifyFile(fs, path("testSTS"), TEST_FILE_SIZE);
+      intercept(AccessDeniedException.class,
+          () -> fs.getDelegationToken(""));
+    }
+  }
+
+  protected void updateConfigWithSessionCreds(final Configuration conf,
+      final SessionCredentials sc) {
+    unsetHadoopCredentialProviders(conf);
+    sc.setSecretsInConfiguration(conf);
+  }
+
+  /**
+   * Verify that asking for a delegation token will be rejected by AWS.
+   */
+  @Test
+  public void testNoDelegationTokenIssue() throws Exception {
+    Configuration conf = new Configuration(getContract().getConf());
+    SessionCredentials sc = requestSessionCredentials(conf,
+        getFileSystem().getBucket());
+    sc.toAWSCredentials();
+    updateConfigWithSessionCreds(conf, sc);
+    conf.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
+
+    try (S3AFileSystem fs = S3ATestUtils.createTestFileSystem(conf)) {
+      intercept(AccessDeniedException.class,
+          () -> fs.getDelegationToken(""));
+    }
+  }
+
+  /**
+   * Create an invalid session token and verify that it is rejected.
+   */
+  @Test
+  public void testInvalidSTSBinding() throws Exception {
+    Configuration conf = new Configuration(getContract().getConf());
+
+    SessionCredentials sc = requestSessionCredentials(conf,
+        getFileSystem().getBucket());
+    sc.toAWSCredentials();
+    updateConfigWithSessionCreds(conf, sc);
+
+    conf.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
+    conf.set(SESSION_TOKEN, "invalid-" + sc.getSessionToken());
+    S3AFileSystem fs = null;
+
+    try {
+      // this may throw an exception, which is an acceptable outcome.
+      // it must be in the try/catch clause.
+      fs = S3ATestUtils.createTestFileSystem(conf);
+      Path path = path("testSTSInvalidToken");
+      createAndVerifyFile(fs,
+          path,
+            TEST_FILE_SIZE);
+      // this is a failure path, so fail with a meaningful error
+      fail("request to create a file should have failed");
+    } catch (AWSBadRequestException expected){
+      // likely at two points in the operation, depending on
+      // S3Guard state
+    } finally {
+      IOUtils.closeStream(fs);
+    }
+  }
+
+  @Test
+  public void testTemporaryCredentialValidationOnLoad() throws Throwable {
+    Configuration conf = new Configuration();
+    unsetHadoopCredentialProviders(conf);
+    conf.set(ACCESS_KEY, "");
+    conf.set(SECRET_KEY, "");
+    conf.set(SESSION_TOKEN, "");
+    final SessionCredentials sc = SessionCredentials.load(null, conf);
+    intercept(IOException.class,
+        SessionCredentials.INVALID_CREDENTIALS,
+        () -> {
+          sc.validate("");
+          return sc.toString();
+        });
+  }
+
+  /**
+   * Verify that the request mechanism is translating exceptions.
+   * @throws Exception on a failure
+   */
+  @Test
+  public void testSessionRequestExceptionTranslation() throws Exception {
+    intercept(IOException.class,
+        () -> requestSessionCredentials(getConfiguration(),
+            getFileSystem().getBucket(), 10));
+  }
+
 }

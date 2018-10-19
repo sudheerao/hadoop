@@ -76,6 +76,9 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
 
   private static final Path ROOT = new Path("/");
 
+  private static final Statement STATEMENT_ALL_BUCKET_READ_ACCESS
+      = statement(true, S3_ALL_BUCKETS, S3_BUCKET_READ_OPERATIONS);
+
   /**
    * test URI, built in setup.
    */
@@ -205,6 +208,7 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
     describe("Assert that you can't use assumed roles to auth assumed roles");
 
     Configuration conf = createAssumedRoleConfig();
+    unsetHadoopCredentialProviders(conf);
     conf.set(ASSUMED_ROLE_CREDENTIALS_PROVIDER,
         AssumedRoleCredentialProvider.NAME);
     expectFileSystemCreateFailure(conf,
@@ -217,6 +221,7 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
     describe("Try to authenticate with a keypair with spaces");
 
     Configuration conf = createAssumedRoleConfig();
+    unsetHadoopCredentialProviders(conf);
     conf.set(ASSUMED_ROLE_CREDENTIALS_PROVIDER,
         SimpleAWSCredentialsProvider.NAME);
     conf.set(ACCESS_KEY, "not valid");
@@ -232,6 +237,7 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
     describe("Try to authenticate with an invalid keypair");
 
     Configuration conf = createAssumedRoleConfig();
+    unsetHadoopCredentialProviders(conf);
     conf.set(ASSUMED_ROLE_CREDENTIALS_PROVIDER,
         SimpleAWSCredentialsProvider.NAME);
     conf.set(ACCESS_KEY, "notvalid");
@@ -461,7 +467,7 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
 
     bindRolePolicyStatements(conf,
         STATEMENT_S3GUARD_CLIENT,
-        statement(true, S3_ALL_BUCKETS, S3_ROOT_READ_OPERATIONS),
+        STATEMENT_ALL_BUCKET_READ_ACCESS,
         STATEMENT_ALLOW_SSE_KMS_RW,
         new Statement(Effects.Allow)
           .addActions(S3_ALL_OPERATIONS)
@@ -525,7 +531,7 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
     bindRolePolicyStatements(conf,
         STATEMENT_S3GUARD_CLIENT,
         STATEMENT_ALLOW_SSE_KMS_RW,
-        statement(true, S3_ALL_BUCKETS, S3_ROOT_READ_OPERATIONS),
+        STATEMENT_ALL_BUCKET_READ_ACCESS,
         new Statement(Effects.Allow)
           .addActions(S3_PATH_RW_OPERATIONS)
           .addResources(directory(restrictedDir))
@@ -617,8 +623,8 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
 
     bindRolePolicyStatements(conf,
         STATEMENT_S3GUARD_CLIENT,
-        statement(true, S3_ALL_BUCKETS, S3_ROOT_READ_OPERATIONS),
-          new Statement(Effects.Allow)
+        STATEMENT_ALL_BUCKET_READ_ACCESS,
+        new Statement(Effects.Allow)
             .addActions(S3_PATH_RW_OPERATIONS)
             .addResources(directory(destDir))
     );
@@ -698,7 +704,7 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
     bindRolePolicyStatements(conf,
         STATEMENT_S3GUARD_CLIENT,
         STATEMENT_ALLOW_SSE_KMS_RW,
-        statement(true, S3_ALL_BUCKETS, S3_ROOT_READ_OPERATIONS),
+        STATEMENT_ALL_BUCKET_READ_ACCESS,
         new Statement(Effects.Allow)
             .addActions(S3_PATH_RW_OPERATIONS)
             .addResources(directory(writeableDir))

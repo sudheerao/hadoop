@@ -168,7 +168,7 @@ public final class S3AUtils {
       SdkBaseException exception) {
     String message = String.format("%s%s: %s",
         operation,
-        path != null ? (" on " + path) : "",
+        StringUtils.isNotEmpty(path)? (" on " + path) : "",
         exception);
     if (!(exception instanceof AmazonServiceException)) {
       Exception innerCause = containsInterruptedException(exception);
@@ -604,7 +604,7 @@ public final class S3AUtils {
       for (Class<?> aClass : awsClasses) {
         credentials.add(createAWSCredentialProvider(conf,
             aClass,
-            binding));
+            S3xLoginHelper.buildFSURI(binding)));
       }
     }
     // make sure the logging message strips out any auth details
@@ -640,6 +640,8 @@ public final class S3AUtils {
    * <ol>
    * <li>a public constructor accepting java.net.URI and
    *     org.apache.hadoop.conf.Configuration</li>
+   * <li>a public constructor accepting
+   *    org.apache.hadoop.conf.Configuration</li>
    * <li>a public static method named getInstance that accepts no
    *    arguments and returns an instance of
    *    com.amazonaws.auth.AWSCredentialsProvider, or</li>
@@ -656,7 +658,7 @@ public final class S3AUtils {
       Configuration conf,
       Class<?> credClass,
       URI uri) throws IOException {
-    AWSCredentialsProvider credentials;
+    AWSCredentialsProvider credentials = null;
     String className = credClass.getName();
     if (!AWSCredentialsProvider.class.isAssignableFrom(credClass)) {
       throw new IOException("Class " + credClass + " " + NOT_AWS_PROVIDER);
@@ -1399,7 +1401,7 @@ public final class S3AUtils {
    * @return the encryption key or ""
    * @throws IllegalArgumentException bad arguments.
    */
-  static String getServerSideEncryptionKey(String bucket,
+  public static String getServerSideEncryptionKey(String bucket,
       Configuration conf) {
     try {
       return lookupPassword(bucket, conf, SERVER_SIDE_ENCRYPTION_KEY);
@@ -1420,7 +1422,7 @@ public final class S3AUtils {
    * one is set.
    * @throws IOException on any validation problem.
    */
-  static S3AEncryptionMethods getEncryptionAlgorithm(String bucket,
+  public static S3AEncryptionMethods getEncryptionAlgorithm(String bucket,
       Configuration conf) throws IOException {
     S3AEncryptionMethods sse = S3AEncryptionMethods.getMethod(
         lookupPassword(bucket, conf,
@@ -1430,6 +1432,7 @@ public final class S3AUtils {
     String diagnostics = passwordDiagnostics(sseKey, "key");
     switch (sse) {
     case SSE_C:
+      LOG.debug("Using SSE-C with {}", diagnostics);
       if (sseKeyLen == 0) {
         throw new IOException(SSE_C_NO_KEY_ERROR);
       }
@@ -1452,7 +1455,6 @@ public final class S3AUtils {
       LOG.debug("Data is unencrypted");
       break;
     }
-    LOG.debug("Using SSE-C with {}", diagnostics);
     return sse;
   }
 
@@ -1612,5 +1614,41 @@ public final class S3AUtils {
       return "ACCEPT_ALL";
     }
   };
+
+  /**
+   * Get the canonical service URI.
+   * @param uri the URI to canonicalize
+   * @return URI to consider the canonical one of the FS.
+   */
+  public static URI getCanonicalServiceURI(URI uri) {
+    String sessionKey = uri.getUserInfo();
+    if (sessionKey != null) {
+      sessionKey = sessionKey.split(":")[0];
+    }
+    if (StringUtils.isEmpty(sessionKey)) {
+//      sessionKey = "default";
+      sessionKey = "";
+    }
+    return sessionKey.isEmpty()? uri
+        : URI.create(FS_S3A + "://" + sessionKey + "@" + uri.getHost());
+  }
+
+  /**
+   * Set a key if the value is non-empty.
+   * @param config config to patch
+   * @param key key to set
+   * @param val value to probe and set
+   * @param origin origin
+   * @return true if the property was set
+   */
+  public static boolean setIfDefined(Configuration config, String key,
+      String val, String origin) {
+    if (StringUtils.isNotEmpty(val)) {
+      config.set(key, val, origin);
+      return true;
+    } else {
+      return false;
+    }
+  }
 
 }

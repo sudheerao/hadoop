@@ -356,6 +356,9 @@ public class TestS3AAWSCredentialsProvider {
     }
   }
 
+  /**
+   * Credential provider which raises an IOE when constructed.
+   */
   private static class IOERaisingProvider implements AWSCredentialsProvider {
 
     public IOERaisingProvider(URI uri, Configuration conf)

@@ -16,29 +16,32 @@
  * limitations under the License.
  */
 
-package org.apache.hadoop.fs.s3a;
+package org.apache.hadoop.fs.s3a.auth.delegation;
 
-import org.apache.hadoop.conf.Configuration;
+import java.net.URI;
+
+import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+import org.apache.hadoop.io.Text;
 
 /**
- * Run the encryption tests against the block output stream.
+ * Role token identifier.
+ * Token kind is {@link DelegationConstants#ROLE_TOKEN_KIND}
  */
-public class ITestS3AEncryptionSSES3BlockOutputStream
-    extends AbstractTestS3AEncryption {
+public class RoleTokenIdentifier extends SessionTokenIdentifier {
 
-  @Override
-  protected Configuration createConfiguration() {
-    Configuration conf = super.createConfiguration();
-    conf.set(Constants.FAST_UPLOAD_BUFFER,
-        Constants.FAST_UPLOAD_BYTEBUFFER);
-    //must specify encryption key as empty because SSE-S3 does not allow it,
-    //nor can it be null.
-    conf.set(Constants.SERVER_SIDE_ENCRYPTION_KEY, "");
-    return conf;
+  public RoleTokenIdentifier() {
+    super(DelegationConstants.ROLE_TOKEN_KIND);
   }
 
-  @Override
-  protected S3AEncryptionMethods getSSEAlgorithm() {
-    return S3AEncryptionMethods.SSE_S3;
+  public RoleTokenIdentifier(final URI uri,
+      final Text owner,
+      final SessionCredentials sessionCredentials,
+      final EncryptionSecrets encryptionSecrets) {
+    super(DelegationConstants.ROLE_TOKEN_KIND,
+        owner,
+        uri,
+        sessionCredentials,
+        encryptionSecrets);
   }
+
 }

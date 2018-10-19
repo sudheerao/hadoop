@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.s3a;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
+import com.google.common.annotations.VisibleForTesting;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -49,13 +50,29 @@ public class SimpleAWSCredentialsProvider implements AWSCredentialsProvider {
 
   public static final String NAME
       = "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider";
-  private String accessKey;
-  private String secretKey;
+  private final String accessKey;
+  private final String secretKey;
 
-  public SimpleAWSCredentialsProvider(URI uri, Configuration conf)
+  /**
+   * Build the credentials from a filesystem URI and configuration.
+   * @param uri FS URI
+   * @param conf configuration containing secrets/references to.
+   * @throws IOException failure
+   */
+  public SimpleAWSCredentialsProvider(final URI uri, final Configuration conf)
       throws IOException {
+      this(getAWSAccessKeys(uri, conf));
+  }
 
-      S3xLoginHelper.Login login = getAWSAccessKeys(uri, conf);
+  /**
+   * Instantiate from a login tuple.
+   * For testing, hence package-scoped.
+   * @param login login secrets
+   * @throws IOException failure
+   */
+  @VisibleForTesting
+  SimpleAWSCredentialsProvider(final S3xLoginHelper.Login login)
+      throws IOException {
       this.accessKey = login.getUser();
       this.secretKey = login.getPassword();
   }

@@ -29,10 +29,19 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
 import org.apache.hadoop.fs.s3a.commit.CommitConstants;
-
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStore;
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStoreCapabilities;
+import org.apache.hadoop.fs.s3native.S3xLoginHelper;
+import org.apache.hadoop.io.DataInputBuffer;
+import org.apache.hadoop.io.DataOutputBuffer;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.service.Service;
+import org.apache.hadoop.service.ServiceOperations;
+import org.apache.hadoop.util.ReflectionUtils;
+
+import com.amazonaws.auth.AWSCredentialsProvider;
 import org.hamcrest.core.Is;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -51,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SECURITY_CREDENTIAL_PROVIDER_PATH;
 import static org.apache.hadoop.fs.contract.ContractTestUtils.skip;
 import static org.apache.hadoop.fs.s3a.FailureInjectionPolicy.*;
 import static org.apache.hadoop.fs.s3a.S3ATestConstants.*;
@@ -75,6 +85,33 @@ public final class S3ATestUtils {
    */
   public static final String UNSET_PROPERTY = "unset";
   public static final int PURGE_DELAY_SECONDS = 60 * 60;
+
+  /**
+   * System property which defines a temp dir for files during
+   * a build.
+   */
+  public static final String TEST_BUILD_DATA = "test.build.data";
+
+  /** Add any deprecated keys. */
+  @SuppressWarnings("deprecation")
+  private static void addDeprecatedKeys() {
+    Configuration.DeprecationDelta[] deltas =
+        new Configuration.DeprecationDelta[] {
+            // STS endpoint configuration option
+            new Configuration.DeprecationDelta(
+                S3ATestConstants.TEST_STS_ENDPOINT,
+                ASSUMED_ROLE_STS_ENDPOINT)
+            };
+
+    if (deltas.length > 0) {
+      Configuration.addDeprecations(deltas);
+      Configuration.reloadExistingConfigurations();
+    }
+  }
+
+  static {
+    addDeprecatedKeys();
+  }
 
   /**
    * Get S3A FS name.
@@ -515,6 +552,17 @@ public final class S3ATestUtils {
   }
 
   /**
+   * Clear any Hadoop credential provider path.
+   * This is needed if people's test setups switch to credential providers,
+   * and the test case is altering FS login details: changes made in the
+   * config will not be picked up.
+   * @param conf configuration to update
+   */
+  public static void unsetHadoopCredentialProviders(final Configuration conf) {
+    conf.unset(HADOOP_SECURITY_CREDENTIAL_PROVIDER_PATH);
+  }
+
+  /**
    * Helper class to do diffs of metrics.
    */
   public static final class MetricDiff {
@@ -919,4 +967,190 @@ public final class S3ATestUtils {
     }
     return Boolean.valueOf(persists);
   }
+
+  /**
+   * Build AWS credentials to talk to the STS. Also where checks for the
+   * session tests being disabled are implemented.
+   * @return a set of credentials
+   * @throws IOException on a failure
+   */
+  public static AWSCredentialsProvider buildAwsCredentialsProvider(
+      Configuration conf)
+      throws IOException {
+    assumeSessionTestsEnabled(conf);
+
+    S3xLoginHelper.Login login = S3AUtils.getAWSAccessKeys(
+        URI.create("s3a://foobar"), conf);
+    if (!login.hasLogin()) {
+      skip("testSTS disabled because AWS credentials not configured");
+    }
+    return new SimpleAWSCredentialsProvider(login);
+  }
+
+  /**
+   * Skip the current test if STS tess are not enabled.
+   * @param conf configuration to examine
+   */
+  public static void assumeSessionTestsEnabled(Configuration conf) {
+    if (!conf.getBoolean(TEST_STS_ENABLED, true)) {
+      skip("STS functional tests disabled");
+    }
+  }
+
+  /**
+   * Request session credentials for the default time (900s).
+   * @param conf configuration to use for login
+   * @param bucket Optional bucket to use to look up per-bucket proxy secrets
+   * @return the credentials
+   * @throws IOException on a failure
+   */
+  public static SessionCredentials requestSessionCredentials(Configuration conf,
+      final String bucket)
+      throws IOException {
+    return requestSessionCredentials(conf, bucket, 900);
+  }
+
+  /**
+   * Request session credentials.
+   * @param conf The Hadoop configuration
+   * @param bucket Optional bucket to use to look up per-bucket proxy secrets
+   * @param duration duration in seconds.
+   * @return the credentials
+   * @throws IOException on a failure
+   */
+  public static SessionCredentials requestSessionCredentials(
+      final Configuration conf,
+      final String bucket,
+      final int duration)
+      throws IOException {
+    assumeSessionTestsEnabled(conf);
+    SessionCredentials sc = SessionCredentials.requestSessionCredentials(
+        buildAwsCredentialsProvider(conf),
+        S3AUtils.createAwsConf(conf, bucket),
+        conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT,
+            DEFAULT_ASSUMED_ROLE_STS_ENDPOINT),
+        conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT_REGION,
+            ASSUMED_ROLE_STS_ENDPOINT_REGION_DEFAULT),
+        duration,
+        new Invoker(new S3ARetryPolicy(conf), Invoker.LOG_EVENT));
+    sc.validate("");
+    return sc;
+  }
+
+  /**
+   * Round trip a writable to a new instance.
+   * @param source source object
+   * @param conf configuration
+   * @param <T> type
+   * @return an unmarshalled instance of the type
+   * @throws Exception on any failure.
+   */
+  @SuppressWarnings("unchecked")
+  public static <T extends Writable> T roundTrip(T source, Configuration conf)
+      throws Exception {
+    DataOutputBuffer dob = new DataOutputBuffer();
+    source.write(dob);
+
+    DataInputBuffer dib = new DataInputBuffer();
+    dib.reset(dob.getData(), dob.getLength());
+
+    T after = ReflectionUtils.newInstance((Class<T>) source.getClass(), conf);
+    after.readFields(dib);
+    return after;
+  }
+
+  /**
+   * Remove any values from a bucket.
+   * @param bucket bucket whose overrides are to be removed. Can be null/empty
+   * @param conf config
+   * @param options list of fs.s3a options to remove
+   */
+  public static void removeBucketOverrides(String bucket,
+      Configuration conf, String...options) {
+
+    if (StringUtils.isEmpty(bucket)) {
+      return;
+    }
+    final String bucketPrefix = FS_S3A_BUCKET_PREFIX + bucket + '.';
+    for (String option : options) {
+      final String stripped = option.substring("fs.s3a.".length());
+      String target = bucketPrefix + stripped;
+      if (conf.get(target) != null) {
+        LOG.debug("Removing option {}", target);
+        conf.unset(target);
+      }
+    }
+  }
+
+  /**
+   * Remove any values from a bucket and the base values too.
+   * @param bucket bucket whose overrides are to be removed. Can be null/empty.
+   * @param conf config
+   * @param options list of fs.s3a options to remove
+   */
+  public static void removeBaseAndBucketOverrides(String bucket,
+      Configuration conf, String... options) {
+    for (String option : options) {
+      conf.unset(option);
+    }
+    removeBucketOverrides(bucket, conf, options);
+  }
+
+  /**
+   * Call a function; any exception raised is logged at info.
+   * This is for test teardowns.
+   * @param log log to use.
+   * @param operation operation to invoke
+   * @param <T> type of operation.
+   */
+  public static <T> void callQuietly(Logger log,
+      Invoker.Operation<T> operation) {
+    try {
+      operation.execute();
+    } catch (Exception e) {
+      log.info(e.toString(), e);
+    }
+  }
+
+  /**
+   * Call a void operation; any exception raised is logged at info.
+   * This is for test teardowns.
+   * @param log log to use.
+   * @param operation operation to invoke
+   */
+  public static void callQuietly(Logger log,
+      Invoker.VoidOperation operation) {
+    try {
+      operation.execute();
+    } catch (Exception e) {
+      log.info(e.toString(), e);
+    }
+  }
+
+  /**
+   * Deploy a hadoop service: init and start it.
+   * @param conf configuration to use
+   * @param service service to configure
+   * @param <T> type of service
+   * @return the started service
+   */
+  public static <T extends Service> T deploy(Configuration conf,
+      T service) {
+    service.init(conf);
+    service.start();
+    return service;
+  }
+
+  /**
+   * Terminate a service, returning {@code null} cast at compile-time
+   * to the type of the service, for ease of setting fields to null.
+   * @param service service.
+   * @param <T> type of the service
+   * @return null, always
+   */
+  public static <T extends Service> T terminate(T service) {
+    ServiceOperations.stopQuietly(LOG, service);
+    return null;
+  }
+
 }
