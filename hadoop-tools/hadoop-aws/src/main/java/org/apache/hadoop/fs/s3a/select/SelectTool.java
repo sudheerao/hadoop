@@ -43,7 +43,7 @@ import org.apache.hadoop.fs.s3a.s3guard.S3GuardTool;
 import org.apache.hadoop.fs.shell.CommandFormat;
 import org.apache.hadoop.util.ExitUtil;
 
-import static org.apache.commons.lang.StringUtils.isNotEmpty;
+import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 import static org.apache.hadoop.service.launcher.LauncherExitCodes.*;
 import static org.apache.hadoop.fs.s3a.select.SelectConstants.*;
 
