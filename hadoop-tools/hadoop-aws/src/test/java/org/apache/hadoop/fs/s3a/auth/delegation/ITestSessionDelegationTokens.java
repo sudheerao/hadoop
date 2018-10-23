@@ -31,7 +31,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.S3AEncryptionMethods;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider;
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.Credentials;
@@ -161,11 +161,11 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
     final AWSSessionCredentials awsSessionCreds
         = verifySessionCredentials(
         delegationTokens.createCredentialProvider().getCredentials());
-    final SessionCredentials origCreds = new SessionCredentials(
+    final MarshalledCredentials origCreds = new MarshalledCredentials(
         awsSessionCreds);
 
     // simulate marshall and transmission
-    final SessionCredentials creds = roundTrip(origCreds, conf);
+    final MarshalledCredentials creds = roundTrip(origCreds, conf);
 
     // decode to get the binding info
     AbstractS3ATokenIdentifier dtId =
@@ -174,7 +174,7 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
 
     // now use those chained credentials to create a new FS instance
     // and then get a session DT from it and expect equality
-    verifyAWSSessionCredentialPropagation(fs, creds, new Configuration(conf));
+    verifyCredentialPropagation(fs, creds, new Configuration(conf));
   }
 
   /**
@@ -187,13 +187,14 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
    * @return the retrieved DT. This is only for error reporting.
    * @throws IOException failure.
    */
-  protected AbstractS3ATokenIdentifier verifyAWSSessionCredentialPropagation(
+  protected AbstractS3ATokenIdentifier verifyCredentialPropagation(
       final S3AFileSystem fs,
-      final SessionCredentials session,
+      final MarshalledCredentials session,
       final Configuration conf)
       throws Exception {
     describe("Verify Token Propagation");
-    // clear any cred paths to ensure they don't get picked up if used for auth.
+    // clear any credential paths to ensure they don't get picked up and used
+    // for authentication.
     unsetHadoopCredentialProviders(conf);
     conf.set(ASSUMED_ROLE_CREDENTIALS_PROVIDER,
         TemporaryAWSCredentialsProvider.NAME);
@@ -209,7 +210,7 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
           = delegationTokens2.bindToDT(newDT);
 
       LOG.info("Regenerated DT is {}", newDT);
-      final SessionCredentials creds2 = new SessionCredentials(
+      final MarshalledCredentials creds2 = new MarshalledCredentials(
           verifySessionCredentials(
               delegationTokens2.createCredentialProvider().getCredentials()));
       assertEquals("Credentials", session, creds2);

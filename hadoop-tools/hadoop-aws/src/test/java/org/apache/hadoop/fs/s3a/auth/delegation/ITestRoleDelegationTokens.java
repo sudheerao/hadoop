@@ -22,7 +22,7 @@ import org.junit.Test;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.io.Text;
 
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_ROLE_BINDING;
@@ -52,19 +52,20 @@ public class ITestRoleDelegationTokens extends ITestSessionDelegationTokens {
    * so the superclass's method will fail.
    * This subclass intercepts the exception which is expected.
    * @param fs base FS to bond to.
-   * @param session session credentials from first DT.
+   * @param marshalledCredentials session credentials from first DT.
    * @param conf config to use
    * @return null
    * @throws Exception failure
    */
   @Override
-  protected AbstractS3ATokenIdentifier verifyAWSSessionCredentialPropagation(
+  protected AbstractS3ATokenIdentifier verifyCredentialPropagation(
       final S3AFileSystem fs,
-      final SessionCredentials session,
+      final MarshalledCredentials marshalledCredentials,
       final Configuration conf) throws Exception {
     intercept(DelegationTokenIOException.class,
         E_NO_SESSION_TOKENS_FOR_ROLE_BINDING,
-        () -> super.verifyAWSSessionCredentialPropagation(fs, session, conf));
+        () -> super.verifyCredentialPropagation(fs,
+            marshalledCredentials, conf));
     return null;
   }
 

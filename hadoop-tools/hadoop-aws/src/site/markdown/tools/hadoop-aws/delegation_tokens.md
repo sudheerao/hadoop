@@ -576,7 +576,7 @@ java.nio.file.AccessDeniedException: : request session credentials:
   AccessDenied; Request ID: 21369f91-55bc-11e7-9b6b-05ee810e5300)
 
 at org.apache.hadoop.fs.s3a.S3AUtils.translateException(S3AUtils.java:174)
-at org.apache.hadoop.fs.s3a.auth.SessionCredentials.requestSessionCredentials(SessionCredentials.java:182)
+at org.apache.hadoop.fs.s3a.auth.MarshalledCredentials.requestSessionCredentials(SessionCredentials.java:182)
 at org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.createTokenIdentifier(S3ADelegationTokens.java:141)
 at org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.createDelegationToken(S3ADelegationTokens.java:103)
 at org.apache.hadoop.fs.s3a.S3AFileSystem.getDelegationToken(S3AFileSystem.java:1860)

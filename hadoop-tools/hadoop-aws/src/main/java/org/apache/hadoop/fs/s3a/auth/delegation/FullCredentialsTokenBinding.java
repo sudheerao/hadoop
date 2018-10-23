@@ -25,8 +25,9 @@ import java.util.Optional;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
 import org.apache.hadoop.fs.s3a.S3AUtils;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialProvider;
 import org.apache.hadoop.fs.s3a.auth.RoleModel;
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3native.S3xLoginHelper;
 
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.FULL_TOKEN_KIND;
@@ -74,24 +75,24 @@ public class FullCredentialsTokenBinding extends
     Configuration conf = getConfig();
     URI uri = getCanonicalUri();
     String origin = AbstractS3ATokenIdentifier.createDefaultOriginMessage();
-    SessionCredentials sessionCredentials;
+    MarshalledCredentials marshalledCredentials;
     // look for access keys to FS
     S3xLoginHelper.Login secrets = S3AUtils.getAWSAccessKeys(uri, conf);
     if (secrets.hasLogin()) {
-      sessionCredentials = new SessionCredentials(
+      marshalledCredentials = new MarshalledCredentials(
           secrets.getUser(), secrets.getPassword(), "");
       origin += "; source = Hadoop configuration data";
     } else {
       // if there are none, look for the environment variables.
-      sessionCredentials = SessionCredentials.fromEnvironment(System.getenv());
+      marshalledCredentials = MarshalledCredentials.fromEnvironment(System.getenv());
       origin += "; source = Environment variables";
     }
-    sessionCredentials.validate("local AWS credentials");
+    marshalledCredentials.validate("local AWS credentials", false);
 
     final FullCredentialsTokenIdentifier id
         = new FullCredentialsTokenIdentifier(getCanonicalUri(),
         getOwnerText(),
-        sessionCredentials,
+        marshalledCredentials,
         encryptionSecrets);
     id.setOrigin(origin);
     return id;
@@ -108,7 +109,7 @@ public class FullCredentialsTokenBinding extends
         new MarshalledCredentialProvider(
             getFileSystem().getUri(),
             getConfig(),
-            tokenIdentifier.getSessionCredentials(),
+            tokenIdentifier.getMarshalledCredentials(),
             false));
   }
 

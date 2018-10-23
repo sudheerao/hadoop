@@ -26,7 +26,7 @@ import org.junit.Test;
 import org.apache.hadoop.fs.s3a.S3AEncryptionMethods;
 import org.apache.hadoop.fs.s3a.S3ATestConstants;
 import org.apache.hadoop.fs.s3a.S3ATestUtils;
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.SecretManager;
@@ -62,15 +62,15 @@ public class TestS3ADelegationTokenSupport {
     AbstractS3ATokenIdentifier identifier
         = new SessionTokenIdentifier(SESSION_TOKEN_KIND,
         alice, new URI("s3a://landsat-pds/"),
-        new SessionCredentials("a", "b", ""),
+        new MarshalledCredentials("a", "b", ""),
         new EncryptionSecrets(S3AEncryptionMethods.SSE_S3, ""));
     Token<AbstractS3ATokenIdentifier> t1 =
         new Token<>(identifier,
             new SessionSecretManager());
     AbstractS3ATokenIdentifier decoded = t1.decodeIdentifier();
     decoded.validate();
-    SessionCredentials creds
-        = ((SessionTokenIdentifier) decoded).getSessionCredentials();
+    MarshalledCredentials creds
+        = ((SessionTokenIdentifier) decoded).getMarshalledCredentials();
     assertNotNull("credentials", creds.toAWSCredentials(false));
     assertEquals(alice, decoded.getOwner());
     UserGroupInformation decodedUser = decoded.getUser();
@@ -95,15 +95,15 @@ public class TestS3ADelegationTokenSupport {
         SESSION_TOKEN_KIND,
         new Text(),
         landsatUri,
-        new SessionCredentials("a", "b", "c"),
+        new MarshalledCredentials("a", "b", "c"),
         new EncryptionSecrets());
 
     SessionTokenIdentifier result = S3ATestUtils.roundTrip(id, null);
     String ids = id.toString();
     assertEquals("URI in " + ids, id.getUri(), result.getUri());
     assertEquals("credentials in " + ids,
-        id.getSessionCredentials(),
-        result.getSessionCredentials());
+        id.getMarshalledCredentials(),
+        result.getMarshalledCredentials());
   }
 
   @Test
@@ -111,15 +111,15 @@ public class TestS3ADelegationTokenSupport {
     RoleTokenIdentifier id = new RoleTokenIdentifier(
         landsatUri,
         new Text(),
-        new SessionCredentials("a", "b", "c"),
+        new MarshalledCredentials("a", "b", "c"),
         new EncryptionSecrets());
 
     RoleTokenIdentifier result = S3ATestUtils.roundTrip(id, null);
     String ids = id.toString();
     assertEquals("URI in " + ids, id.getUri(), result.getUri());
     assertEquals("credentials in " + ids,
-        id.getSessionCredentials(),
-        result.getSessionCredentials());
+        id.getMarshalledCredentials(),
+        result.getMarshalledCredentials());
   }
 
   @Test
@@ -127,15 +127,15 @@ public class TestS3ADelegationTokenSupport {
     FullCredentialsTokenIdentifier id = new FullCredentialsTokenIdentifier(
         landsatUri,
         new Text(),
-        new SessionCredentials("a", "b", ""),
+        new MarshalledCredentials("a", "b", ""),
         new EncryptionSecrets());
 
     FullCredentialsTokenIdentifier result = S3ATestUtils.roundTrip(id, null);
     String ids = id.toString();
     assertEquals("URI in " + ids, id.getUri(), result.getUri());
     assertEquals("credentials in " + ids,
-        id.getSessionCredentials(),
-        result.getSessionCredentials());
+        id.getMarshalledCredentials(),
+        result.getMarshalledCredentials());
   }
 
   /**

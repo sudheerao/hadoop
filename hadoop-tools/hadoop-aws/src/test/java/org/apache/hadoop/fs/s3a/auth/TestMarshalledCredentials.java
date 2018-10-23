@@ -34,9 +34,9 @@ import org.apache.hadoop.test.HadoopTestBase;
 /**
  * Unit test of session credential support.
  */
-public class TestSessionCredentials extends HadoopTestBase {
+public class TestMarshalledCredentials extends HadoopTestBase {
 
-  private SessionCredentials credentials;
+  private MarshalledCredentials credentials;
 
   private int expiration;
 
@@ -50,7 +50,7 @@ public class TestSessionCredentials extends HadoopTestBase {
 
   @Before
   public void createSessionToken() {
-    credentials = new SessionCredentials("accessKey",
+    credentials = new MarshalledCredentials("accessKey",
         "secretKey", "sessionToken");
     credentials.setRoleARN("roleARN");
     expiration = 1970;
@@ -59,7 +59,7 @@ public class TestSessionCredentials extends HadoopTestBase {
 
   @Test
   public void testRoundTrip() throws Throwable {
-    SessionCredentials c2 = S3ATestUtils.roundTrip(this.credentials,
+    MarshalledCredentials c2 = S3ATestUtils.roundTrip(this.credentials,
         new Configuration());
     assertEquals(credentials, c2);
     assertEquals("accessKey", c2.getAccessKey());
@@ -71,10 +71,10 @@ public class TestSessionCredentials extends HadoopTestBase {
 
   @Test
   public void testRoundTripNoSessionData() throws Throwable {
-    SessionCredentials c = new SessionCredentials();
+    MarshalledCredentials c = new MarshalledCredentials();
     c.setAccessKey("A");
     c.setSecretKey("K");
-    SessionCredentials c2 = S3ATestUtils.roundTrip(c,
+    MarshalledCredentials c2 = S3ATestUtils.roundTrip(c,
         new Configuration());
     assertEquals(c, c2);
   }

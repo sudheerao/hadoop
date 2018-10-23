@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
-import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.CredentialInitializationException;
 import org.apache.hadoop.fs.s3a.Invoker;
@@ -62,14 +61,13 @@ import static org.apache.hadoop.fs.s3a.S3AUtils.lookupPassword;
  * Stores the credentials for a session or for a full login.
  * This structure is {@link Writable}, so can be marshalled inside a
  * delegation token.
- * It's marked as Configurable so that the reflection code to
- * create Writable is happy; nothing important.
  */
 @InterfaceAudience.Private
-public final class SessionCredentials implements Writable, Configurable {
+public final class MarshalledCredentials implements Writable,
+    AWSCredentialsProvider {
 
   private static final Logger LOG = LoggerFactory.getLogger(
-      SessionCredentials.class);
+      MarshalledCredentials.class);
 
   public static final String INVALID_CREDENTIALS
       = "Invalid credentials";
@@ -89,18 +87,16 @@ public final class SessionCredentials implements Writable, Configurable {
 
   private String roleARN = "";
 
-  private Configuration conf;
-
   private long expiration;
 
-  public SessionCredentials() {
+  public MarshalledCredentials() {
   }
 
   /**
    * Instantiate from a set of credentials issued by an STS call.
    * @param credentials AWS-provided session credentials
    */
-  public SessionCredentials(Credentials credentials) {
+  public MarshalledCredentials(final Credentials credentials) {
     accessKey = credentials.getAccessKeyId();
     secretKey = credentials.getSecretAccessKey();
     sessionToken = credentials.getSessionToken();
@@ -114,9 +110,9 @@ public final class SessionCredentials implements Writable, Configurable {
    * @param secretKey secret key
    * @param sessionToken session token
    */
-  public SessionCredentials(String accessKey,
-      String secretKey,
-      String sessionToken) {
+  public MarshalledCredentials(final String accessKey,
+      final String secretKey,
+      final String sessionToken) {
     this.accessKey = checkNotNull(accessKey);
     this.secretKey = checkNotNull(secretKey);
     this.sessionToken = checkNotNull(sessionToken);
@@ -126,21 +122,10 @@ public final class SessionCredentials implements Writable, Configurable {
    * Create from a set of AWS session credentials.
    * @param awsCredentials the AWS Session info.
    */
-  public SessionCredentials(AWSSessionCredentials awsCredentials) {
+  public MarshalledCredentials(final AWSSessionCredentials awsCredentials) {
     this.accessKey = awsCredentials.getAWSAccessKeyId();
     this.secretKey = awsCredentials.getAWSSecretKey();
     this.sessionToken = awsCredentials.getAWSSecretKey();
-  }
-
-  @Override
-  public void setConf(final Configuration conf) {
-    this.conf = conf;
-
-  }
-
-  @Override
-  public Configuration getConf() {
-    return conf;
   }
 
   public String getAccessKey() {
@@ -195,7 +180,7 @@ public final class SessionCredentials implements Writable, Configurable {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    SessionCredentials that = (SessionCredentials) o;
+    MarshalledCredentials that = (MarshalledCredentials) o;
     return expiration == that.expiration &&
         Objects.equals(accessKey, that.accessKey) &&
         Objects.equals(secretKey, that.secretKey) &&
@@ -217,9 +202,9 @@ public final class SessionCredentials implements Writable, Configurable {
    * @param conf configuration to load from
    * @throws IOException on any load failure
    */
-  public static SessionCredentials load(
-      URI uri,
-      Configuration conf) throws IOException {
+  public static MarshalledCredentials load(
+      final URI uri,
+      final Configuration conf) throws IOException {
     // determine the bucket
     String bucket = uri != null ? uri.getHost() : "";
     Configuration leanConf =
@@ -228,7 +213,7 @@ public final class SessionCredentials implements Writable, Configurable {
     String accessKey = lookupPassword(bucket, leanConf, ACCESS_KEY);
     String secretKey = lookupPassword(bucket, leanConf, SECRET_KEY);
     String sessionToken = lookupPassword(bucket, leanConf, SESSION_TOKEN);
-    SessionCredentials credentials = new SessionCredentials(accessKey,
+    MarshalledCredentials credentials = new MarshalledCredentials(accessKey,
         secretKey, sessionToken);
     return credentials;
   }
@@ -244,12 +229,12 @@ public final class SessionCredentials implements Writable, Configurable {
    * @throws IOException on a failure of the request
    */
   @Retries.RetryTranslated
-  public static SessionCredentials requestSessionCredentials(
-      AWSCredentialsProvider parentCredentials,
-      ClientConfiguration awsConf,
-      String stsEndpoint,
+  public static MarshalledCredentials requestSessionCredentials(
+      final AWSCredentialsProvider parentCredentials,
+      final ClientConfiguration awsConf,
+      final String stsEndpoint,
       final String stsRegion,
-      int duration,
+      final int duration,
       final Invoker invoker) throws IOException {
     AWSSecurityTokenService tokenService =
         STSClientFactory.builder(parentCredentials,
@@ -261,7 +246,7 @@ public final class SessionCredentials implements Writable, Configurable {
         = STSClientFactory.createClientConnection(tokenService, invoker);
     Credentials credentials = clientConnection
         .requestSessionCredentials(duration, TimeUnit.SECONDS);
-    return new SessionCredentials(credentials);
+    return new MarshalledCredentials(credentials);
   }
 
   /**
@@ -283,11 +268,21 @@ public final class SessionCredentials implements Writable, Configurable {
 
   /**
    * Is this a valid set of credentials tokens?
-   * @return true if all the fields are set.
+   * @return true if the key and secrets are set.
    */
   public boolean isValid() {
+    return isValid(false);
+  }
+
+  /**
+   * Is this a valid set of credentials tokens?
+   * @param sessionTokenRequired is a session token required?
+   * @return true if all the fields are set.
+   */
+  public boolean isValid(boolean sessionTokenRequired) {
     return !StringUtils.isEmpty(accessKey)
-        && !StringUtils.isEmpty(secretKey);
+        && !StringUtils.isEmpty(secretKey)
+        && (!sessionTokenRequired == !StringUtils.isNotEmpty(sessionToken));
   }
 
   /**
@@ -298,7 +293,7 @@ public final class SessionCredentials implements Writable, Configurable {
    */
   @Override
   public void write(DataOutput out) throws IOException {
-    validate("Writing " + this + ": ");
+    validate("Writing " + this + ": ", false);
     Text.writeString(out, accessKey);
     Text.writeString(out, secretKey);
     Text.writeString(out, sessionToken);
@@ -324,9 +319,11 @@ public final class SessionCredentials implements Writable, Configurable {
    * Verify that a set of credentials is valid.
    * @throws DelegationTokenIOException if they aren't
    * @param message message to prefix errors;
+   * @param sessionTokenRequired is a session token required?
    */
-  public void validate(final String message) throws IOException {
-    if (!isValid()) {
+  public void validate(final String message,
+      final boolean sessionTokenRequired) throws IOException {
+    if (!isValid(sessionTokenRequired)) {
       throw new DelegationTokenIOException(message
           + INVALID_CREDENTIALS
           + " in " + this);
@@ -335,12 +332,23 @@ public final class SessionCredentials implements Writable, Configurable {
 
   /**
    * Create an AWS credential set from these values.
+   * From {@code AWSCredentialProvider}.
    * @return a new set of credentials
    * @throws CredentialInitializationException init problems
    */
-  public AWSCredentials toAWSCredentials() throws
+  @Override
+  public AWSCredentials getCredentials() throws
       CredentialInitializationException {
     return toAWSCredentials(true);
+  }
+
+  /**
+   * From {@code AWSCredentialProvider}.
+   * No-op.
+   */
+  @Override
+  public void refresh() {
+    /* No-Op */
   }
 
   /**
@@ -349,13 +357,9 @@ public final class SessionCredentials implements Writable, Configurable {
    * @return a new set of credentials
    * @throws CredentialInitializationException validation failure
    */
-  public AWSCredentials toAWSCredentials(boolean sessionCredentials) throws
-      CredentialInitializationException {
-    if (!isValid()) {
-      throw new CredentialInitializationException(INVALID_CREDENTIALS);
-    }
-    // specific check for session credentials.
-    if (sessionCredentials && StringUtils.isEmpty(sessionToken)) {
+  public AWSCredentials toAWSCredentials(final boolean sessionCredentials)
+      throws CredentialInitializationException {
+    if (!isValid(sessionCredentials)) {
       throw new CredentialInitializationException(INVALID_CREDENTIALS);
     }
     if (StringUtils.isNotEmpty(sessionToken)) {
@@ -386,9 +390,9 @@ public final class SessionCredentials implements Writable, Configurable {
    * @param env environment.
    * @return a possibly incomplete/invalid set of credentials.
    */
-  public static SessionCredentials fromEnvironment(
-      Map<String, String> env) {
-    SessionCredentials creds = new SessionCredentials();
+  public static MarshalledCredentials fromEnvironment(
+      final Map<String, String> env) {
+    MarshalledCredentials creds = new MarshalledCredentials();
     creds.setAccessKey(env.get("AWS_ACCESS_KEY_ID"));
     creds.setSecretKey(env.get("AWS_SECRET_ACCESS_KEY"));
     creds.setSessionToken(env.get("AWS_SESSION_TOKEN"));

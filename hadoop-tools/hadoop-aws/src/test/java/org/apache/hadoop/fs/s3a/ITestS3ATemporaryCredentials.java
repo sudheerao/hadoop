@@ -29,9 +29,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.test.LambdaTestUtils;
 
@@ -121,7 +121,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     S3AUtils.clearBucketOption(conf2, bucket, SECRET_KEY);
     S3AUtils.clearBucketOption(conf2, bucket, SESSION_TOKEN);
 
-    updateConfigWithSessionCreds(conf2, new SessionCredentials(sessionCreds));
+    updateConfigWithSessionCreds(conf2,
+        new MarshalledCredentials(sessionCreds));
 
     conf2.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
 
@@ -169,9 +170,9 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   @Test
   public void testSTSBindingforGetDelegationToken() throws Exception {
     Configuration conf = new Configuration(getContract().getConf());
-    SessionCredentials sc = requestSessionCredentials(conf,
+    MarshalledCredentials sc = requestSessionCredentials(conf,
         getFileSystem().getBucket());
-    sc.toAWSCredentials();
+    sc.getCredentials();
     updateConfigWithSessionCreds(conf, sc);
     conf.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
 
@@ -183,7 +184,7 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   }
 
   protected void updateConfigWithSessionCreds(final Configuration conf,
-      final SessionCredentials sc) {
+      final MarshalledCredentials sc) {
     unsetHadoopCredentialProviders(conf);
     sc.setSecretsInConfiguration(conf);
   }
@@ -194,9 +195,9 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   @Test
   public void testNoDelegationTokenIssue() throws Exception {
     Configuration conf = new Configuration(getContract().getConf());
-    SessionCredentials sc = requestSessionCredentials(conf,
+    MarshalledCredentials sc = requestSessionCredentials(conf,
         getFileSystem().getBucket());
-    sc.toAWSCredentials();
+    sc.getCredentials();
     updateConfigWithSessionCreds(conf, sc);
     conf.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
 
@@ -213,9 +214,9 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   public void testInvalidSTSBinding() throws Exception {
     Configuration conf = new Configuration(getContract().getConf());
 
-    SessionCredentials sc = requestSessionCredentials(conf,
+    MarshalledCredentials sc = requestSessionCredentials(conf,
         getFileSystem().getBucket());
-    sc.toAWSCredentials();
+    sc.getCredentials();
     updateConfigWithSessionCreds(conf, sc);
 
     conf.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
@@ -247,11 +248,11 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     conf.set(ACCESS_KEY, "");
     conf.set(SECRET_KEY, "");
     conf.set(SESSION_TOKEN, "");
-    final SessionCredentials sc = SessionCredentials.load(null, conf);
+    final MarshalledCredentials sc = MarshalledCredentials.load(null, conf);
     intercept(IOException.class,
-        SessionCredentials.INVALID_CREDENTIALS,
+        MarshalledCredentials.INVALID_CREDENTIALS,
         () -> {
-          sc.validate("");
+          sc.validate("", true);
           return sc.toString();
         });
   }

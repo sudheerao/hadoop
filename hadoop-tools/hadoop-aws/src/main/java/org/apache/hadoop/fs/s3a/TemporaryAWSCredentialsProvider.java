@@ -28,7 +28,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.auth.AbstractSessionCredentialsProvider;
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 
 /**
  * Support session credentials for authenticating with AWS.
@@ -39,7 +39,6 @@ import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
  *
  * This credential provider must not fail in creation because that will
  * break a chain of credential providers.
- * Instead it
  */
 @InterfaceAudience.Public
 @InterfaceStability.Stable
@@ -73,7 +72,8 @@ public class TemporaryAWSCredentialsProvider extends
   @Override
   protected AWSCredentials createCredentials(Configuration config)
       throws IOException {
-    return SessionCredentials.load(getUri(), config).toAWSCredentials(true);
+    return MarshalledCredentials.load(getUri(), config)
+        .toAWSCredentials(true);
   }
 
 }

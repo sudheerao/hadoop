@@ -23,7 +23,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.net.URI;
 
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.io.Text;
 
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.SESSION_TOKEN_KIND;
@@ -33,7 +33,7 @@ import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.SESSI
  * credentials which will be valid until they expire.
  *
  * <b>Note 1:</b>
- * There's a risk here that the reference to {@link SessionCredentials}
+ * There's a risk here that the reference to {@link MarshalledCredentials}
  * may trigger a transitive load of AWS classes, a load which will
  * fail if the aws SDK isn't on the classpath.
  *
@@ -48,7 +48,8 @@ public class SessionTokenIdentifier extends
   /**
    * Session credentials: initially empty but non-null.
    */
-  private SessionCredentials sessionCredentials = new SessionCredentials();
+  private MarshalledCredentials marshalledCredentials
+      = new MarshalledCredentials();
 
   /**
    * Create with the kind {@link DelegationConstants#SESSION_TOKEN_KIND}.
@@ -72,10 +73,10 @@ public class SessionTokenIdentifier extends
       final Text kind,
       final Text owner,
       final URI uri,
-      final SessionCredentials sessionCredentials,
+      final MarshalledCredentials marshalledCredentials,
       final EncryptionSecrets encryptionSecrets) {
     super(kind, uri, owner, encryptionSecrets);
-    this.sessionCredentials = sessionCredentials;
+    this.marshalledCredentials = marshalledCredentials;
   }
 
   public SessionTokenIdentifier(final Text kind,
@@ -89,14 +90,14 @@ public class SessionTokenIdentifier extends
   @Override
   public void write(final DataOutput out) throws IOException {
     super.write(out);
-    sessionCredentials.write(out);
+    marshalledCredentials.write(out);
   }
 
   @Override
   public void readFields(final DataInput in)
       throws DelegationTokenIOException, IOException {
     super.readFields(in);
-    sessionCredentials.readFields(in);
+    marshalledCredentials.readFields(in);
   }
 
   /**
@@ -105,14 +106,14 @@ public class SessionTokenIdentifier extends
    */
   @Override
   public long getExpiryTime() {
-    return sessionCredentials.getExpiration();
+    return marshalledCredentials.getExpiration();
   }
 
   /**
    * Get the session credentials.
    * @return session credentials.
    */
-  public SessionCredentials getSessionCredentials() {
-    return sessionCredentials;
+  public MarshalledCredentials getMarshalledCredentials() {
+    return marshalledCredentials;
   }
 }

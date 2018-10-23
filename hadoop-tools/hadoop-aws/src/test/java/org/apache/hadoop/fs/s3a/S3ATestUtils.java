@@ -29,7 +29,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.commit.CommitConstants;
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStore;
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStoreCapabilities;
@@ -1004,7 +1004,7 @@ public final class S3ATestUtils {
    * @return the credentials
    * @throws IOException on a failure
    */
-  public static SessionCredentials requestSessionCredentials(Configuration conf,
+  public static MarshalledCredentials requestSessionCredentials(Configuration conf,
       final String bucket)
       throws IOException {
     return requestSessionCredentials(conf, bucket, 900);
@@ -1018,13 +1018,13 @@ public final class S3ATestUtils {
    * @return the credentials
    * @throws IOException on a failure
    */
-  public static SessionCredentials requestSessionCredentials(
+  public static MarshalledCredentials requestSessionCredentials(
       final Configuration conf,
       final String bucket,
       final int duration)
       throws IOException {
     assumeSessionTestsEnabled(conf);
-    SessionCredentials sc = SessionCredentials.requestSessionCredentials(
+    MarshalledCredentials sc = MarshalledCredentials.requestSessionCredentials(
         buildAwsCredentialsProvider(conf),
         S3AUtils.createAwsConf(conf, bucket),
         conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT,
@@ -1033,7 +1033,7 @@ public final class S3ATestUtils {
             ASSUMED_ROLE_STS_ENDPOINT_REGION_DEFAULT),
         duration,
         new Invoker(new S3ARetryPolicy(conf), Invoker.LOG_EVENT));
-    sc.validate("");
+    sc.validate("", true);
     return sc;
   }
 

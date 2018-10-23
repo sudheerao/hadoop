@@ -30,9 +30,10 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
 import org.apache.hadoop.fs.s3a.Retries;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialProvider;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.RoleModel;
 import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
 
 import static org.apache.hadoop.fs.s3a.Constants.ASSUMED_ROLE_CREDENTIALS_PROVIDER;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_ROLE_ARN;
@@ -105,7 +106,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
     final RoleTokenIdentifier id = new RoleTokenIdentifier(
         getCanonicalUri(),
         getOwnerText(),
-        new SessionCredentials(credentials),
+        new MarshalledCredentials(credentials),
         encryptionSecrets);
     id.setOrigin(AbstractS3ATokenIdentifier.createDefaultOriginMessage()
         + " Role ARN=" + roleArn);
@@ -130,7 +131,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
         new MarshalledCredentialProvider(
             getFileSystem().getUri(),
             getConfig(),
-            tokenIdentifier.getSessionCredentials(),
+            tokenIdentifier.getMarshalledCredentials(),
             true));
   }
 

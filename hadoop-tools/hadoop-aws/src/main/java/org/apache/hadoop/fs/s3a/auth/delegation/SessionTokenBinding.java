@@ -39,9 +39,10 @@ import org.apache.hadoop.fs.s3a.Retries;
 import org.apache.hadoop.fs.s3a.S3ARetryPolicy;
 import org.apache.hadoop.fs.s3a.S3AUtils;
 import org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialProvider;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.RoleModel;
 import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Text;
 
@@ -237,13 +238,13 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
       final EncryptionSecrets encryptionSecrets) throws IOException {
     requireServiceStarted();
 
-    final SessionCredentials sessionCredentials;
+    final MarshalledCredentials marshalledCredentials;
     String origin = AbstractS3ATokenIdentifier.createDefaultOriginMessage();
     final Optional<STSClientFactory.STSClient> client = prepareSTSClient();
 
     if (client.isPresent()) {
       // this is the normal route: ask for a new STS token
-      sessionCredentials = new SessionCredentials(
+      marshalledCredentials = new MarshalledCredentials(
           client.get()
               .requestSessionCredentials(duration, TimeUnit.SECONDS));
     } else {
@@ -257,7 +258,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
       final AWSCredentials awsCredentials
           = parentAuthChain.getCredentials();
       if (awsCredentials instanceof AWSSessionCredentials) {
-        sessionCredentials = new SessionCredentials(
+        marshalledCredentials = new MarshalledCredentials(
             (AWSSessionCredentials) awsCredentials);
       } else {
         throw new DelegationTokenIOException(
@@ -268,7 +269,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
         = new SessionTokenIdentifier(getKind(),
         getOwnerText(),
         getCanonicalUri(),
-        sessionCredentials,
+        marshalledCredentials,
         encryptionSecrets);
     id.setOrigin(origin);
     return id;
@@ -285,7 +286,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
         new MarshalledCredentialProvider(
             getFileSystem().getUri(),
             getConfig(),
-            tokenIdentifier.getSessionCredentials(),
+            tokenIdentifier.getMarshalledCredentials(),
             true));
   }
 

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hadoop.fs.s3a.auth.delegation;
+package org.apache.hadoop.fs.s3a.auth;
 
 import java.io.IOException;
 import java.net.URI;
@@ -28,8 +28,6 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.CredentialInitializationException;
-import org.apache.hadoop.fs.s3a.auth.AbstractSessionCredentialsProvider;
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
 
 /**
  * AWS credential provider driven from marshalled session/full credentials
@@ -45,9 +43,9 @@ public class MarshalledCredentialProvider extends
 
   /** Name: {@value}. */
   public static final String NAME
-      = "org.apache.hadoop.fs.s3a.auth.delegation.MarshalledCredentialProvider";
+      = "org.apache.hadoop.fs.s3a.auth.MarshalledCredentialProvider";
 
-  private final SessionCredentials credentials;
+  private final MarshalledCredentials credentials;
   private final boolean sessionTokenRequired;
 
   /**
@@ -63,7 +61,7 @@ public class MarshalledCredentialProvider extends
   public MarshalledCredentialProvider(
       final URI uri,
       final Configuration conf,
-      final SessionCredentials credentials,
+      final MarshalledCredentials credentials,
       final boolean sessionTokenRequired)
       throws IOException {
     super(uri, conf);

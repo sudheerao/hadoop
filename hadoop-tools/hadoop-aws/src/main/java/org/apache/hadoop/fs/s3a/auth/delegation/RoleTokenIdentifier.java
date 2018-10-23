@@ -20,7 +20,7 @@ package org.apache.hadoop.fs.s3a.auth.delegation;
 
 import java.net.URI;
 
-import org.apache.hadoop.fs.s3a.auth.SessionCredentials;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.io.Text;
 
 /**
@@ -35,12 +35,12 @@ public class RoleTokenIdentifier extends SessionTokenIdentifier {
 
   public RoleTokenIdentifier(final URI uri,
       final Text owner,
-      final SessionCredentials sessionCredentials,
+      final MarshalledCredentials marshalledCredentials,
       final EncryptionSecrets encryptionSecrets) {
     super(DelegationConstants.ROLE_TOKEN_KIND,
         owner,
         uri,
-        sessionCredentials,
+        marshalledCredentials,
         encryptionSecrets);
   }
 
