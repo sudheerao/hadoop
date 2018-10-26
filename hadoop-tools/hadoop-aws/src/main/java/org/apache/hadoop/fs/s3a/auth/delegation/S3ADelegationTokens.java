@@ -259,6 +259,26 @@ public class S3ADelegationTokens extends AbstractDTService {
   }
 
   /**
+   * This is a test-only back door which resets the state and binds to
+   * a token again.
+   * This allows an instance of this class to be bonded to a DT after being
+   * started, so avoids the need to have the token in the current user
+   * credentials. It is package scoped so as to only be usable in tests
+   * in the same package.
+   * 
+   * Yes, this is ugly, but there is no obvious/easy way to test token 
+   * binding without Kerberos getting involved.
+   * @param token token to decode and bind to.
+   * @throws IOException selection/extraction/validation failure.
+   */
+  @VisibleForTesting
+  void resetTokenBindingToDT(final Token<AbstractS3ATokenIdentifier> token)
+      throws IOException{
+    credentialProviders = Optional.empty();
+    bindToDelegationToken(token);
+  }
+  
+  /**
    * Bind to a delegation token retrieved for this filesystem.
    * Extract the secrets from the token and set internal fields
    * to the values.
@@ -268,12 +288,11 @@ public class S3ADelegationTokens extends AbstractDTService {
    *   <li>{@link #credentialProviders} is set to the credential
    *   provider(s) returned by the token binding.</li>
    * </ol>
-   * @param token token to decode.
-   * @return the decoded delegation token identifier
+   * @param token token to decode and bind to.
    * @throws IOException selection/extraction/validation failure.
    */
   @VisibleForTesting
-  public AbstractS3ATokenIdentifier bindToDelegationToken(
+  public void bindToDelegationToken(
       final Token<AbstractS3ATokenIdentifier> token)
       throws IOException {
     Preconditions.checkState(!credentialProviders.isPresent(),
@@ -288,7 +307,6 @@ public class S3ADelegationTokens extends AbstractDTService {
       credentialProviders = Optional.of(
           tokenBinding.bindToTokenIdentifier(dti));
     }
-    return dti;
   }
 
   /**

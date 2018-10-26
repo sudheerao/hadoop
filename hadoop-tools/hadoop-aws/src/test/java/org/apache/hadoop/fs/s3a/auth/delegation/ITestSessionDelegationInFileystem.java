@@ -232,10 +232,12 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     Token<? extends TokenIdentifier> retrieved = notNull(
         "retrieved token with key " + service + "; expected " + token,
         cred.getToken(service));
+    delegationTokens.start();
     // this only sneaks in because there isn't a state check here
-    delegationTokens.bindToDelegationToken(
+    delegationTokens.resetTokenBindingToDT(
         (Token<AbstractS3ATokenIdentifier>) retrieved);
-
+    assertTrue("bind to existing DT failed",
+        delegationTokens.isBoundToDT());
     AWSCredentialProviderList providerList = notNull("providers",
         delegationTokens.getCredentialProviders());
 
