@@ -1134,7 +1134,7 @@ public final class S3ATestUtils {
    * @param <T> type of service
    * @return the started service
    */
-  public static <T extends Service> T deploy(Configuration conf,
+  public static <T extends Service> T deployService(Configuration conf,
       T service) {
     service.init(conf);
     service.start();
@@ -1148,7 +1148,8 @@ public final class S3ATestUtils {
    * @param <T> type of the service
    * @return null, always
    */
-  public static <T extends Service> T terminate(T service) {
+  @SuppressWarnings("ThrowableNotThrown")
+  public static <T extends Service> T terminateService(T service) {
     ServiceOperations.stopQuietly(LOG, service);
     return null;
   }

@@ -299,14 +299,12 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
             "Parent auth chain is no longer supplying session secrets");
       }
     }
-    final SessionTokenIdentifier id
-        = new SessionTokenIdentifier(getKind(),
+    return new SessionTokenIdentifier(getKind(),
         getOwnerText(),
         getCanonicalUri(),
         marshalledCredentials,
-        encryptionSecrets);
-    id.setOrigin(origin);
-    return id;
+        encryptionSecrets,
+        origin);
   }
 
   @Override

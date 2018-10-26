@@ -19,7 +19,6 @@ package org.apache.hadoop.fs.s3a.auth.delegation;
 import java.util.Arrays;
 import java.util.Collection;
 
-import org.bouncycastle.operator.OperatorCreationException;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -48,10 +47,10 @@ import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.assumeSessionTestsEnabled;
-import static org.apache.hadoop.fs.s3a.S3ATestUtils.deploy;
+import static org.apache.hadoop.fs.s3a.S3ATestUtils.deployService;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.disableFilesystemCaching;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.getTestPropertyInt;
-import static org.apache.hadoop.fs.s3a.S3ATestUtils.terminate;
+import static org.apache.hadoop.fs.s3a.S3ATestUtils.terminateService;
 import static org.apache.hadoop.fs.s3a.auth.RoleTestUtils.probeForAssumedRoleARN;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.*;
 import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizedHadoopCluster.assertSecurityEnabled;
@@ -124,14 +123,10 @@ public class ITestDelegatedMRJob extends AbstractDelegationIT {
    */
   @BeforeClass
   public static void setupCluster() throws Exception {
-
-    // this is here to catch bouncy-castle off the CP at compile-time.
-    new OperatorCreationException("");
-//    Assume.assumeTrue("This is currently disabled", false);
     JobConf conf = new JobConf();
     assumeSessionTestsEnabled(conf);
     disableFilesystemCaching(conf);
-    cluster = deploy(conf, new MiniKerberizedHadoopCluster());
+    cluster = deployService(conf, new MiniKerberizedHadoopCluster());
   }
 
   /**
@@ -139,7 +134,7 @@ public class ITestDelegatedMRJob extends AbstractDelegationIT {
    */
   @AfterClass
   public static void teardownCluster() throws Exception {
-    cluster = terminate(cluster);
+    cluster = terminateService(cluster);
   }
 
   @Override
@@ -182,7 +177,7 @@ public class ITestDelegatedMRJob extends AbstractDelegationIT {
     assertSecurityEnabled();
 
     LOG.info("Starting MiniMRCluster");
-    yarn = deploy(conf,
+    yarn = deployService(conf,
         new MiniMRYarnCluster("ITestDelegatedMRJob", 1));
 
   }
@@ -194,7 +189,7 @@ public class ITestDelegatedMRJob extends AbstractDelegationIT {
     if (fs != null && destPath != null) {
       fs.delete(destPath, true);
     }
-    yarn = terminate(yarn);
+    yarn = terminateService(yarn);
     super.teardown();
     closeUserFileSystems(UserGroupInformation.getCurrentUser());
   }

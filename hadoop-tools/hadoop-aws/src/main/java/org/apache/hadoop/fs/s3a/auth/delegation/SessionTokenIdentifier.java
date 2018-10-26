@@ -77,14 +77,16 @@ public class SessionTokenIdentifier extends
    * @param uri filesystem URI.
    * @param marshalledCredentials credentials to marshall
    * @param encryptionSecrets encryption secrets
+   * @param origin origin text for diagnostics.
    */
   public SessionTokenIdentifier(
       final Text kind,
       final Text owner,
       final URI uri,
       final MarshalledCredentials marshalledCredentials,
-      final EncryptionSecrets encryptionSecrets) {
-    super(kind, uri, owner, encryptionSecrets);
+      final EncryptionSecrets encryptionSecrets,
+      final String origin) {
+    super(kind, uri, owner, origin, encryptionSecrets);
     this.marshalledCredentials = marshalledCredentials;
   }
 
@@ -110,7 +112,7 @@ public class SessionTokenIdentifier extends
 
   @Override
   public void readFields(final DataInput in)
-      throws DelegationTokenIOException, IOException {
+      throws IOException {
     super.readFields(in);
     marshalledCredentials.readFields(in);
   }

@@ -26,9 +26,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Objects;
 
-import com.google.common.base.Preconditions;
-
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.token.Token;
@@ -95,16 +92,19 @@ public abstract class AbstractS3ATokenIdentifier
    *
    * Constructor.
    * @param kind token kind.
-   * @param owner token owner
    * @param uri filesystem URI.
+   * @param owner token owner
+   * @param origin origin text for diagnostics.
    * @param encryptionSecrets encryption secrets to set.
    */
   protected AbstractS3ATokenIdentifier(
       final Text kind,
       final URI uri,
       final Text owner,
+      final String origin,
       final EncryptionSecrets encryptionSecrets) {
     this(kind, owner, new Text(), new Text(), uri);
+    this.origin = checkNotNull(origin);
     this.encryptionSecrets = checkNotNull(encryptionSecrets);
   }
 

@@ -58,7 +58,7 @@ import org.apache.hadoop.mapreduce.v2.MiniMRYarnCluster;
 import org.apache.hadoop.mapreduce.v2.jobhistory.JHAdminConfig;
 
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.*;
-import static org.apache.hadoop.fs.s3a.S3ATestUtils.terminate;
+import static org.apache.hadoop.fs.s3a.S3ATestUtils.terminateService;
 import static org.apache.hadoop.fs.s3a.commit.CommitConstants.*;
 import static org.apache.hadoop.fs.s3a.commit.InternalCommitterConstants.*;
 
@@ -88,8 +88,8 @@ public abstract class AbstractITCommitMRJob extends AbstractCommitITest {
     conf.setBoolean(JHAdminConfig.MR_HISTORY_CLEANER_ENABLE, false);
     conf.setLong(CommonConfigurationKeys.FS_DU_INTERVAL_KEY, Long.MAX_VALUE);
 
-    hdfs = deploy(conf, new MiniDFSClusterService());
-    yarn = deploy(conf,
+    hdfs = deployService(conf, new MiniDFSClusterService());
+    yarn = deployService(conf,
         new MiniMRYarnCluster("ITCommitMRJob", 2));
   }
 
@@ -97,8 +97,8 @@ public abstract class AbstractITCommitMRJob extends AbstractCommitITest {
   @AfterClass
   public static void teardownClusters() throws IOException {
     conf = null;
-    yarn = terminate(yarn);
-    hdfs = terminate(hdfs);
+    yarn = terminateService(yarn);
+    hdfs = terminateService(hdfs);
   }
 
   public static MiniDFSCluster getHdfs() {

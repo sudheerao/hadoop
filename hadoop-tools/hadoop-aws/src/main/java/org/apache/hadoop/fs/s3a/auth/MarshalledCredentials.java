@@ -285,8 +285,7 @@ public final class MarshalledCredentials implements Writable,
    * @return true if all the fields are set.
    */
   public boolean isValid(boolean sessionTokenRequired) {
-    return !StringUtils.isEmpty(accessKey)
-        && !StringUtils.isEmpty(secretKey)
+    return accessKey != null && secretKey != null 
         && (!sessionTokenRequired  || hasSessionToken());
   }
 
@@ -424,5 +423,14 @@ public final class MarshalledCredentials implements Writable,
     creds.setSecretKey(env.get("AWS_SECRET_ACCESS_KEY"));
     creds.setSessionToken(env.get("AWS_SESSION_TOKEN"));
     return creds;
+  }
+
+  /**
+   * Return a set of empty credentials.
+   * These can be marshalled, but not used for login.
+   * @return a new set of credentials.
+   */
+  public static MarshalledCredentials empty() {
+    return new MarshalledCredentials("", "", "");
   }
 }

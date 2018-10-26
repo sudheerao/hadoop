@@ -125,14 +125,13 @@ public class RoleTokenBinding extends SessionTokenBinding {
             policyJson,
             getDuration(),
             TimeUnit.SECONDS);
-    final RoleTokenIdentifier id = new RoleTokenIdentifier(
+    return new RoleTokenIdentifier(
         getCanonicalUri(),
         getOwnerText(),
         new MarshalledCredentials(credentials),
-        encryptionSecrets);
-    id.setOrigin(AbstractS3ATokenIdentifier.createDefaultOriginMessage()
-        + " Role ARN=" + roleArn);
-    return id;
+        encryptionSecrets,
+        AbstractS3ATokenIdentifier.createDefaultOriginMessage()
+            + " Role ARN=" + roleArn);
   }
 
   @Override

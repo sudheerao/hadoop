@@ -61,9 +61,11 @@ public class TestS3ADelegationTokenSupport {
     Text alice = new Text("alice");
     AbstractS3ATokenIdentifier identifier
         = new SessionTokenIdentifier(SESSION_TOKEN_KIND,
-        alice, new URI("s3a://landsat-pds/"),
+        alice, 
+        new URI("s3a://landsat-pds/"),
         new MarshalledCredentials("a", "b", ""),
-        new EncryptionSecrets(S3AEncryptionMethods.SSE_S3, ""));
+        new EncryptionSecrets(S3AEncryptionMethods.SSE_S3, ""),
+        "origin");
     Token<AbstractS3ATokenIdentifier> t1 =
         new Token<>(identifier,
             new SessionSecretManager());
@@ -80,6 +82,7 @@ public class TestS3ADelegationTokenSupport {
     assertEquals("Authentication method of " + decodedUser,
         UserGroupInformation.AuthenticationMethod.TOKEN,
         decodedUser.getAuthenticationMethod());
+    assertEquals("origin", decoded.getOrigin());
   }
 
   @Test
@@ -96,7 +99,7 @@ public class TestS3ADelegationTokenSupport {
         new Text(),
         landsatUri,
         new MarshalledCredentials("a", "b", "c"),
-        new EncryptionSecrets());
+        new EncryptionSecrets(), "");
 
     SessionTokenIdentifier result = S3ATestUtils.roundTrip(id, null);
     String ids = id.toString();
@@ -112,7 +115,7 @@ public class TestS3ADelegationTokenSupport {
         landsatUri,
         new Text(),
         new MarshalledCredentials("a", "b", "c"),
-        new EncryptionSecrets());
+        new EncryptionSecrets(), "");
 
     RoleTokenIdentifier result = S3ATestUtils.roundTrip(id, null);
     String ids = id.toString();
@@ -128,7 +131,7 @@ public class TestS3ADelegationTokenSupport {
         landsatUri,
         new Text(),
         new MarshalledCredentials("a", "b", ""),
-        new EncryptionSecrets());
+        new EncryptionSecrets(), "");
 
     FullCredentialsTokenIdentifier result = S3ATestUtils.roundTrip(id, null);
     String ids = id.toString();

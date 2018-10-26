@@ -40,7 +40,6 @@ import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.FULL_
  * These aren't as secure; this class exists to (a) support deployments
  * where there is not STS service and (b) validate the design of
  * S3A DT support to support different managers.
- *
  */
 public class FullCredentialsTokenBinding extends
     AbstractDelegationTokenBinding {
@@ -54,8 +53,14 @@ public class FullCredentialsTokenBinding extends
   public static final String E_SESSION_TOKENS_NOT_SUPPORTED
       = "Session tokens not supported";
 
+  /**
+   * Long-lived AWS credentials.
+   */
   private MarshalledCredentials awsCredentials;
 
+  /**
+   * Origin of credentials.
+   */
   private String credentialOrigin;
 
   /**
@@ -133,13 +138,11 @@ public class FullCredentialsTokenBinding extends
       final EncryptionSecrets encryptionSecrets) throws IOException {
     requireServiceStarted();
 
-    final FullCredentialsTokenIdentifier id
-        = new FullCredentialsTokenIdentifier(getCanonicalUri(),
+    return new FullCredentialsTokenIdentifier(getCanonicalUri(),
         getOwnerText(),
         awsCredentials,
-        encryptionSecrets);
-    id.setOrigin(credentialOrigin);
-    return id;
+        encryptionSecrets,
+        credentialOrigin);
   }
 
   @Override

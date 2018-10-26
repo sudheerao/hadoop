@@ -90,20 +90,20 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
   private S3ADelegationTokens delegationTokens;
 
   /***
-   * Set up a miniKDC instance with two users in the keytab.
+   * Set up a mini Cluster with two users in the keytab.
    */
   @BeforeClass
-  public static void setupKDC() throws Exception {
+  public static void setupCluster() throws Exception {
     cluster = new MiniKerberizedHadoopCluster();
     cluster.init(new Configuration());
     cluster.start();
   }
 
   /**
-   * Tear down the KDC.
+   * Tear down the Cluster.
    */
   @AfterClass
-  public static void teardownKDC() throws Exception {
+  public static void teardownCluster() throws Exception {
     ServiceOperations.stopQuietly(LOG, cluster);
   }
 
