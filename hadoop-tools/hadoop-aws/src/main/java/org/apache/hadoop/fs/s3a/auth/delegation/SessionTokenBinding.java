@@ -29,6 +29,7 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSSessionCredentials;
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
+import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,14 +63,15 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
       SessionTokenBinding.class);
 
   /**
-   * Wire name of this binding includes a version marker: {@value}.
+   * Wire name of this binding: {@value}.
    */
-  private static final String NAME = "SessionTokens";
+  private static final String NAME = "SessionTokens/001";
 
   /**
    * A message added to the standard origin string when the DT is
    * built from session credentials passed in.
    */
+  @VisibleForTesting
   public static final String CREDENTIALS_CONVERTED_TO_DELEGATION_TOKEN
       = "Existing session credentials converted to Delegation Token";
 
@@ -106,10 +108,16 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
    */
   private final AtomicBoolean forwardMessageLogged = new AtomicBoolean(false);
 
+  /** Constructor for reflection. */
   public SessionTokenBinding() {
     this(NAME, SESSION_TOKEN_KIND);
   }
 
+  /**
+   * Constructor for subclasses.
+   * @param name binding name.
+   * @param kind token kind.
+   */
   protected SessionTokenBinding(final String name,
       final Text kind) {
     super(name, kind);
@@ -126,7 +134,6 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
     duration = conf.getTimeDuration(DELEGATION_TOKEN_DURATION,
         DEFAULT_DELEGATION_TOKEN_DURATION,
         TimeUnit.SECONDS);
-    URI uri = getCanonicalUri();
 
     // create the provider set for session credentials.
     Class<?>[] awsClasses = loadAWSProviderClasses(conf,
@@ -135,7 +142,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
         EnvironmentVariableCredentialsProvider.class);
 
     parentAuthChain = new AWSCredentialProviderList();
-
+    URI uri = getCanonicalUri();
     for (Class<?> clazz : awsClasses) {
       parentAuthChain.add(createAWSCredentialProvider(conf, clazz, uri));
     }
@@ -149,11 +156,38 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
   }
 
   /**
+   * Return an unbonded provider chain.
+   * @return the auth chain built from the assumed role credentials
+   * @throws IOException any failure.
+   */
+  @Override
+  public AWSCredentialProviderList deployUnbonded()
+      throws IOException {
+    requireServiceStarted();
+    return parentAuthChain;
+  }
+
+  /**
    * Get the invoker for STS calls.
    * @return the invoker
    */
   protected Invoker getInvoker() {
     return invoker;
+  }
+
+  @Override
+  public AWSCredentialProviderList bindToTokenIdentifier(
+      final AbstractS3ATokenIdentifier retrievedIdentifier)
+      throws IOException {
+    SessionTokenIdentifier tokenIdentifier =
+        convertTokenIdentifier(retrievedIdentifier,
+            SessionTokenIdentifier.class);
+    return new AWSCredentialProviderList(
+        new MarshalledCredentialProvider(
+            getFileSystem().getUri(),
+            getConfig(),
+            tokenIdentifier.getMarshalledCredentials(),
+            true));
   }
 
   /**
@@ -233,7 +267,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
 
   @Override
   @Retries.RetryTranslated
-  public AbstractS3ATokenIdentifier createTokenIdentifier(
+  public SessionTokenIdentifier createTokenIdentifier(
       final Optional<RoleModel.Policy> policy,
       final EncryptionSecrets encryptionSecrets) throws IOException {
     requireServiceStarted();
@@ -276,22 +310,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
   }
 
   @Override
-  public AWSCredentialProviderList bindToTokenIdentifier(
-      final AbstractS3ATokenIdentifier retrievedIdentifier)
-      throws IOException {
-    SessionTokenIdentifier tokenIdentifier =
-        convertTokenIdentifier(retrievedIdentifier,
-            SessionTokenIdentifier.class);
-    return new AWSCredentialProviderList(
-        new MarshalledCredentialProvider(
-            getFileSystem().getUri(),
-            getConfig(),
-            tokenIdentifier.getMarshalledCredentials(),
-            true));
-  }
-
-  @Override
-  public AbstractS3ATokenIdentifier createIdentifier() {
+  public SessionTokenIdentifier createEmptyIdentifier() {
     return new SessionTokenIdentifier();
   }
 

@@ -52,7 +52,8 @@ public class SessionTokenIdentifier extends
       = new MarshalledCredentials();
 
   /**
-   * Create with the kind {@link DelegationConstants#SESSION_TOKEN_KIND}.
+   * Constructor for service loader use.
+   * Created with the kind {@link DelegationConstants#SESSION_TOKEN_KIND}.
    * Subclasses MUST NOT subclass this; they must provide their own
    * token kind.
    */
@@ -69,6 +70,14 @@ public class SessionTokenIdentifier extends
     super(kind);
   }
 
+  /**
+   * Constructor.
+   * @param kind token kind.
+   * @param owner token owner
+   * @param uri filesystem URI.
+   * @param marshalledCredentials credentials to marshall
+   * @param encryptionSecrets encryption secrets
+   */
   public SessionTokenIdentifier(
       final Text kind,
       final Text owner,
@@ -79,6 +88,12 @@ public class SessionTokenIdentifier extends
     this.marshalledCredentials = marshalledCredentials;
   }
 
+  /**
+   * Constructor.
+   * @param kind token kind.
+   * @param owner token owner
+   * @param uri filesystem URI.
+   */
   public SessionTokenIdentifier(final Text kind,
       final Text owner,
       final Text renewer,
@@ -102,7 +117,7 @@ public class SessionTokenIdentifier extends
 
   /**
    * Return the expiry time in seconds since 1970-01-01.
-   * @return the time when the session credential expire.
+   * @return the time when the AWS credentials expire.
    */
   @Override
   public long getExpiryTime() {
@@ -110,8 +125,8 @@ public class SessionTokenIdentifier extends
   }
 
   /**
-   * Get the session credentials.
-   * @return session credentials.
+   * Get the marshalled credentials.
+   * @return marshalled AWS credentials.
    */
   public MarshalledCredentials getMarshalledCredentials() {
     return marshalledCredentials;

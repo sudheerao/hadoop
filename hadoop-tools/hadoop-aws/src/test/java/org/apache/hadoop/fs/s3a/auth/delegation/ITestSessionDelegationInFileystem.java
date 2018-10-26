@@ -50,6 +50,7 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.service.ServiceOperations;
+import org.apache.hadoop.service.ServiceStateException;
 import org.apache.hadoop.util.ExitUtil;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 
@@ -61,8 +62,8 @@ import static org.apache.hadoop.fs.s3a.S3ATestUtils.removeBaseAndBucketOverrides
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.unsetHadoopCredentialProviders;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.*;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationTokenIOException.TOKEN_MISMATCH;
-import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizeHadoopCluster.ALICE;
-import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizeHadoopCluster.assertSecurityEnabled;
+import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizedHadoopCluster.ALICE;
+import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizedHadoopCluster.assertSecurityEnabled;
 import static org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.lookupS3ADelegationToken;
 import static org.apache.hadoop.test.GenericTestUtils.notNull;
 import static org.apache.hadoop.test.LambdaTestUtils.doAs;
@@ -80,9 +81,7 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
   private static final Logger LOG =
       LoggerFactory.getLogger(ITestSessionDelegationInFileystem.class);
 
-  protected static final String YARN_RM = "yarn-rm@EXAMPLE";
-
-  private static MiniKerberizeHadoopCluster cluster;
+  private static MiniKerberizedHadoopCluster cluster;
 
   private UserGroupInformation bobUser;
 
@@ -95,7 +94,7 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
    */
   @BeforeClass
   public static void setupKDC() throws Exception {
-    cluster = new MiniKerberizeHadoopCluster();
+    cluster = new MiniKerberizedHadoopCluster();
     cluster.init(new Configuration());
     cluster.start();
   }
@@ -108,7 +107,7 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     ServiceOperations.stopQuietly(LOG, cluster);
   }
 
-  protected static MiniKerberizeHadoopCluster getCluster() {
+  protected static MiniKerberizedHadoopCluster getCluster() {
     return cluster;
   }
 
@@ -169,10 +168,8 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
         UserGroupInformation.getCurrentUser().getCredentials(),
         fs.getUri()));
 
-    delegationTokens = new S3ADelegationTokens();
-    delegationTokens.bindToFileSystem(fs.getCanonicalUri(), fs);
-    delegationTokens.init(getConfiguration());
-    delegationTokens.start();
+    // DTs are inited but not started.
+    delegationTokens = instantiateDTSupport(getConfiguration());
   }
 
   @SuppressWarnings("ThrowableNotThrown")
@@ -197,6 +194,7 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
   @Test
   public void testGetDTfromFileSystem() throws Throwable {
     describe("Enable delegation tokens and request one");
+    delegationTokens.start();
     S3AFileSystem fs = getFileSystem();
     S3ATestUtils.MetricDiff invocationDiff = new S3ATestUtils.MetricDiff(fs,
         Statistic.INVOCATION_GET_DELEGATION_TOKEN);
@@ -234,10 +232,12 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     Token<? extends TokenIdentifier> retrieved = notNull(
         "retrieved token with key " + service + "; expected " + token,
         cred.getToken(service));
-    delegationTokens.bindToDT((Token<AbstractS3ATokenIdentifier>) retrieved);
+    // this only sneaks in because there isn't a state check here
+    delegationTokens.bindToDelegationToken(
+        (Token<AbstractS3ATokenIdentifier>) retrieved);
 
     AWSCredentialProviderList providerList = notNull("providers",
-        delegationTokens.createCredentialProvider());
+        delegationTokens.getCredentialProviders());
 
     providerList.getCredentials();
   }
@@ -246,7 +246,7 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
   public void testCanRetrieveTokenFromCurrentUserCreds() throws Throwable {
     describe("Create a DT, add it to the current UGI credentials,"
         + " then retrieve");
-
+    delegationTokens.start();
     Credentials cred = createDelegationTokens();
     UserGroupInformation ugi = UserGroupInformation.getCurrentUser();
     ugi.addCredentials(cred);
@@ -268,8 +268,9 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     Credentials cred = createDelegationTokens();
     assertThat("Token size", cred.getAllTokens(), hasSize(1));
     UserGroupInformation.getCurrentUser().addCredentials(cred);
+    delegationTokens.start();
     assertTrue("bind to existing DT failed",
-        delegationTokens.bindToExistingDT());
+        delegationTokens.isBoundToDT());
   }
 
   /**
@@ -428,7 +429,8 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     bindProviderList(bucket, conf, CountInvocationsProvider.NAME);
     conf.set(DELEGATION_TOKEN_BINDING,
         DELEGATION_TOKEN_FULL_CREDENTIALS_BINDING);
-    intercept(DelegationTokenIOException.class, TOKEN_MISMATCH,
+    ServiceStateException e = intercept(ServiceStateException.class,
+        TOKEN_MISMATCH,
         () -> {
           S3AFileSystem remote = newS3AInstance(uri, conf);
           // if we get this far, provide info for the exception which will
@@ -437,6 +439,10 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
           remote.close();
           return s;
         });
+    Throwable cause = e.getCause();
+    if (cause == null || !(cause instanceof DelegationTokenIOException)) {
+      throw e;
+    }
   }
 
   @Test
@@ -496,7 +502,8 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
         ACCESS_KEY, SECRET_KEY, SESSION_TOKEN);
     conf.set(DELEGATION_TOKEN_BINDING,
         getDelegationBinding());
-    intercept(DelegationTokenIOException.class, TOKEN_MISMATCH,
+    ServiceStateException e = intercept(ServiceStateException.class,
+        TOKEN_MISMATCH,
         () -> {
           S3AFileSystem remote = newS3AInstance(uri, conf);
           // if we get this far, provide info for the exception which will
@@ -505,6 +512,10 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
           remote.close();
           return s;
         });
+    Throwable cause = e.getCause();
+    if (cause == null || !(cause instanceof DelegationTokenIOException)) {
+      throw e;
+    }
   }
 
   /**

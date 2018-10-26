@@ -140,7 +140,7 @@ public final class DelegationConstants {
    * binding operations are logged at.
    * Value: {@value}.
    */
-  static final boolean DURATION_LOG_AT_INFO = false;
+  static final boolean DURATION_LOG_AT_INFO = true;
 
 
   /**

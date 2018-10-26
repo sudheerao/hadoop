@@ -35,6 +35,7 @@ import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.Credentials;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 
@@ -46,10 +47,10 @@ import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEG
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.SESSION_TOKEN_KIND;
 import static org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding.CREDENTIALS_CONVERTED_TO_DELEGATION_TOKEN;
 import static org.apache.hadoop.test.GenericTestUtils.notNull;
+import static org.apache.hadoop.test.LambdaTestUtils.intercept;
 
 /**
  * Tests use of Hadoop delegation tokens to marshall S3 credentials.
- *
  */
 public class ITestSessionDelegationTokens extends AbstractDelegationIT {
 
@@ -57,7 +58,6 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
       LoggerFactory.getLogger(ITestSessionDelegationTokens.class);
 
   private S3ADelegationTokens delegationTokens;
-
 
   /**
    * Get the delegation token binding for this test suite.
@@ -85,9 +85,7 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
     resetUGI();
     Configuration conf = getConfiguration();
     S3AFileSystem fs = getFileSystem();
-    delegationTokens = new S3ADelegationTokens();
-    delegationTokens.bindToFileSystem(fs.getCanonicalUri(), fs);
-    delegationTokens.init(conf);
+    delegationTokens = instantiateDTSupport(getConfiguration());
     delegationTokens.start();
   }
 
@@ -150,22 +148,26 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
     final Configuration conf = fs.getConf();
 
     assertNull("Current User has delegation token",
-        delegationTokens.selectTokenFromActiveUser());
+        delegationTokens.selectTokenFromFSOwner());
     Token<AbstractS3ATokenIdentifier> dt
         = delegationTokens.createDelegationToken(
             new EncryptionSecrets(S3AEncryptionMethods.SSE_KMS, "kms key"));
     assertEquals("Token kind mismatch", getTokenKind(), dt.getKind());
 
-    assertNotNull("Could not bind to an existing DT",
-        delegationTokens.bindToDT(dt));
-    final AWSSessionCredentials awsSessionCreds
-        = verifySessionCredentials(
-        delegationTokens.createCredentialProvider().getCredentials());
-    final MarshalledCredentials origCreds = new MarshalledCredentials(
-        awsSessionCreds);
+    final MarshalledCredentials creds;
+    try(S3ADelegationTokens dt2 = instantiateDTSupport(getConfiguration());) {
 
-    // simulate marshall and transmission
-    final MarshalledCredentials creds = roundTrip(origCreds, conf);
+      assertNotNull("Could not bind to an existing DT",
+          dt2.bindToDelegationToken(dt));
+      final AWSSessionCredentials awsSessionCreds
+          = verifySessionCredentials(
+          dt2.getCredentialProviders().getCredentials());
+      final MarshalledCredentials origCreds = new MarshalledCredentials(
+          awsSessionCreds);
+
+      // simulate marshall and transmission
+      creds = roundTrip(origCreds, conf);
+    }
 
     // decode to get the binding info
     AbstractS3ATokenIdentifier dtId =
@@ -198,21 +200,30 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
     unsetHadoopCredentialProviders(conf);
     conf.set(ASSUMED_ROLE_CREDENTIALS_PROVIDER,
         TemporaryAWSCredentialsProvider.NAME);
+    // from our existing DT, create the DT
+    final Token<AbstractS3ATokenIdentifier> origDT
+        = delegationTokens.getBoundOrNewDT(new EncryptionSecrets());
     session.setSecretsInConfiguration(conf);
-    try(S3ADelegationTokens delegationTokens2 = new S3ADelegationTokens()) {
-      delegationTokens2.bindToFileSystem(fs.getCanonicalUri(), fs);
-      delegationTokens2.init(conf);
+    // attach to the user, so that when tokens are looked for, they get picked
+    resetUGI();
+    final Credentials credentials = new Credentials();
+    credentials.addToken(new Text(fs.getCanonicalServiceName()), origDT);
+    final UserGroupInformation currentUser
+        = UserGroupInformation.getCurrentUser();
+    currentUser.addCredentials(credentials);
+    try(S3ADelegationTokens delegationTokens2 = instantiateDTSupport(conf)) {
       delegationTokens2.start();
-
-      final Token<AbstractS3ATokenIdentifier> newDT
-          = delegationTokens2.getBoundOrNewDT(new EncryptionSecrets());
+      assertTrue("Not bound to a DT" + delegationTokens2,
+          delegationTokens2.isBoundToDT());
       final AbstractS3ATokenIdentifier boundId
-          = delegationTokens2.bindToDT(newDT);
+          = delegationTokens2.getDecodedIdentifier().get();
 
+      Token<AbstractS3ATokenIdentifier> newDT
+          = delegationTokens2.getBoundOrNewDT(new EncryptionSecrets());
       LOG.info("Regenerated DT is {}", newDT);
       final MarshalledCredentials creds2 = new MarshalledCredentials(
           verifySessionCredentials(
-              delegationTokens2.createCredentialProvider().getCredentials()));
+              delegationTokens2.getCredentialProviders().getCredentials()));
       assertEquals("Credentials", session, creds2);
       assertTrue("Origin in " + boundId,
           boundId.getOrigin()
@@ -230,4 +241,14 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
     return session;
   }
 
+  @Test
+  public void testDBindingReentrancyLock() throws Throwable {
+    describe("Verify that S3ADelegationTokens cannot be bound twice when there" 
+        + " is no token");
+    S3AFileSystem fs = getFileSystem();
+    S3ADelegationTokens delegation = instantiateDTSupport(getConfiguration());
+    delegation.start();
+    assertFalse("Delegation is bound to a DT: " + delegation,
+        delegation.isBoundToDT());
+  }
 }

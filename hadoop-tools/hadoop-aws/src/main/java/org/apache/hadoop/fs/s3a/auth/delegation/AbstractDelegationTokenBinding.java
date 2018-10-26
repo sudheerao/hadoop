@@ -115,6 +115,8 @@ public abstract class AbstractDelegationTokenBinding extends AbstractDTService {
 
   /**
    * Create a delegation token for the user.
+   * This will only be called if a new DT is needed, that is: the
+   * filesystem has been deployed unbonded. 
    * @param policy minimum policy to use, if known.
    * @param encryptionSecrets encryption secrets for the token.
    * @return the token
@@ -140,6 +142,8 @@ public abstract class AbstractDelegationTokenBinding extends AbstractDTService {
    * Create a token identifier with all the information needed
    * to be included in a delegation token.
    * This is where session credentials need to be extracted, etc.
+   * This will only be called if a new DT is needed, that is: the
+   * filesystem has been deployed unbonded. 
    *
    * If {@link #createDelegationToken(Optional, EncryptionSecrets)}
    * is overridden, this method can be replaced with a stub.
@@ -149,7 +153,7 @@ public abstract class AbstractDelegationTokenBinding extends AbstractDTService {
    * @return the token data to include in the token identifier.
    * @throws IOException failure creating the token data.
    */
-  abstract AbstractS3ATokenIdentifier createTokenIdentifier(
+  public abstract AbstractS3ATokenIdentifier createTokenIdentifier(
       Optional<RoleModel.Policy> policy,
       EncryptionSecrets encryptionSecrets) throws IOException;
 
@@ -177,6 +181,16 @@ public abstract class AbstractDelegationTokenBinding extends AbstractDTService {
   }
 
   /**
+   * Perform any actions when deploying unbonded, and return a list
+   * of credential providers.
+   * @return non-empty list of AWS credential providers to use for
+   * authenticating this client with AWS services.
+   * @throws IOException any failure.
+   */
+  public abstract AWSCredentialProviderList deployUnbonded()
+      throws IOException;
+  
+  /**
    * Bind to the token identifier, returning the credential providers to use
    * for the owner to talk to S3, DDB and related AWS Services.
    * @param retrievedIdentifier the unmarshalled data
@@ -193,7 +207,7 @@ public abstract class AbstractDelegationTokenBinding extends AbstractDTService {
    * This is used in the secret manager.
    * @return an empty identifier.
    */
-  public abstract AbstractS3ATokenIdentifier createIdentifier();
+  public abstract AbstractS3ATokenIdentifier createEmptyIdentifier();
 
   @Override
   public String toString() {
@@ -253,7 +267,7 @@ public abstract class AbstractDelegationTokenBinding extends AbstractDTService {
     public AbstractS3ATokenIdentifier createIdentifier() {
       try (DurationInfo ignored = new DurationInfo(LOG, DURATION_LOG_AT_INFO,
           "Creating Delegation Token Identifier")) {
-        return AbstractDelegationTokenBinding.this.createIdentifier();
+        return AbstractDelegationTokenBinding.this.createEmptyIdentifier();
       }
     }
   }

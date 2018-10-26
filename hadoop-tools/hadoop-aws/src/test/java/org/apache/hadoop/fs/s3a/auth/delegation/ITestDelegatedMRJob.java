@@ -54,8 +54,8 @@ import static org.apache.hadoop.fs.s3a.S3ATestUtils.getTestPropertyInt;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.terminate;
 import static org.apache.hadoop.fs.s3a.auth.RoleTestUtils.probeForAssumedRoleARN;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.*;
-import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizeHadoopCluster.assertSecurityEnabled;
-import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizeHadoopCluster.closeUserFileSystems;
+import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizedHadoopCluster.assertSecurityEnabled;
+import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizedHadoopCluster.closeUserFileSystems;
 import static org.apache.hadoop.test.GenericTestUtils.notNull;
 
 /**
@@ -85,7 +85,7 @@ public class ITestDelegatedMRJob extends AbstractDelegationIT {
    * Created in static {@link #setupCluster()} call.
    */
   @SuppressWarnings("StaticNonFinalField")
-  private static MiniKerberizeHadoopCluster cluster;
+  private static MiniKerberizedHadoopCluster cluster;
 
   private final String name;
 
@@ -131,7 +131,7 @@ public class ITestDelegatedMRJob extends AbstractDelegationIT {
     JobConf conf = new JobConf();
     assumeSessionTestsEnabled(conf);
     disableFilesystemCaching(conf);
-    cluster = deploy(conf, new MiniKerberizeHadoopCluster());
+    cluster = deploy(conf, new MiniKerberizedHadoopCluster());
   }
 
   /**

@@ -35,6 +35,7 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.BasicSessionCredentials;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.model.Credentials;
+import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,15 +70,19 @@ public final class MarshalledCredentials implements Writable,
   private static final Logger LOG = LoggerFactory.getLogger(
       MarshalledCredentials.class);
 
+  /**
+   * Error text on invalid credentials: {@value}.
+   */
+  @VisibleForTesting
   public static final String INVALID_CREDENTIALS
       = "Invalid credentials";
 
   /**
-   * How long can any of the secrets be.
+   * How long can any of the secrets be: {@value}.
    * This is much longer than the current tokens, but leaves space for
    * future enhancements.
    */
-  private static final int MAX_SECRET_LENGTH = 4096;
+  private static final int MAX_SECRET_LENGTH = 8192;
 
   private String accessKey;
 
@@ -282,7 +287,15 @@ public final class MarshalledCredentials implements Writable,
   public boolean isValid(boolean sessionTokenRequired) {
     return !StringUtils.isEmpty(accessKey)
         && !StringUtils.isEmpty(secretKey)
-        && (!sessionTokenRequired == !StringUtils.isNotEmpty(sessionToken));
+        && (!sessionTokenRequired  || hasSessionToken());
+  }
+
+  /**
+   * Does this set of credentials have a session token.
+   * @return true if there's a session token.
+   */
+  public boolean hasSessionToken() {
+    return StringUtils.isNotEmpty(sessionToken);
   }
 
   /**
@@ -331,17 +344,29 @@ public final class MarshalledCredentials implements Writable,
   }
 
   /**
-   * Create an AWS credential set from these values.
+   * Create an AWS credential set from these values; type
+   * depends on what has come in.
    * From {@code AWSCredentialProvider}.
    * @return a new set of credentials
-   * @throws CredentialInitializationException init problems
+   * @throws CredentialInitializationException init/validation problems
    */
   @Override
   public AWSCredentials getCredentials() throws
       CredentialInitializationException {
-    return toAWSCredentials(true);
+    return toAWSCredentials(false);
   }
 
+  /**
+   * Get Session Credentials.
+   * @return a set of session credentials.
+   * @throws CredentialInitializationException init/validation problems
+   */
+  public BasicSessionCredentials getSessionCredentials() throws
+      CredentialInitializationException {
+    return (BasicSessionCredentials) toAWSCredentials(true);
+  }
+
+  
   /**
    * From {@code AWSCredentialProvider}.
    * No-op.
@@ -353,16 +378,18 @@ public final class MarshalledCredentials implements Writable,
 
   /**
    * Create an AWS credential set from these values.
-   * @param sessionCredentials is a session token required.
+   * @param requireSessionCredentials is a session token required.
    * @return a new set of credentials
    * @throws CredentialInitializationException validation failure
    */
-  public AWSCredentials toAWSCredentials(final boolean sessionCredentials)
+  public AWSCredentials toAWSCredentials(
+      final boolean requireSessionCredentials)
       throws CredentialInitializationException {
-    if (!isValid(sessionCredentials)) {
+    
+    if (!isValid(requireSessionCredentials)) {
       throw new CredentialInitializationException(INVALID_CREDENTIALS);
     }
-    if (StringUtils.isNotEmpty(sessionToken)) {
+    if (hasSessionToken()) {
       // a session token was supplied, so return session credentials
       return new BasicSessionCredentials(accessKey, secretKey, sessionToken);
     } else {

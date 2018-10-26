@@ -54,7 +54,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
   /**
    * Wire name of this binding includes a version marker: {@value}.
    */
-  private static final String NAME = "RoleCredentials-001";
+  private static final String NAME = "RoleCredentials/001";
 
   public static final String E_NO_ARN =
       "No role ARN defined in " + DELEGATION_TOKEN_ROLE_ARN;
@@ -69,6 +69,28 @@ public class RoleTokenBinding extends SessionTokenBinding {
   }
 
   /**
+   * Returns a (wrapped) {@link MarshalledCredentialProvider} which
+   * requires the marshalled credentials to contain session secrets.
+   * @param retrievedIdentifier the incoming identifier.
+   * @return the provider chain.
+   * @throws IOException on failure
+   */
+  @Override
+  public AWSCredentialProviderList bindToTokenIdentifier(
+      final AbstractS3ATokenIdentifier retrievedIdentifier)
+      throws IOException {
+    RoleTokenIdentifier tokenIdentifier =
+        convertTokenIdentifier(retrievedIdentifier,
+            RoleTokenIdentifier.class);
+    return new AWSCredentialProviderList(
+        new MarshalledCredentialProvider(
+            getFileSystem().getUri(),
+            getConfig(),
+            tokenIdentifier.getMarshalledCredentials(),
+            true));
+  }
+
+  /**
    * Create the Token Identifier.
    * Looks for the option {@link DelegationConstants#DELEGATION_TOKEN_ROLE_ARN}
    * in the config and fail if it is not set.
@@ -80,7 +102,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
    */
   @Override
   @Retries.RetryTranslated
-  public AbstractS3ATokenIdentifier createTokenIdentifier(
+  public RoleTokenIdentifier createTokenIdentifier(
       final Optional<RoleModel.Policy> policy,
       final EncryptionSecrets encryptionSecrets) throws IOException {
     requireServiceStarted();
@@ -113,30 +135,8 @@ public class RoleTokenBinding extends SessionTokenBinding {
     return id;
   }
 
-  /**
-   * Returns a (wrapped) {@link MarshalledCredentialProvider} which
-   * requires the marshalled credentials to contain session secrets.
-   * @param retrievedIdentifier the incoming identifier.
-   * @return the provider chain.
-   * @throws IOException on failure
-   */
   @Override
-  public AWSCredentialProviderList bindToTokenIdentifier(
-      final AbstractS3ATokenIdentifier retrievedIdentifier)
-      throws IOException {
-    RoleTokenIdentifier tokenIdentifier =
-        convertTokenIdentifier(retrievedIdentifier,
-            RoleTokenIdentifier.class);
-    return new AWSCredentialProviderList(
-        new MarshalledCredentialProvider(
-            getFileSystem().getUri(),
-            getConfig(),
-            tokenIdentifier.getMarshalledCredentials(),
-            true));
-  }
-
-  @Override
-  public AbstractS3ATokenIdentifier createIdentifier() {
+  public RoleTokenIdentifier createEmptyIdentifier() {
     return new RoleTokenIdentifier();
   }
 }

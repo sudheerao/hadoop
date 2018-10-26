@@ -34,6 +34,8 @@ import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.delegation.web.DelegationTokenIdentifier;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 /**
  * An S3A Delegation Token Identifier: contains the information needed
  * to talk to S3A.
@@ -64,9 +66,9 @@ public abstract class AbstractS3ATokenIdentifier
     extends DelegationTokenIdentifier {
 
   /**
-   * What is the maximum string length supported for text fields.
+   * What is the maximum string length supported for text fields,
    */
-  protected static final int MAX_TEXT_LENGTH = 4096;
+  protected static final int MAX_TEXT_LENGTH = 8192;
 
   /** Canonical URI of the bucket. */
   private URI uri;
@@ -103,7 +105,7 @@ public abstract class AbstractS3ATokenIdentifier
       final Text owner,
       final EncryptionSecrets encryptionSecrets) {
     this(kind, owner, new Text(), new Text(), uri);
-    this.encryptionSecrets = Preconditions.checkNotNull(encryptionSecrets);
+    this.encryptionSecrets = checkNotNull(encryptionSecrets);
   }
 
   /**
@@ -121,11 +123,13 @@ public abstract class AbstractS3ATokenIdentifier
       final Text realUser,
       final URI uri) {
     super(kind, owner, renewer, realUser);
-    this.uri = uri;
+    this.uri = checkNotNull(uri);
   }
 
   /**
    * Build from a token.
+   * This has been written for refresh operations;
+   * if someone implements refresh it will be relevant.
    * @param token to to build from
    * @throws IOException failure to build the identifier.
    */
@@ -176,7 +180,7 @@ public abstract class AbstractS3ATokenIdentifier
     Text.writeString(out, uri.toString());
     Text.writeString(out, origin);
     encryptionSecrets.write(out);
-    new LongWritable(created).write(out);
+    out.writeLong(created);
   }
 
   /**
@@ -197,11 +201,9 @@ public abstract class AbstractS3ATokenIdentifier
       throws DelegationTokenIOException, IOException {
     super.readFields(in);
     uri = URI.create(Text.readString(in, MAX_TEXT_LENGTH));
-    origin = Text.readString(in, 4096);
+    origin = Text.readString(in, MAX_TEXT_LENGTH);
     encryptionSecrets.readFields(in);
-    final LongWritable lw = new LongWritable();
-    lw.readFields(in);
-    created = lw.get();
+    created = in.readLong();
   }
 
   /**

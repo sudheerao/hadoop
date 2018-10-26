@@ -54,18 +54,6 @@ public class ITestRoleDelegationInFileystem extends
     return ROLE_TOKEN_KIND;
   }
 
-  @Override
-  @Test
-  public void testDelegatedFileSystem() throws Throwable {
-    super.testDelegatedFileSystem();
-  }
-
-  @Override
-  protected void executeDelegatedFSOperations(final S3AFileSystem delegatedFS,
-      final Path testPath) throws Exception {
-    super.executeDelegatedFSOperations(delegatedFS, testPath);
-  }
-
   /**
    * This verifies that the granted credentials only access the target bucket
    * by using the credentials in a new S3 client to query the AWS-owned landsat

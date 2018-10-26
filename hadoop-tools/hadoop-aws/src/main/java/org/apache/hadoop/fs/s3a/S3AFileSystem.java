@@ -453,23 +453,26 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       dtIntegration.bindToFileSystem(getCanonicalUri(), this);
       dtIntegration.init(conf);
       dtIntegration.start();
-      if (dtIntegration.bindToExistingDT()) {
-        // switch to the DT provider and bypass all other configured
-        // providers.
-        credentials = dtIntegration.createCredentialProvider();
+      // switch to the DT provider and bypass all other configured
+      // providers.
+      if (dtIntegration.isBoundToDT()) {
+        // A DT was retrieved.
+        LOG.debug("Using existing delegation token");
         // and use the encryption settings from that client, whatever they were
-        setEncryptionSecrets(dtIntegration.getEncryptionSecrets());
-        LOG.debug("Using delegation token credential provider {}", credentials);
       } else {
         LOG.debug("No delegation token for this instance");
       }
-    }
-
-    if (credentials == null) {
-      // DT support is disabled or there is no token to bind to, so
+      // Get new credential chain
+      credentials = dtIntegration.getCredentialProviders();
+      // and any encryption secrets which came from a DT
+      dtIntegration.getEncryptionSecrets()
+          .ifPresent(this::setEncryptionSecrets);
+    } else {
+      // DT support is disabled, so
       // create the normal token set
       credentials = createAWSCredentialProviderSet(name, conf);
     }
+    LOG.debug("Using credential provider {}", credentials);
     Class<? extends S3ClientFactory> s3ClientFactoryClass = conf.getClass(
         S3_CLIENT_FACTORY_IMPL, DEFAULT_S3_CLIENT_FACTORY_IMPL,
         S3ClientFactory.class);

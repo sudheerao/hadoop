@@ -59,10 +59,10 @@ import static org.junit.Assert.assertTrue;
  * however, users should be logged in in test cases, so that their local state
  * (credentials etc) are reset in every test.
  */
-public class MiniKerberizeHadoopCluster extends CompositeService {
+public class MiniKerberizedHadoopCluster extends CompositeService {
 
   private static final Logger LOG =
-      LoggerFactory.getLogger(MiniKerberizeHadoopCluster.class);
+      LoggerFactory.getLogger(MiniKerberizedHadoopCluster.class);
 
   public static final String ALICE = "alice";
 
@@ -105,8 +105,8 @@ public class MiniKerberizeHadoopCluster extends CompositeService {
    * If this class's log is at DEBUG level, this also turns
    * Kerberos diagnostics on in the JVM.
    */
-  public MiniKerberizeHadoopCluster() {
-    super("MiniKerberizeHadoopCluster");
+  public MiniKerberizedHadoopCluster() {
+    super("MiniKerberizedHadoopCluster");
     // load all the configs to force in the -default.xml files
     new HdfsConfiguration();
     new YarnConfiguration();

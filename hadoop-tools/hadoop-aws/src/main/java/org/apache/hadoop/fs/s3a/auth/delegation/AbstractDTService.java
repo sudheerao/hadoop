@@ -34,14 +34,26 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * This is the base class for both the delegation binding
  * code and the back end service created; allows for
  * shared methods across both.
+ * 
+ * The lifecycle sequence is as follows
+ * <pre>
+ *   - create
+ *   - bindToFileSystem(uri, ownerFS)
+ *   - init
+ *   - start
+ *   ...api calls...
+ *   - stop
+ * </pre>
+ * 
+ * As the S3ADelegation mechanism is all configured during the filesystem
+ * initalize() operation, it is not ready for use through all the start process.
  */
 public abstract class AbstractDTService
     extends AbstractService {
 
   /**
    * URI of the filesystem.
-   * Valid after {@link #bindToFileSystem(URI, S3AFileSystem)}
-   * or {@link #bindToURI(URI)}.
+   * Valid after {@link #bindToFileSystem(URI, S3AFileSystem)}.
    */
   private URI canonicalUri;
 
@@ -70,6 +82,11 @@ public abstract class AbstractDTService
    * Subclasses can use this to perform their own binding operations -
    * but they must always call their superclass implementation.
    * This <i>Must</i> be called before calling {@code init()}.
+   * 
+   * <b>Important:</b>
+   * This binding will happen during FileSystem.initialize(); the FS
+   * is not live for actual use and will not yet have interacted with
+   * AWS services. 
    * @param uri the canonical URI of the FS.
    * @param fs owning FS.
    * @throws IOException failure.
@@ -96,10 +113,7 @@ public abstract class AbstractDTService
 
   /**
    * Get the owner of the FS.
-   * Will be null if the service was initialized though
-   * {@link #bindToURI(URI)} rather than
-   * {@link #bindToFileSystem(URI, S3AFileSystem)}
-   * @return the owner fs; null if a filesystem wasn't supplied during binding.
+   * @return the owner fs
    */
   protected S3AFileSystem getFileSystem() {
     return fileSystem;

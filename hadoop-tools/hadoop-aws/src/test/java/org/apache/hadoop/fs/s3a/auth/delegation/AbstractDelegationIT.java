@@ -48,6 +48,8 @@ import static org.apache.hadoop.test.GenericTestUtils.notNull;
  */
 public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
 
+  protected static final String YARN_RM = "yarn-rm@EXAMPLE";
+
   private static final Logger LOG =
       LoggerFactory.getLogger(AbstractDelegationIT.class);
 
@@ -80,7 +82,7 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
    */
   protected static Credentials mkTokens(final S3AFileSystem fs) throws IOException {
     Credentials cred = new Credentials();
-    fs.addDelegationTokens(ITestSessionDelegationInFileystem.YARN_RM, cred);
+    fs.addDelegationTokens(AbstractDelegationIT.YARN_RM, cred);
     return cred;
   }
 
@@ -112,7 +114,7 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
     assertTrue("Expected bound to a delegation token: " + dtSupport,
         dtSupport.isBoundToDT());
     assertEquals("Wrong token kind",
-        tokenKind, dtSupport.getBoundDT().getKind());
+        tokenKind, dtSupport.getBoundDT().get().getKind());
   }
 
   /**
@@ -187,5 +189,20 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
         new FileOutputStream(tokenFile))) {
       cred.writeTokenStorageToStream(out);
     }
+  }
+
+  /**
+   * Create and init an S3a DT instance, but don't start it.
+   * @param conf conf to use
+   * @return a new instance
+   * @throws IOException IOE
+   */
+  public S3ADelegationTokens instantiateDTSupport(Configuration conf) 
+      throws IOException {
+    S3AFileSystem fs = getFileSystem();
+    S3ADelegationTokens tokens = new S3ADelegationTokens();
+    tokens.bindToFileSystem(fs.getCanonicalUri(), fs);
+    tokens.init(conf);
+    return tokens;
   }
 }

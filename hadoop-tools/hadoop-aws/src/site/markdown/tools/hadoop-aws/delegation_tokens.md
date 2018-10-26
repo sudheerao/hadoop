@@ -16,11 +16,11 @@
 
 <!-- MACRO{toc|fromDepth=0|toDepth=2} -->
 
-## <a name="introduction"></a> Introduction
+## <a name="introduction"></a> Introducting S3A Delegation Tokens.
 
 The S3A filesystem client supports `Hadoop Delegation Tokens`.
 This allows YARN application like Apache Spark or services such as Apache Oozie to
-obtain credentials to access S3 and pass them pass these credentials to
+obtain credentials to access S3 buckets and pass them pass these credentials to
 jobs/queries, so granting them access to the service with the same access
 permissions as the user.
 
@@ -47,6 +47,9 @@ of the granted STS token, no process receiving the token may perform
 any operations in the AWS infrastructure other than those for the S3 bucket,
 and that restricted by the rights of the requested role ARN.
 
+All three tokens also marshall the encryption settings: The encryption mechanism
+to use and the KMS key ID or SSE-C client secret. This allows encryption
+policy and secrets to be uploaded from the client to the services.
 
 ## <a name="background"></a> Background: Hadoop Delegation Tokens.
 
@@ -716,3 +719,135 @@ analysis, we would welcome this. Do bear in mind that all users of the
 same AWS account in that region will be throttled. Your colleagues may
 notice, especially if the applications they are running do not retry on
 throttle responses from STS (it's not a common occurrence after all...).
+
+## Implementing your own Delegation Token Binding
+
+The DT binding mechanism is designed to be extensible: if you have an alternate
+authentication mechanism, such as an S3-compatible object store with
+Kerberos support —S3A Delegation tokens should support it.
+
+*if it can't: that's a bug in the implementation which needs to be corrected*.
+
+### Steps
+
+1. Come up with a token "Kind"; a unique name for the delegation token identifier.
+1. Implement a subclass of `AbstractS3ATokenIdentifier` which adds all information which
+is marshalled from client to remote services. This must subclass the `Writable` methods to read
+and write the data to a data stream: these subclasses must call the superclass methods first.
+1. Add a resource `META-INF/services/org.apache.hadoop.security.token.TokenIdentifier`
+1. And list in it, the classname of your new identifier.
+1. Implement a subclass of `AbstractDelegationTokenBinding`
+
+### Implementing `AbstractS3ATokenIdentifier`
+
+Look at the other examples to see what to do; `SessionTokenIdentifier` does
+most of the work.
+
+Having a `toString()` method which is informative is ideal for the `hdfs creds`
+command as well as debugging: *but do not print secrets*
+
+### `AWSCredentialProviderList deployUnbonded()`
+
+1. Perform all initialization needed on an "unbonded" deployment to authenticate with the store.
+1. Return a list of AWS Credential providers which can be used to authenticate the caller.
+
+**Tip**: consider *not* doing all the checks to verify that DTs can be issued.
+That can be postponed until a DT is issued -as in any deployments where a DT is not actually
+needed, failing at this point is overkill. As an example, `RoleTokenBinding` cannot issue
+DTs if it only has a set of session credentials, but it will deploy without them, so allowing
+`hadoop fs` commands to work on an EC2 VM with IAM role credentials.
+
+**Tip**: The class `org.apache.hadoop.fs.s3a.auth.MarshalledCredentials` holds a set of
+marshalled credentials and so can be used within your own Token Identifier if you want
+to include a set of full/session AWS credentials in your token identifier. 
+
+### `AWSCredentialProviderList bindToTokenIdentifier(AbstractS3ATokenIdentifier id)`
+
+The identifier passed in will be the one for the current filesystem URI and of your token kind.
+
+1. Use `convertTokenIdentifier` to cast it to your DT type, or fail with a meaningful `IOException`.
+1. Extract the secrets neede to authenticate with the object store (or whatever service issues
+object store credentials).
+1. Return a list of AWS Credential providers which can be used to authenticate the caller with
+the extracted secrets.
+
+### `AbstractS3ATokenIdentifier createEmptyIdentifier()`
+
+Return an empty instance of your token identifier.
+
+### `AbstractS3ATokenIdentifier createTokenIdentifier(Optional<RoleModel.Policy> policy,  EncryptionSecrets secrets)`
+  
+Create the delegation token.
+
+If non-empty, the `policy` argument contains an AWS policy model to grant access to: 
+
+* The target S3 bucket.
+* Any S3Guard DDB table it is bonded to.
+* KMS key `"kms:GenerateDataKey` and `kms:Decrypt`permissions for all KMS keys.
+
+This can be converted to a string and passed to the AWS `assumeRole` operation. 
+
+The `secrets` argument contains encryption policy and secrets: 
+this should be passed to the superclass constructor as is; it is retrieved and used
+to set the encryption policy on the newly created filesystem.
+
+ 
+*Tip*: Use `AbstractS3ATokenIdentifier.createDefaultOriginMessage()` to create an initial
+message for the origin of the token —this is useful for diagnostics.
+
+
+#### Token Renewal
+
+There's no support in the design for token renewal; it would be very complex
+to make it pluggable, and as all the bundled mechanisms don't support renewal,
+untestable and unjustifiable.
+
+Any token binding which wants to add renewal support will have to implement
+it directly.
+
+### Testing
+
+Use the tests `org.apache.hadoop.fs.s3a.auth.delegation` as examples. You'll have to
+copy and paste some of the test base classes over; `hadoop-common`'s test JAR is published
+to Maven Central, but not the S3A one (a fear of leaking AWS credentials).
+
+
+#### Unit Test `TestS3ADelegationTokenSupport`
+
+This tests marshalling and unmarshalling of tokens identifiers.
+*Test that every field is preserved.*
+
+
+#### Integration Test `ITestSessionDelegationTokens`
+
+Tests the lifecycle of a 
+
+#### Integration Test `ITestSessionDelegationInFileystem`.
+
+This collects DTs from one filesystem, and uses that to create a new FS instance and
+then perform filesystem operations. A miniKDC is instantiated 
+
+* Take care to remove all login secrets from the environment, so as to make sure that
+the second instance is picking up the DT information.
+* `UserGroupInformation.reset()` can be used to reset User secrets after every test case (e.g. teardown), so that issued DTs from one test case do not contaminate the next.
+* its subclass, `ITestRoleDelegationInFileystem` add a check that the session credentials
+in the DT cannot be 
+
+
+#### Integration Test `ITestDelegatedMRJob`
+
+It's not easy to bring up a YARN cluster with a secure HDFS and miniKDC controller in
+test cases —this test, the closest there is to an end-to-end test, 
+uses mocking to mock the RPC calls to the YARN AM, and then verifies that the tokens
+have been collected in the job context, 
+
+#### Load Test `ILoadTestSessionCredentials`
+
+This attempts to collect many, many delegation tokens simultaneously and sees what happens.
+
+Worth doing if you have a new auth service; consider also something for going from DT to
+AWS credentials if this is also implemented by your own service. This is left as an exercise
+for the developer.
+
+**Tip**: don't go overboard here, especially against AWS itself. 
+

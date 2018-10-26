@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Optional;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
 import org.apache.hadoop.fs.s3a.S3AUtils;
@@ -46,7 +48,15 @@ public class FullCredentialsTokenBinding extends
   /**
    * Wire name of this binding includes a version marker: {@value}.
    */
-  private static final String NAME = "FullCredentials-001";
+  private static final String NAME = "FullCredentials/001";
+
+  @VisibleForTesting
+  public static final String E_SESSION_TOKENS_NOT_SUPPORTED
+      = "Session tokens not supported";
+
+  private MarshalledCredentials awsCredentials;
+
+  private String credentialOrigin;
 
   /**
    * Constructor, uses name of {@link #name} and token kind of
@@ -55,6 +65,56 @@ public class FullCredentialsTokenBinding extends
    */
   public FullCredentialsTokenBinding() {
     super(NAME, FULL_TOKEN_KIND);
+  }
+
+  @Override
+  protected void serviceStart() throws Exception {
+    super.serviceStart();
+    loadAWSCredentials();
+  }
+
+  /**
+   * Load the AWS credentials.
+   * @throws IOException failure
+   */
+  private void loadAWSCredentials() throws IOException {
+    credentialOrigin = AbstractS3ATokenIdentifier.createDefaultOriginMessage();
+    Configuration conf = getConfig();
+    URI uri = getCanonicalUri();
+    // look for access keys to FS
+    S3xLoginHelper.Login secrets = S3AUtils.getAWSAccessKeys(uri, conf);
+    if (secrets.hasLogin()) {
+      awsCredentials = new MarshalledCredentials(
+          secrets.getUser(), secrets.getPassword(), "");
+      credentialOrigin += "; source = Hadoop configuration data";
+    } else {
+      // if there are none, look for the environment variables.
+      awsCredentials = MarshalledCredentials.fromEnvironment(
+          System.getenv());
+      credentialOrigin += "; source = Environment variables";
+    }
+    awsCredentials.validate("local AWS credentials", false);
+    if(awsCredentials.hasSessionToken()) {
+      throw new DelegationTokenIOException(E_SESSION_TOKENS_NOT_SUPPORTED);
+    }
+  }
+
+
+  /**
+   * Serve up the credentials retrieved from configuration/environment in
+   * {@link #loadAWSCredentials()}.
+   * @return a credential provider for the unbonded instance.
+   * @throws IOException failure to load
+   */
+  @Override
+  public AWSCredentialProviderList deployUnbonded() throws IOException {
+    requireServiceStarted();
+    return new AWSCredentialProviderList(
+        new MarshalledCredentialProvider(
+            getFileSystem().getUri(),
+            getConfig(),
+            awsCredentials,
+            false));
   }
 
   /**
@@ -72,29 +132,13 @@ public class FullCredentialsTokenBinding extends
       final Optional<RoleModel.Policy> policy,
       final EncryptionSecrets encryptionSecrets) throws IOException {
     requireServiceStarted();
-    Configuration conf = getConfig();
-    URI uri = getCanonicalUri();
-    String origin = AbstractS3ATokenIdentifier.createDefaultOriginMessage();
-    MarshalledCredentials marshalledCredentials;
-    // look for access keys to FS
-    S3xLoginHelper.Login secrets = S3AUtils.getAWSAccessKeys(uri, conf);
-    if (secrets.hasLogin()) {
-      marshalledCredentials = new MarshalledCredentials(
-          secrets.getUser(), secrets.getPassword(), "");
-      origin += "; source = Hadoop configuration data";
-    } else {
-      // if there are none, look for the environment variables.
-      marshalledCredentials = MarshalledCredentials.fromEnvironment(System.getenv());
-      origin += "; source = Environment variables";
-    }
-    marshalledCredentials.validate("local AWS credentials", false);
 
     final FullCredentialsTokenIdentifier id
         = new FullCredentialsTokenIdentifier(getCanonicalUri(),
         getOwnerText(),
-        marshalledCredentials,
+        awsCredentials,
         encryptionSecrets);
-    id.setOrigin(origin);
+    id.setOrigin(credentialOrigin);
     return id;
   }
 
@@ -114,7 +158,7 @@ public class FullCredentialsTokenBinding extends
   }
 
   @Override
-  public AbstractS3ATokenIdentifier createIdentifier() {
+  public AbstractS3ATokenIdentifier createEmptyIdentifier() {
     return new FullCredentialsTokenIdentifier();
   }
 

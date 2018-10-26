@@ -689,7 +689,8 @@ match these constraints.
 If set explicitly, it must be valid.
 
 ```
-org.apache.hadoop.fs.s3a.AWSBadRequestException: Instantiate org.apache.hadoop.fs.s3a.auth.AssumedRoleCredentialProvider on
+org.apache.hadoop.fs.s3a.AWSBadRequestException:
+ Instantiate org.apache.hadoop.fs.s3a.auth.AssumedRoleCredentialProvider on
     com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceException:
     1 validation error detected: Value 'Session Names cannot Hava Spaces!' at 'roleSessionName'
     failed to satisfy constraint: Member must satisfy regular expression pattern: [\w+=,.@-]*
