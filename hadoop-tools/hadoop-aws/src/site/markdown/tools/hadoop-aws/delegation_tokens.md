@@ -300,40 +300,31 @@ other than the central `sts.amazonaws.com` endpoint, then the region property
 
 
 Both the Session and the Role Delegation Token bindings both use the option
-`fs.s3a.assumed.role.credentials.provider` to define the credential providers
+`fs.s3a.aws.credentials.provider` to define the credential providers
 to authenticate to the AWS STS with.
 
 Here is the effective list of providers if none are declared:
 
 ```xml
 <property>
-  <name>fs.s3a.assumed.role.credentials.provider</name>
-  <value>org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider,
-    com.amazonaws.auth.EnvironmentVariableCredentialsProvider
+  <name>fs.s3a.aws.credentials.provider</name>
+  <value>
+    org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider,
+    org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider,
+    com.amazonaws.auth.EnvironmentVariableCredentialsProvider,
+    org.apache.hadoop.fs.s3a.auth.IAMInstanceCredentialsProvider
   </value>
-  <description>
-    List of credential providers to authenticate with the STS endpoint and
-    retrieve short-lived role credentials.
-    Used by AssumedRoleCredentialProvider and the S3A Session Delegation Token
-    and S3A Role Delegation Token bindings.
-  </description>
 </property>
 ```
 
-That is
-1. The `fs.s3a.access.key` and `fs.s3a.secret.key` configuration options.
-1. The `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`
-    environment variables.
-
-It is possible to add other providers to the list, including those which
-only return session tokens, such as the IAM token provider
-`com.amazonaws.auth.InstanceProfileCredentialsProvider`.
-
+Not all these authentication mechanisms provide the full set of credentials
+STS needs. The session token provider will simply forward any session credentials
+it is authenticated with; the role token binding will fail.
 
 #### Forwarding of existing AWS Session credentials.
 
 When the AWS credentials supplied to the Session Delegation Token binding
-through `fs.s3a.assumed.role.credentials.provider` are themselves a set of
+through `fs.s3a.aws.credentials.provider` are themselves a set of
 session credentials, generated delegation tokens with simply contain these
 existing session credentials, a new set of credentials obtained from STS.
 This is because the STS service does not let
@@ -410,7 +401,6 @@ For Full Credential Delegation  tokens, `fs.s3a.delegation.token.binding`
 must be set to `org.apache.hadoop.fs.s3a.auth.delegation.FullCredentialsTokenBinding`
 
 There are no other configuration options.
-
 
 ```xml
 <property>

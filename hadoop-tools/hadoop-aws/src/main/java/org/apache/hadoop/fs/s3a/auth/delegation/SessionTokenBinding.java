@@ -46,7 +46,7 @@ import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Text;
 
-import static org.apache.hadoop.fs.s3a.Constants.ASSUMED_ROLE_CREDENTIALS_PROVIDER;
+import static org.apache.hadoop.fs.s3a.Constants.AWS_CREDENTIALS_PROVIDER;
 import static org.apache.hadoop.fs.s3a.Invoker.once;
 import static org.apache.hadoop.fs.s3a.S3AUtils.STANDARD_AWS_PROVIDERS;
 import static org.apache.hadoop.fs.s3a.S3AUtils.buildAWSProviderList;
@@ -137,7 +137,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
     // create the provider set for session credentials.
     parentAuthChain = buildAWSProviderList(getCanonicalUri(),
         conf,
-        ASSUMED_ROLE_CREDENTIALS_PROVIDER,
+        AWS_CREDENTIALS_PROVIDER,
         STANDARD_AWS_PROVIDERS,
         new HashSet<>());
   }

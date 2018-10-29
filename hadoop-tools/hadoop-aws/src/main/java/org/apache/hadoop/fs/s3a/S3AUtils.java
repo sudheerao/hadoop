@@ -598,8 +598,11 @@ public final class S3AUtils {
     // this will reject any user:secret entries in the URI
     S3xLoginHelper.buildFSURI(binding);
     AWSCredentialProviderList credentials =
-        buildAWSProviderList(binding, conf, AWS_CREDENTIALS_PROVIDER,
-            STANDARD_AWS_PROVIDERS, new HashSet<>());
+        buildAWSProviderList(binding,
+            conf,
+            AWS_CREDENTIALS_PROVIDER,
+            STANDARD_AWS_PROVIDERS,
+            new HashSet<>());
     // make sure the logging message strips out any auth details
     LOG.debug("For URI {}, using credentials {}",
         S3xLoginHelper.toString(binding), credentials);

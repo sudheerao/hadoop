@@ -1015,15 +1015,29 @@
 
 <property>
   <name>fs.s3a.aws.credentials.provider</name>
+  <value>
+    org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider,
+    org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider,
+    com.amazonaws.auth.EnvironmentVariableCredentialsProvider,
+    org.apache.hadoop.fs.s3a.auth.IAMInstanceCredentialsProvider
+  </value>
   <description>
     Comma-separated class names of credential provider classes which implement
     com.amazonaws.auth.AWSCredentialsProvider.
 
+    When S3A delegation tokens are not enabled, this list will be used
+    to directly authenticate with S3 and DynamoDB services..
+    When S3A Delegation tokens are enabled, depending upon the delegation
+    token binding it may be used
+    to communicate wih the STS endpoint to request session/role
+    credentials.
+    
     These are loaded and queried in sequence for a valid set of credentials.
     Each listed class must implement one of the following means of
     construction, which are attempted in order:
     1. a public constructor accepting java.net.URI and
         org.apache.hadoop.conf.Configuration,
+    1. a public constructor accepting org.apache.hadoop.conf.Configuration,
     2. a public static method named getInstance that accepts no
        arguments and returns an instance of
        com.amazonaws.auth.AWSCredentialsProvider, or
@@ -1037,6 +1051,8 @@
 
     If unspecified, then the default list of credential provider classes,
     queried in sequence, is:
+    1. org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider: looks
+       for session login secrets in the Hadoop configuration.
     1. org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider:
        Uses the values of fs.s3a.access.key and fs.s3a.secret.key.
     2. com.amazonaws.auth.EnvironmentVariableCredentialsProvider: supports
@@ -1046,8 +1062,9 @@
     3. com.amazonaws.auth.InstanceProfileCredentialsProvider: supports use
         of instance profile credentials if running in an EC2 VM.
   </description>
+  
 </property>
-
+  
 <property>
   <name>fs.s3a.session.token</name>
   <description>Session token, when using org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider

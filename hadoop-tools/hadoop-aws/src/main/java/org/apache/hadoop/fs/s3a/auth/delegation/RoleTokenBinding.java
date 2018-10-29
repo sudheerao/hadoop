@@ -35,7 +35,7 @@ import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.RoleModel;
 import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
 
-import static org.apache.hadoop.fs.s3a.Constants.ASSUMED_ROLE_CREDENTIALS_PROVIDER;
+import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_CREDENTIALS_PROVIDER;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_ROLE_ARN;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.E_NO_SESSION_TOKENS_FOR_ROLE_BINDING;
 
@@ -114,7 +114,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
         .orElseThrow(() -> {
           // we've come in on a parent binding, so fail fast
           LOG.error("Cannot issue delegation tokens because the credential"
-              + " providers listed in " + ASSUMED_ROLE_CREDENTIALS_PROVIDER
+              + " providers listed in " + DELEGATION_TOKEN_CREDENTIALS_PROVIDER
               + " are returning session tokens");
           return new DelegationTokenIOException(
               E_NO_SESSION_TOKENS_FOR_ROLE_BINDING);

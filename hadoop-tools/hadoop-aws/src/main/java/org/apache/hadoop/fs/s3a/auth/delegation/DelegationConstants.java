@@ -89,6 +89,13 @@ public final class DelegationConstants {
       Constants.ASSUMED_ROLE_SESSION_DURATION_DEFAULT;
 
   /**
+   * Key to list AWS credential providers for Session/role
+   * credentials: {@value}.
+   */
+  public static final String DELEGATION_TOKEN_CREDENTIALS_PROVIDER =
+      Constants.AWS_CREDENTIALS_PROVIDER;
+
+  /**
    * ARN of the delegation token: {@value}.
    * Required for the role token.
    */
