@@ -21,7 +21,11 @@ package org.apache.hadoop.fs.s3a.auth;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.AmazonClientException;
@@ -32,6 +36,7 @@ import com.amazonaws.auth.STSAssumeRoleSessionCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
 import com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceException;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +52,7 @@ import org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider;
 import org.apache.hadoop.security.UserGroupInformation;
 
 import static org.apache.hadoop.fs.s3a.Constants.*;
+import static org.apache.hadoop.fs.s3a.S3AUtils.buildAWSProviderList;
 import static org.apache.hadoop.fs.s3a.S3AUtils.createAWSCredentialProvider;
 import static org.apache.hadoop.fs.s3a.S3AUtils.loadAWSProviderClasses;
 
@@ -106,17 +112,12 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
     }
 
     // build up the base provider
-    Class<?>[] awsClasses = loadAWSProviderClasses(conf,
+    credentialsToSTS = buildAWSProviderList(fsUri, conf,
         ASSUMED_ROLE_CREDENTIALS_PROVIDER,
-        SimpleAWSCredentialsProvider.class,
-        EnvironmentVariableCredentialsProvider.class);
-    credentialsToSTS = new AWSCredentialProviderList();
-    for (Class<?> aClass : awsClasses) {
-      if (this.getClass().equals(aClass)) {
-        throw new IOException(E_FORBIDDEN_PROVIDER);
-      }
-      credentialsToSTS.add(createAWSCredentialProvider(conf, aClass, fsUri));
-    }
+        Arrays.asList(
+            SimpleAWSCredentialsProvider.class,
+            EnvironmentVariableCredentialsProvider.class),
+        Sets.newHashSet(this.getClass()));
     LOG.debug("Credentials to obtain role credentials: {}", credentialsToSTS);
 
     // then the STS binding

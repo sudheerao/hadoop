@@ -132,6 +132,7 @@ import static org.apache.hadoop.fs.s3a.Statistic.*;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 import static org.apache.hadoop.fs.s3a.auth.RolePolicies.STATEMENT_ALLOW_SSE_KMS_RW;
 import static org.apache.hadoop.fs.s3a.auth.RolePolicies.allowS3Operations;
+import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DEFAULT_DELEGATION_TOKENS_ENABLED;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKENS_ENABLED;
 import static org.apache.hadoop.io.IOUtils.cleanupWithLogger;
 
@@ -262,7 +263,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     // patch the Hadoop security providers
     patchSecurityCredentialProviders(conf);
     boolean delegationTokensEnabled = conf.getBoolean(DELEGATION_TOKENS_ENABLED,
-        false);
+        DEFAULT_DELEGATION_TOKENS_ENABLED);
     if (delegationTokensEnabled) {
       LOG.debug("Using delegation tokens");
     }

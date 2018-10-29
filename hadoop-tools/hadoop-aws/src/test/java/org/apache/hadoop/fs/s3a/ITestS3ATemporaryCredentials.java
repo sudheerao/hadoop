@@ -51,7 +51,6 @@ import static org.apache.hadoop.test.LambdaTestUtils.intercept;
  * This test will use the AWS credentials (if provided) for
  * S3A tests to request temporary credentials, then attempt to use those
  * credentials instead.
-
  */
 public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
 
@@ -121,8 +120,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     S3AUtils.clearBucketOption(conf2, bucket, SECRET_KEY);
     S3AUtils.clearBucketOption(conf2, bucket, SESSION_TOKEN);
 
-    updateConfigWithSessionCreds(conf2,
-        new MarshalledCredentials(sessionCreds));
+    MarshalledCredentials mc = new MarshalledCredentials(sessionCreds);
+    updateConfigWithSessionCreds(conf2, mc);
 
     conf2.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
 

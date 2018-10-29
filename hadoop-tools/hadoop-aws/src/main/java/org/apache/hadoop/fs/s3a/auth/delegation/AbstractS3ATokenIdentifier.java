@@ -63,7 +63,7 @@ public abstract class AbstractS3ATokenIdentifier
     extends DelegationTokenIdentifier {
 
   /**
-   * What is the maximum string length supported for text fields,
+   * The maximum string length supported for text fields.
    */
   protected static final int MAX_TEXT_LENGTH = 8192;
 

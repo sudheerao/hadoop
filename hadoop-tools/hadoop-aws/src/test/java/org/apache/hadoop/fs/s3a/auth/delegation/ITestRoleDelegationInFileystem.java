@@ -20,9 +20,6 @@ package org.apache.hadoop.fs.s3a.auth.delegation;
 
 import java.nio.file.AccessDeniedException;
 
-import org.junit.Test;
-
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.io.Text;
 

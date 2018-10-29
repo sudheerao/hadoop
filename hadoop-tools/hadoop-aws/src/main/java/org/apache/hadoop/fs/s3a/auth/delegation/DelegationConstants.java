@@ -45,6 +45,11 @@ public final class DelegationConstants {
       "fs.s3a.delegation.tokens.enabled";
 
   /**
+   * Default policy about delegation token support: {@value}.
+   */
+  public static final boolean DEFAULT_DELEGATION_TOKENS_ENABLED = false;
+  
+  /**
    * Endpoint for session tokens, used when building delegation tokens:
    * {@value}.
    * @see <a href="https://docs.aws.amazon.com/general/latest/gr/rande.html#sts_region">STS regions</a>

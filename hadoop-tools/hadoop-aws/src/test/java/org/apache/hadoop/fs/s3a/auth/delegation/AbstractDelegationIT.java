@@ -80,7 +80,8 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
    * @return a non-empty set of credentials.
    * @throws IOException failure to create.
    */
-  protected static Credentials mkTokens(final S3AFileSystem fs) throws IOException {
+  protected static Credentials mkTokens(final S3AFileSystem fs)
+      throws IOException {
     Credentials cred = new Credentials();
     fs.addDelegationTokens(AbstractDelegationIT.YARN_RM, cred);
     return cred;

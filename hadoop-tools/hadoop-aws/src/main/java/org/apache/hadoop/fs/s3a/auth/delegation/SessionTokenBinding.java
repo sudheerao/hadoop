@@ -20,6 +20,7 @@ package org.apache.hadoop.fs.s3a.auth.delegation;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -27,7 +28,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.amazonaws.ClientConfiguration;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSSessionCredentials;
-import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -39,7 +39,6 @@ import org.apache.hadoop.fs.s3a.Invoker;
 import org.apache.hadoop.fs.s3a.Retries;
 import org.apache.hadoop.fs.s3a.S3ARetryPolicy;
 import org.apache.hadoop.fs.s3a.S3AUtils;
-import org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialProvider;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.RoleModel;
@@ -49,8 +48,8 @@ import org.apache.hadoop.io.Text;
 
 import static org.apache.hadoop.fs.s3a.Constants.ASSUMED_ROLE_CREDENTIALS_PROVIDER;
 import static org.apache.hadoop.fs.s3a.Invoker.once;
-import static org.apache.hadoop.fs.s3a.S3AUtils.createAWSCredentialProvider;
-import static org.apache.hadoop.fs.s3a.S3AUtils.loadAWSProviderClasses;
+import static org.apache.hadoop.fs.s3a.S3AUtils.STANDARD_AWS_PROVIDERS;
+import static org.apache.hadoop.fs.s3a.S3AUtils.buildAWSProviderList;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.*;
 
 /**
@@ -81,7 +80,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
   /**
    * Has an attempt to initialize STS been attempted?
    */
-  private boolean stsInitAttempted;
+  private final AtomicBoolean stsInitAttempted = new AtomicBoolean(false);
 
   /** The STS client; created in startup if the parental credentials permit. */
   @SuppressWarnings("FieldAccessedSynchronizedAndUnsynchronized")
@@ -136,23 +135,22 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
         TimeUnit.SECONDS);
 
     // create the provider set for session credentials.
-    Class<?>[] awsClasses = loadAWSProviderClasses(conf,
+    parentAuthChain = buildAWSProviderList(getCanonicalUri(),
+        conf,
         ASSUMED_ROLE_CREDENTIALS_PROVIDER,
-        SimpleAWSCredentialsProvider.class,
-        EnvironmentVariableCredentialsProvider.class);
-
-    parentAuthChain = new AWSCredentialProviderList();
-    URI uri = getCanonicalUri();
-    for (Class<?> clazz : awsClasses) {
-      parentAuthChain.add(createAWSCredentialProvider(conf, clazz, uri));
-    }
+        STANDARD_AWS_PROVIDERS,
+        new HashSet<>());
   }
 
   @Override
   protected void serviceStop() throws Exception {
     super.serviceStop();
-    this.stsClient.ifPresent(IOUtils::closeStream);
-    this.stsClient = Optional.empty();
+    // this is here to keep findbugs quiet, even though nothing
+    // can safely invoke stsClient as we are shut down.
+    synchronized (this) {
+      this.stsClient.ifPresent(IOUtils::closeStream);
+      this.stsClient = Optional.empty();
+    }
   }
 
   /**
@@ -203,10 +201,11 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
    */
   private synchronized Optional<STSClientFactory.STSClient> maybeInitSTS()
       throws IOException {
-    if (stsInitAttempted) {
+    if (stsInitAttempted.getAndSet(true)) {
+      // whether or not it succeeded, the state of the STS client is what
+      // callers get after the first attempt.
       return stsClient;
     }
-    stsInitAttempted = true;
 
     Configuration conf = getConfig();
     URI uri = getCanonicalUri();

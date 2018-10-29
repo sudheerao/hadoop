@@ -247,6 +247,11 @@ org.apache.hadoop.fs.s3a.AWSBadRequestException: initTable on bucket:
   (Service: AmazonDynamoDBv2; Status Code: 400; Error Code: UnrecognizedClientException)
 ```
 
+This can surface if your configuration is setting the `fs.s3a.secret.key`,
+`fs.s3a.access.key` and `fs.s3a.session.key` correctly, but the 
+AWS credential provider list set in `AWS_CREDENTIALS_PROVIDER` does not include
+`org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider`.
+
 
 ### <a name="access_denied_unknown-ID"></a> AccessDeniedException "The AWS Access Key Id you provided does not exist in our records."
 

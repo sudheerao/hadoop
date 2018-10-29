@@ -26,7 +26,6 @@ import com.amazonaws.Protocol;
 import com.amazonaws.SdkBaseException;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
-import com.amazonaws.auth.InstanceProfileCredentialsProvider;
 import com.amazonaws.retry.RetryUtils;
 import com.amazonaws.services.dynamodbv2.model.AmazonDynamoDBException;
 import com.amazonaws.services.dynamodbv2.model.LimitExceededException;
@@ -47,6 +46,7 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.fs.s3a.auth.IAMInstanceCredentialsProvider;
 import org.apache.hadoop.fs.s3a.auth.NoAuthWithAWSException;
 import org.apache.hadoop.fs.s3native.S3xLoginHelper;
 import org.apache.hadoop.net.ConnectTimeoutException;
@@ -71,11 +71,14 @@ import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.nio.file.AccessDeniedException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.hadoop.fs.s3a.Constants.*;
@@ -592,27 +595,27 @@ public final class S3AUtils {
    */
   public static AWSCredentialProviderList createAWSCredentialProviderSet(
       URI binding, Configuration conf) throws IOException {
-    AWSCredentialProviderList credentials = new AWSCredentialProviderList();
-
-    Class<?>[] awsClasses = loadAWSProviderClasses(conf,
-        AWS_CREDENTIALS_PROVIDER);
-    if (awsClasses.length == 0) {
-      credentials.add(new SimpleAWSCredentialsProvider(binding, conf));
-      credentials.add(new EnvironmentVariableCredentialsProvider());
-      credentials.add(InstanceProfileCredentialsProvider.getInstance());
-    } else {
-      for (Class<?> aClass : awsClasses) {
-        credentials.add(createAWSCredentialProvider(conf,
-            aClass,
-            S3xLoginHelper.buildFSURI(binding)));
-      }
-    }
+    // this will reject any user:secret entries in the URI
+    S3xLoginHelper.buildFSURI(binding);
+    AWSCredentialProviderList credentials =
+        buildAWSProviderList(binding, conf, AWS_CREDENTIALS_PROVIDER,
+            STANDARD_AWS_PROVIDERS, new HashSet<>());
     // make sure the logging message strips out any auth details
     LOG.debug("For URI {}, using credentials {}",
         S3xLoginHelper.toString(binding), credentials);
     return credentials;
   }
 
+  /**
+   * The standard AWS provider list for AWS connections.
+   */
+  public static final List<Class<?>>
+      STANDARD_AWS_PROVIDERS = new ArrayList<>(Arrays.asList(
+          TemporaryAWSCredentialsProvider.class,
+          SimpleAWSCredentialsProvider.class,
+          EnvironmentVariableCredentialsProvider.class,
+          IAMInstanceCredentialsProvider.class));
+  
   /**
    * Load list of AWS credential provider/credential provider factory classes.
    * @param conf configuration
@@ -621,17 +624,53 @@ public final class S3AUtils {
    * @return the list of classes, possibly empty
    * @throws IOException on a failure to load the list.
    */
-  public static Class<?>[] loadAWSProviderClasses(Configuration conf,
+  public static List<Class<?>> loadAWSProviderClasses(Configuration conf,
       String key,
       Class<?>... defaultValue) throws IOException {
     try {
-      return conf.getClasses(key, defaultValue);
+      return Arrays.asList(conf.getClasses(key, defaultValue));
     } catch (RuntimeException e) {
       Throwable c = e.getCause() != null ? e.getCause() : e;
       throw new IOException("From option " + key + ' ' + c, c);
     }
   }
 
+  /**
+   * Load list of AWS credential provider/credential provider factory classes;
+   * support a forbidden list for 
+   * @param conf configuration
+   * @param key key
+   * @param forbidden a possibly empty set of forbidden classes. 
+   * @param defaultValues list of default providers.
+   * @return the list of classes, possibly empty
+   * @throws IOException on a failure to load the list.
+   */
+  public static AWSCredentialProviderList buildAWSProviderList(
+      final URI binding,
+      final Configuration conf,
+      final String key,
+      final List<Class<?>> defaultValues,
+      final Set<Class<?>> forbidden) throws IOException {
+
+    // build up the base provider
+    List<Class<?>> awsClasses = loadAWSProviderClasses(conf,
+        key,
+        defaultValues.toArray(new Class[defaultValues.size()]));
+    // iterate through, checking for blacklists and then instantiating
+    // each provider
+    AWSCredentialProviderList providers = new AWSCredentialProviderList();
+    for (Class<?> aClass : awsClasses) {
+      
+      if (forbidden.contains(aClass)) {
+        throw new IOException("AWS provider class cannot be used in option "
+        + key + ": " + aClass);
+      }
+      providers.add(createAWSCredentialProvider(conf,
+          aClass, binding));
+    }
+    return providers;
+  }
+  
   /**
    * Create an AWS credential provider from its class by using reflection.  The
    * class must implement one of the following means of construction, which are

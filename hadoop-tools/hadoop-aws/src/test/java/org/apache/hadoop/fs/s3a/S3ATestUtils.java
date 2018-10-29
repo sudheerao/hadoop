@@ -1004,7 +1004,8 @@ public final class S3ATestUtils {
    * @return the credentials
    * @throws IOException on a failure
    */
-  public static MarshalledCredentials requestSessionCredentials(Configuration conf,
+  public static MarshalledCredentials requestSessionCredentials(
+      final Configuration conf,
       final String bucket)
       throws IOException {
     return requestSessionCredentials(conf, bucket, 900);

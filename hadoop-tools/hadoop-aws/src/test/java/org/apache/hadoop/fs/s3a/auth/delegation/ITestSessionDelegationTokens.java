@@ -35,7 +35,6 @@ import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.Credentials;
-import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 
@@ -47,7 +46,6 @@ import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEG
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.SESSION_TOKEN_KIND;
 import static org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding.CREDENTIALS_CONVERTED_TO_DELEGATION_TOKEN;
 import static org.apache.hadoop.test.GenericTestUtils.notNull;
-import static org.apache.hadoop.test.LambdaTestUtils.intercept;
 
 /**
  * Tests use of Hadoop delegation tokens to marshall S3 credentials.
