@@ -28,7 +28,7 @@ import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.service.AbstractService;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 /**
  * This is the base class for both the delegation binding
@@ -97,8 +97,8 @@ public abstract class AbstractDTService
     requireServiceState(STATE.NOTINITED);
     Preconditions.checkState(canonicalUri == null,
         "bindToFileSystem called twice");
-    this.canonicalUri = checkNotNull(uri);
-    this.fileSystem = checkNotNull(fs);
+    this.canonicalUri = requireNonNull(uri);
+    this.fileSystem = requireNonNull(fs);
     this.owner = fs.getOwner();
   }
 
@@ -149,6 +149,6 @@ public abstract class AbstractDTService
   @Override
   protected void serviceInit(final Configuration conf) throws Exception {
     super.serviceInit(conf);
-    checkNotNull(canonicalUri, "service does not have a canonical URI");
+    requireNonNull(canonicalUri, "service does not have a canonical URI");
   }
 }

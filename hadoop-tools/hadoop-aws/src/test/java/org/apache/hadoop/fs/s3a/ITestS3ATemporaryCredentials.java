@@ -19,11 +19,12 @@
 package org.apache.hadoop.fs.s3a;
 
 import java.io.IOException;
-import java.nio.file.AccessDeniedException;
+import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
 import com.amazonaws.services.securitytoken.model.Credentials;
+import org.hamcrest.Matchers;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +33,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenIdentifier;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.test.LambdaTestUtils;
 
@@ -40,8 +42,11 @@ import static org.apache.hadoop.fs.s3a.Constants.*;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.assumeSessionTestsEnabled;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.requestSessionCredentials;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.unsetHadoopCredentialProviders;
+import static org.apache.hadoop.fs.s3a.auth.RoleTestUtils.assertCredentialsEqual;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.*;
+import static org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding.CREDENTIALS_CONVERTED_TO_DELEGATION_TOKEN;
 import static org.apache.hadoop.test.LambdaTestUtils.intercept;
+import static org.hamcrest.Matchers.containsString;
 
 /**
  * Tests use of temporary credentials (for example, AWS STS & S3).
@@ -79,7 +84,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   @Override
   protected Configuration createConfiguration() {
     Configuration conf = super.createConfiguration();
-    conf.setBoolean(DELEGATION_TOKENS_ENABLED, true);
+    conf.set(DELEGATION_TOKEN_BINDING, 
+        DELEGATION_TOKEN_SESSION_BINDING);
     return conf;
   }
 
@@ -111,8 +117,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
             builder.build(),
             new Invoker(new S3ARetryPolicy(conf), Invoker.LOG_EVENT));
     Credentials sessionCreds = clientConnection
-        .requestSessionCredentials(900, TimeUnit.SECONDS);
-
+        .requestSessionCredentials(TEST_SESSION_TOKEN_DURATION, TimeUnit.SECONDS);
+    
     // clone configuration so changes here do not affect the base FS.
     Configuration conf2 = new Configuration(conf);
     S3AUtils.clearBucketOption(conf2, bucket, AWS_CREDENTIALS_PROVIDER);
@@ -164,21 +170,52 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   }
 
   /**
-   * Test STS binding.
+   * Test that session tokens are propagated, with the origin string
+   * declaring this
    */
   @Test
-  public void testSTSBindingforGetDelegationToken() throws Exception {
+  public void testSessionTokenPropagation() throws Exception {
     Configuration conf = new Configuration(getContract().getConf());
     MarshalledCredentials sc = requestSessionCredentials(conf,
         getFileSystem().getBucket());
-    sc.getCredentials();
+    // now we expect the duration of the granted creds to be "not far off" now.
+    long expirationInMillis = sc.getExpiration();
+    Date expiryDate = new Date(expirationInMillis);
+    long nowInMillis = System.currentTimeMillis();
+    Date currentDate = new Date(nowInMillis);
+    // date is ahead of now
+    String reason = String.format( 
+        "Expiry Date of %s (%d); current date %s (%d)",
+        expiryDate, expirationInMillis, currentDate, nowInMillis);
+    assertThat(
+        reason,
+        expiryDate,
+        Matchers.greaterThan(currentDate));
+    // allow for a bit of an offset in times. Issue: timezones?
+    long extendedExpiryRange = TEST_SESSION_TOKEN_DURATION + 5 * 60;
+    assertThat(
+        reason,
+        expirationInMillis,
+        Matchers.lessThanOrEqualTo(nowInMillis + 
+            (extendedExpiryRange * 1000)));
+    
     updateConfigWithSessionCreds(conf, sc);
     conf.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
 
     try (S3AFileSystem fs = S3ATestUtils.createTestFileSystem(conf)) {
       createAndVerifyFile(fs, path("testSTS"), TEST_FILE_SIZE);
-      intercept(AccessDeniedException.class,
-          () -> fs.getDelegationToken(""));
+      SessionTokenIdentifier identifier
+          = (SessionTokenIdentifier) fs.getDelegationToken("")
+          .decodeIdentifier();
+      String ids = identifier.toString();
+      assertThat("origin in " + ids,
+          identifier.getOrigin(),
+          containsString(CREDENTIALS_CONVERTED_TO_DELEGATION_TOKEN));
+      
+      // and validate the AWS bits to make sure everything has come across.
+      assertCredentialsEqual("Reissued credentials in " + ids,
+          sc,
+          identifier.getMarshalledCredentials());
     }
   }
 
@@ -186,24 +223,6 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
       final MarshalledCredentials sc) {
     unsetHadoopCredentialProviders(conf);
     sc.setSecretsInConfiguration(conf);
-  }
-
-  /**
-   * Verify that asking for a delegation token will be rejected by AWS.
-   */
-  @Test
-  public void testNoDelegationTokenIssue() throws Exception {
-    Configuration conf = new Configuration(getContract().getConf());
-    MarshalledCredentials sc = requestSessionCredentials(conf,
-        getFileSystem().getBucket());
-    sc.getCredentials();
-    updateConfigWithSessionCreds(conf, sc);
-    conf.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
-
-    try (S3AFileSystem fs = S3ATestUtils.createTestFileSystem(conf)) {
-      intercept(AccessDeniedException.class,
-          () -> fs.getDelegationToken(""));
-    }
   }
 
   /**
@@ -251,7 +270,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     intercept(IOException.class,
         MarshalledCredentials.INVALID_CREDENTIALS,
         () -> {
-          sc.validate("", true);
+          sc.validate("",
+              MarshalledCredentials.CredentialTypeRequired.SessionOnly);
           return sc.toString();
         });
   }

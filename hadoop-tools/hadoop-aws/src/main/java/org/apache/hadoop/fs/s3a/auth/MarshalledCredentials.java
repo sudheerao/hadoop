@@ -25,6 +25,7 @@ import java.net.URI;
 import java.util.Date;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.ClientConfiguration;
@@ -36,10 +37,7 @@ import com.amazonaws.auth.BasicSessionCredentials;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.model.Credentials;
 import com.google.common.annotations.VisibleForTesting;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.CredentialInitializationException;
@@ -52,7 +50,8 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.security.ProviderUtils;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
+import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 import static org.apache.hadoop.fs.s3a.Constants.ACCESS_KEY;
 import static org.apache.hadoop.fs.s3a.Constants.SECRET_KEY;
 import static org.apache.hadoop.fs.s3a.Constants.SESSION_TOKEN;
@@ -62,20 +61,20 @@ import static org.apache.hadoop.fs.s3a.S3AUtils.lookupPassword;
  * Stores the credentials for a session or for a full login.
  * This structure is {@link Writable}, so can be marshalled inside a
  * delegation token.
+ * 
+ * The class is designed so that keys inside are kept non-null; to be
+ * unset just set them to the empty string. This is to simplify marshalling.
  */
 @InterfaceAudience.Private
 public final class MarshalledCredentials implements Writable,
     AWSCredentialsProvider {
-
-  private static final Logger LOG = LoggerFactory.getLogger(
-      MarshalledCredentials.class);
 
   /**
    * Error text on invalid credentials: {@value}.
    */
   @VisibleForTesting
   public static final String INVALID_CREDENTIALS
-      = "Invalid credentials";
+      = "Invalid AWS credentials";
 
   /**
    * How long can any of the secrets be: {@value}.
@@ -84,14 +83,15 @@ public final class MarshalledCredentials implements Writable,
    */
   private static final int MAX_SECRET_LENGTH = 8192;
 
-  private String accessKey;
+  private String accessKey = "";
 
-  private String secretKey;
+  private String secretKey = "";
 
   private String sessionToken = "";
 
   private String roleARN = "";
 
+  /** Expiry time is measured in milliseconds. */
   private long expiration;
 
   public MarshalledCredentials() {
@@ -104,8 +104,10 @@ public final class MarshalledCredentials implements Writable,
   public MarshalledCredentials(final Credentials credentials) {
     accessKey = credentials.getAccessKeyId();
     secretKey = credentials.getSecretAccessKey();
-    sessionToken = credentials.getSessionToken();
-    expiration = credentials.getExpiration().getTime();
+    String st = credentials.getSessionToken();
+    this.sessionToken = st != null ? st : "";
+    Date date = credentials.getExpiration();
+    this.expiration = date != null ? date.getTime() : 0;
   }
 
   /**
@@ -118,9 +120,9 @@ public final class MarshalledCredentials implements Writable,
   public MarshalledCredentials(final String accessKey,
       final String secretKey,
       final String sessionToken) {
-    this.accessKey = checkNotNull(accessKey);
-    this.secretKey = checkNotNull(secretKey);
-    this.sessionToken = checkNotNull(sessionToken);
+    this.accessKey = requireNonNull(accessKey);
+    this.secretKey = requireNonNull(secretKey);
+    this.sessionToken = requireNonNull(sessionToken);
   }
 
   /**
@@ -130,7 +132,7 @@ public final class MarshalledCredentials implements Writable,
   public MarshalledCredentials(final AWSSessionCredentials awsCredentials) {
     this.accessKey = awsCredentials.getAWSAccessKeyId();
     this.secretKey = awsCredentials.getAWSSecretKey();
-    this.sessionToken = awsCredentials.getAWSSecretKey();
+    this.sessionToken = awsCredentials.getSessionToken();
   }
 
   public String getAccessKey() {
@@ -162,19 +164,19 @@ public final class MarshalledCredentials implements Writable,
   }
 
   public void setRoleARN(String roleARN) {
-    this.roleARN = roleARN;
+    this.roleARN = requireNonNull(roleARN);
   }
 
   public void setAccessKey(final String accessKey) {
-    this.accessKey = accessKey;
+    this.accessKey = requireNonNull(accessKey, "access key");
   }
 
   public void setSecretKey(final String secretKey) {
-    this.secretKey = secretKey;
+    this.secretKey = requireNonNull(secretKey, "secret key");
   }
 
   public void setSessionToken(final String sessionToken) {
-    this.sessionToken = sessionToken;
+    this.sessionToken = requireNonNull(sessionToken, "session token");
   }
 
   @Override
@@ -195,11 +197,9 @@ public final class MarshalledCredentials implements Writable,
 
   @Override
   public int hashCode() {
-
     return Objects.hash(accessKey, secretKey, sessionToken, roleARN,
         expiration);
   }
-
 
   /**
    * Loads the credentials from the owning FS.
@@ -262,31 +262,94 @@ public final class MarshalledCredentials implements Writable,
   @Override
   public String toString() {
     return String.format(
-        "Session Credentials (%s) for user %s%s; role=%s",
-        isValid() ? "valid" : "invalid",
+        "Marshalled %s Credentials for user %s%s; role=\"%s\" (%s)",
+        (hasSessionToken() ? "Session" : "Full"),
         accessKey,
         (expiration == 0)
             ? ""
-            : (" expires " + (new Date(expiration * 1000))),
-        roleARN);
+            : (" expires " + (new Date(expiration))),
+        roleARN,
+        isValid() ? "valid" : "invalid");
   }
 
   /**
    * Is this a valid set of credentials tokens?
+   * The requirement is {@link CredentialTypeRequired#AnyNonEmpty}
    * @return true if the key and secrets are set.
    */
-  public boolean isValid() {
-    return isValid(false);
+  private boolean isValid() {
+    if ( accessKey == null || secretKey == null || sessionToken == null) {
+      // null fields are not permitted, empty is OK for marshalling around.
+      return false;
+    }
+    // now look at whether values are set/unset.
+    boolean hasAccessAndSecretKeys = isNotEmpty(accessKey)
+        && isNotEmpty(secretKey);
+    boolean hasSessionToken = hasSessionToken();
+    switch (CredentialTypeRequired.AnyNonEmpty) {
+
+    case AnyIncludingEmpty:
+      // this is simplest.
+      return true;
+
+    case Empty:
+      // empty. ignore session value if the other keys are unset.
+      return !hasAccessAndSecretKeys;
+
+    case AnyNonEmpty:
+      // just look for the access key and secret key being non-empty
+      return hasAccessAndSecretKeys;
+
+    case FullOnly:
+      return hasAccessAndSecretKeys && !hasSessionToken;
+
+    case SessionOnly:
+      return hasAccessAndSecretKeys && hasSessionToken();
+
+      // this is here to keep the IDE quiet
+    default:
+      return false;
+    }
   }
 
   /**
    * Is this a valid set of credentials tokens?
-   * @param sessionTokenRequired is a session token required?
-   * @return true if all the fields are set.
+   * @param required credential type required.
+   * @return true if the requirements are met.
    */
-  public boolean isValid(boolean sessionTokenRequired) {
-    return accessKey != null && secretKey != null 
-        && (!sessionTokenRequired  || hasSessionToken());
+  public boolean isValid(final CredentialTypeRequired required) {
+    if ( accessKey == null || secretKey == null || sessionToken == null) {
+      // null fields are not permitted, empty is OK for marshalling around.
+      return false;
+    }
+    // now look at whether values are set/unset.
+    boolean hasAccessAndSecretKeys = isNotEmpty(accessKey)
+        && isNotEmpty(secretKey);
+    boolean hasSessionToken = hasSessionToken();
+    switch (required) {
+
+    case AnyIncludingEmpty:
+      // this is simplest.
+      return true;
+
+    case Empty:
+      // empty. ignore session value if the other keys are unset.
+      return !hasAccessAndSecretKeys;
+
+    case AnyNonEmpty:
+      // just look for the access key and secret key being non-empty
+      return hasAccessAndSecretKeys;
+
+    case FullOnly:
+      return hasAccessAndSecretKeys && !hasSessionToken;
+
+    case SessionOnly:
+      return hasAccessAndSecretKeys && hasSessionToken();
+
+      // this is here to keep the IDE quiet
+    default:
+      return false;
+    }
   }
 
   /**
@@ -294,7 +357,7 @@ public final class MarshalledCredentials implements Writable,
    * @return true if there's a session token.
    */
   public boolean hasSessionToken() {
-    return StringUtils.isNotEmpty(sessionToken);
+    return isNotEmpty(sessionToken);
   }
 
   /**
@@ -305,7 +368,8 @@ public final class MarshalledCredentials implements Writable,
    */
   @Override
   public void write(DataOutput out) throws IOException {
-    validate("Writing " + this + ": ", false);
+    validate("Writing " + this + ": ",
+        CredentialTypeRequired.AnyIncludingEmpty);
     Text.writeString(out, accessKey);
     Text.writeString(out, secretKey);
     Text.writeString(out, sessionToken);
@@ -331,15 +395,26 @@ public final class MarshalledCredentials implements Writable,
    * Verify that a set of credentials is valid.
    * @throws DelegationTokenIOException if they aren't
    * @param message message to prefix errors;
-   * @param sessionTokenRequired is a session token required?
+   * @param typeRequired credential type required.
    */
   public void validate(final String message,
-      final boolean sessionTokenRequired) throws IOException {
-    if (!isValid(sessionTokenRequired)) {
-      throw new DelegationTokenIOException(message
-          + INVALID_CREDENTIALS
-          + " in " + this);
+      final CredentialTypeRequired typeRequired) throws IOException {
+    if (!isValid(typeRequired)) {
+      String error = buildInvalidCredentialsError(typeRequired);
+      throw new DelegationTokenIOException(message + error);
     }
+  }
+
+  /**
+   * Build an error string for when the credentials do not match
+   * that required.
+   * @param typeRequired credential type required.
+   * @return an error string.
+   */
+  public String buildInvalidCredentialsError(
+      final CredentialTypeRequired typeRequired) {
+    return INVALID_CREDENTIALS
+        + " in " + this.toString() + " required: " + typeRequired;
   }
 
   /**
@@ -352,7 +427,7 @@ public final class MarshalledCredentials implements Writable,
   @Override
   public AWSCredentials getCredentials() throws
       CredentialInitializationException {
-    return toAWSCredentials(false);
+    return toAWSCredentials(CredentialTypeRequired.AnyNonEmpty);
   }
 
   /**
@@ -360,9 +435,10 @@ public final class MarshalledCredentials implements Writable,
    * @return a set of session credentials.
    * @throws CredentialInitializationException init/validation problems
    */
-  public BasicSessionCredentials getSessionCredentials() throws
-      CredentialInitializationException {
-    return (BasicSessionCredentials) toAWSCredentials(true);
+  public BasicSessionCredentials getSessionCredentials()
+      throws CredentialInitializationException {
+    return (BasicSessionCredentials) toAWSCredentials(
+        CredentialTypeRequired.SessionOnly);
   }
 
   
@@ -377,16 +453,17 @@ public final class MarshalledCredentials implements Writable,
 
   /**
    * Create an AWS credential set from these values.
-   * @param requireSessionCredentials is a session token required.
+   * @param typeRequired type of credentials required
    * @return a new set of credentials
    * @throws CredentialInitializationException validation failure
    */
   public AWSCredentials toAWSCredentials(
-      final boolean requireSessionCredentials)
+      final CredentialTypeRequired typeRequired)
       throws CredentialInitializationException {
-    
-    if (!isValid(requireSessionCredentials)) {
-      throw new CredentialInitializationException(INVALID_CREDENTIALS);
+
+    if (!isValid(typeRequired)) {
+      throw new CredentialInitializationException(
+          buildInvalidCredentialsError(typeRequired));
     }
     if (hasSessionToken()) {
       // a session token was supplied, so return session credentials
@@ -419,10 +496,14 @@ public final class MarshalledCredentials implements Writable,
   public static MarshalledCredentials fromEnvironment(
       final Map<String, String> env) {
     MarshalledCredentials creds = new MarshalledCredentials();
-    creds.setAccessKey(env.get("AWS_ACCESS_KEY_ID"));
-    creds.setSecretKey(env.get("AWS_SECRET_ACCESS_KEY"));
-    creds.setSessionToken(env.get("AWS_SESSION_TOKEN"));
+    creds.setAccessKey(nullToEmptyString(env.get("AWS_ACCESS_KEY_ID")));
+    creds.setSecretKey(nullToEmptyString(env.get("AWS_SECRET_ACCESS_KEY")));
+    creds.setSessionToken(nullToEmptyString(env.get("AWS_SESSION_TOKEN")));
     return creds;
+  }
+  
+  private static String nullToEmptyString(final String src) {
+    return Optional.ofNullable(src).orElse("");
   }
 
   /**
@@ -432,5 +513,33 @@ public final class MarshalledCredentials implements Writable,
    */
   public static MarshalledCredentials empty() {
     return new MarshalledCredentials("", "", "");
+  }
+  
+  public enum CredentialTypeRequired {
+    /** No entry at all. */
+    Empty("None"),
+    /** Any credential type including "unset". */
+    AnyIncludingEmpty("Full, Session or None"),
+    /** Any credential type is OK. */
+    AnyNonEmpty("Full or Session"),
+    /** The credentials must be session or role credentials. */
+    SessionOnly("Session"),
+    /** Full credentials are required. */
+    FullOnly("Full");
+
+    private final String text;
+
+    CredentialTypeRequired(final String text) {
+      this.text = text;
+    }
+
+    public String getText() {
+      return text;
+    }
+
+    @Override
+    public String toString() {
+      return getText();
+    }
   }
 }

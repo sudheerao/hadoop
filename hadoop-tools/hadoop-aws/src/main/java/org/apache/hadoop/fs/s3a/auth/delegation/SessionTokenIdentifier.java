@@ -133,4 +133,14 @@ public class SessionTokenIdentifier extends
   public MarshalledCredentials getMarshalledCredentials() {
     return marshalledCredentials;
   }
+
+  /**
+   * Add the (sanitized) marshalled credentials to the string value.
+   * @return a string value for test assertions and debugging.
+   */
+  @Override
+  public String toString() {
+    return super.toString()
+        + "; marshalledCredentials=" + marshalledCredentials;
+  }
 }

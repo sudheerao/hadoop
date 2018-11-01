@@ -24,7 +24,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URI;
 
-import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,12 +35,11 @@ import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 
+import static java.util.Objects.requireNonNull;
 import static org.apache.hadoop.fs.s3a.Constants.AWS_CREDENTIALS_PROVIDER;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.removeBaseAndBucketOverrides;
-import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKENS_ENABLED;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_BINDING;
 import static org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.lookupS3ADelegationToken;
-import static org.apache.hadoop.test.GenericTestUtils.notNull;
 
 /**
  * superclass class for DT tests.
@@ -66,8 +64,9 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
       URI uri,
       Text kind) throws IOException {
     final Token<AbstractS3ATokenIdentifier> token =
-        notNull("No Token for " + uri,
-          lookupS3ADelegationToken(submittedCredentials, uri));
+        requireNonNull(
+            lookupS3ADelegationToken(submittedCredentials, uri),
+            "No Token for " + uri);
     assertEquals("Kind of token " + token,
         kind,
         token.getKind());
@@ -110,8 +109,7 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
   protected static void assertBoundToDT(final S3AFileSystem fs,
       final Text tokenKind) {
     final S3ADelegationTokens dtSupport
-        = notNull("No token integration",
-        fs.getDtIntegration());
+        = requireNonNull(fs.getDtIntegration(), "No token integration");
     assertTrue("Expected bound to a delegation token: " + dtSupport,
         dtSupport.isBoundToDT());
     assertEquals("Wrong token kind",
@@ -137,7 +135,8 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
    * @return creation count
    */
   private static int getTokenCreationCount(final S3AFileSystem fs) {
-    return notNull("DT integration", fs.getDtIntegration()).getCreationCount();
+    return requireNonNull(fs.getDtIntegration(), "DT integration")
+        .getCreationCount();
   }
 
   /**
@@ -147,7 +146,6 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
    */
   protected void enableDelegationTokens(Configuration conf, String binding) {
     LOG.info("Enabling delegation token support for {}", binding);
-    conf.setBoolean(DELEGATION_TOKENS_ENABLED, true);
     conf.set(DELEGATION_TOKEN_BINDING, binding);
   }
 
@@ -182,7 +180,7 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
    */
   protected void saveDT(final File tokenFile, final Token<?> token)
       throws IOException {
-    Preconditions.checkNotNull(token, "Null token");
+    requireNonNull(token, "Null token");
     Credentials cred = new Credentials();
     cred.addToken(token.getService(), token);
 

@@ -76,6 +76,7 @@ import static org.junit.Assert.*;
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
 public final class S3ATestUtils {
+
   private static final Logger LOG = LoggerFactory.getLogger(
       S3ATestUtils.class);
 
@@ -1008,7 +1009,8 @@ public final class S3ATestUtils {
       final Configuration conf,
       final String bucket)
       throws IOException {
-    return requestSessionCredentials(conf, bucket, 900);
+    return requestSessionCredentials(conf, bucket,
+        TEST_SESSION_TOKEN_DURATION);
   }
 
   /**
@@ -1034,7 +1036,8 @@ public final class S3ATestUtils {
             ASSUMED_ROLE_STS_ENDPOINT_REGION_DEFAULT),
         duration,
         new Invoker(new S3ARetryPolicy(conf), Invoker.LOG_EVENT));
-    sc.validate("", true);
+    sc.validate("requested session credentials: ",
+        MarshalledCredentials.CredentialTypeRequired.SessionOnly);
     return sc;
   }
 

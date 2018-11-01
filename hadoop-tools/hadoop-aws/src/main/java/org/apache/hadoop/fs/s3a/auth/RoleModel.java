@@ -35,8 +35,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.util.JsonSerialization;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static java.util.Objects.requireNonNull;
 
 /**
  * Jackson Role Model for Role Properties, for API clients and tests.
@@ -302,8 +302,8 @@ public class RoleModel {
 
     @Override
     public void validate() {
-      checkNotNull(sid, "Sid");
-      checkNotNull(effect, "Effect");
+      requireNonNull(sid, "Sid");
+      requireNonNull(effect, "Effect");
       checkState(!(action.isEmpty()), "Empty Action");
       checkState(!(resource.isEmpty()), "Empty Resource");
     }
@@ -371,7 +371,7 @@ public class RoleModel {
      */
     @Override
     public void validate() {
-      checkNotNull(statement, "Statement");
+      requireNonNull(statement, "Statement");
       checkState(VERSION.equals(version), "Invalid Version: %s", version);
       statement.stream().forEach((a) -> a.validate());
     }

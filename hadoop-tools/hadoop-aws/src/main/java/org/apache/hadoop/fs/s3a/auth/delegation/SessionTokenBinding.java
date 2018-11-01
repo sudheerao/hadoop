@@ -185,7 +185,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
             getFileSystem().getUri(),
             getConfig(),
             tokenIdentifier.getMarshalledCredentials(),
-            true));
+            MarshalledCredentials.CredentialTypeRequired.SessionOnly));
   }
 
   /**
@@ -295,7 +295,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
             (AWSSessionCredentials) awsCredentials);
       } else {
         throw new DelegationTokenIOException(
-            "Parent auth chain is no longer supplying session secrets");
+            "AWS Authentication chain is no longer supplying session secrets");
       }
     }
     return new SessionTokenIdentifier(getKind(),

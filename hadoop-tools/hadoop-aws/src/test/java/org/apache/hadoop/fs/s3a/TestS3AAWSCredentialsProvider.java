@@ -29,6 +29,7 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
 import com.amazonaws.auth.InstanceProfileCredentialsProvider;
+import com.google.common.collect.Sets;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -99,7 +100,7 @@ public class TestS3AAWSCredentialsProvider {
     URI uri = testFile.toUri();
     AWSCredentialProviderList list = S3AUtils.createAWSCredentialProviderSet(
         uri, conf);
-    List<Class<? extends AWSCredentialsProvider>> expectedClasses =
+    List<Class<?>> expectedClasses =
         Arrays.asList(
             TemporaryAWSCredentialsProvider.class,
             SimpleAWSCredentialsProvider.class,
@@ -117,22 +118,16 @@ public class TestS3AAWSCredentialsProvider {
         uri1, conf);
     AWSCredentialProviderList list2 = S3AUtils.createAWSCredentialProviderSet(
         uri2, conf);
-    List<Class<? extends AWSCredentialsProvider>> expectedClasses =
-        Arrays.asList(
-            SimpleAWSCredentialsProvider.class,
-            EnvironmentVariableCredentialsProvider.class,
-            InstanceProfileCredentialsProvider.class);
+    List<Class<?>> expectedClasses = STANDARD_AWS_PROVIDERS;
     assertCredentialProviders(expectedClasses, list1);
     assertCredentialProviders(expectedClasses, list2);
-    assertSameInstanceProfileCredentialsProvider(list1.getProviders().get(2),
-        list2.getProviders().get(2));
   }
 
   @Test
   public void testConfiguredChain() throws Exception {
     URI uri1 = new URI("s3a://bucket1"), uri2 = new URI("s3a://bucket2");
     Configuration conf = new Configuration();
-    List<Class<? extends AWSCredentialsProvider>> expectedClasses =
+    List<Class<?>> expectedClasses =
         Arrays.asList(
             EnvironmentVariableCredentialsProvider.class,
             InstanceProfileCredentialsProvider.class,
@@ -144,16 +139,14 @@ public class TestS3AAWSCredentialsProvider {
         uri2, conf);
     assertCredentialProviders(expectedClasses, list1);
     assertCredentialProviders(expectedClasses, list2);
-    assertSameInstanceProfileCredentialsProvider(list1.getProviders().get(1),
-        list2.getProviders().get(1));
   }
 
   @Test
   public void testConfiguredChainUsesSharedInstanceProfile() throws Exception {
     URI uri1 = new URI("s3a://bucket1"), uri2 = new URI("s3a://bucket2");
-    Configuration conf = new Configuration();
-    List<Class<? extends AWSCredentialsProvider>> expectedClasses =
-        Arrays.<Class<? extends AWSCredentialsProvider>>asList(
+    Configuration conf = new Configuration(false);
+    List<Class<?>> expectedClasses =
+        Arrays.asList(
             InstanceProfileCredentialsProvider.class);
     conf.set(AWS_CREDENTIALS_PROVIDER, buildClassListString(expectedClasses));
     AWSCredentialProviderList list1 = S3AUtils.createAWSCredentialProviderSet(
@@ -162,10 +155,24 @@ public class TestS3AAWSCredentialsProvider {
         uri2, conf);
     assertCredentialProviders(expectedClasses, list1);
     assertCredentialProviders(expectedClasses, list2);
-    assertSameInstanceProfileCredentialsProvider(list1.getProviders().get(0),
-        list2.getProviders().get(0));
   }
 
+  @Test
+  public void testFallbackToDefaults() throws Throwable {
+    Configuration conf = new Configuration(false);
+    conf.set(AWS_CREDENTIALS_PROVIDER, "  ");
+    // build up the base provider
+    final AWSCredentialProviderList credentials = buildAWSProviderList(
+        new URI("s3a://bucket1"),
+        conf,
+        ASSUMED_ROLE_CREDENTIALS_PROVIDER,
+        Arrays.asList(
+            EnvironmentVariableCredentialsProvider.class),
+        Sets.newHashSet());
+    assertTrue("empty credentials", credentials.size() > 0);
+
+  }
+  
   /**
    * A credential provider declared as abstract, so it cannot be instantiated.
    */
@@ -229,13 +236,13 @@ public class TestS3AAWSCredentialsProvider {
    * @param list providers to check
    */
   private static void assertCredentialProviders(
-      List<Class<? extends AWSCredentialsProvider>> expectedClasses,
+      List<Class<?>> expectedClasses,
       AWSCredentialProviderList list) {
     assertNotNull(list);
     List<AWSCredentialsProvider> providers = list.getProviders();
     assertEquals(expectedClasses.size(), providers.size());
     for (int i = 0; i < expectedClasses.size(); ++i) {
-      Class<? extends AWSCredentialsProvider> expectedClass =
+      Class<?> expectedClass =
           expectedClasses.get(i);
       AWSCredentialsProvider provider = providers.get(i);
       assertNotNull(
@@ -246,23 +253,6 @@ public class TestS3AAWSCredentialsProvider {
               i, expectedClass, provider.getClass()),
           expectedClass.isAssignableFrom(provider.getClass()));
     }
-  }
-
-  /**
-   * Asserts that two different references point to the same shared instance of
-   * InstanceProfileCredentialsProvider using a descriptive assertion message.
-   * @param provider1 provider to check
-   * @param provider2 provider to check
-   */
-  private static void assertSameInstanceProfileCredentialsProvider(
-      AWSCredentialsProvider provider1, AWSCredentialsProvider provider2) {
-    assertNotNull(provider1);
-    assertInstanceOf(InstanceProfileCredentialsProvider.class, provider1);
-    assertNotNull(provider2);
-    assertInstanceOf(InstanceProfileCredentialsProvider.class, provider2);
-    assertSame("Expected all usage of InstanceProfileCredentialsProvider to "
-            + "share a singleton instance, but found unique instances.",
-        provider1, provider2);
   }
 
   /**

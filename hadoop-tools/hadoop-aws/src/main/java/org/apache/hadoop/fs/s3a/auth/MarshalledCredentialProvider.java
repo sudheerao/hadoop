@@ -46,15 +46,15 @@ public class MarshalledCredentialProvider extends
       = "org.apache.hadoop.fs.s3a.auth.MarshalledCredentialProvider";
 
   private final MarshalledCredentials credentials;
-  private final boolean sessionTokenRequired;
+
+  private final MarshalledCredentials.CredentialTypeRequired typeRequired;
 
   /**
    * Constructor.
    * @param uri filesystem URI
    * @param conf configuration.
    * @param credentials marshalled credentials.
-   * @param sessionTokenRequired flag to indicate that the marshalled
-   * credentials must include a session token.
+   * @param typeRequired credential type required.
    * @throws CredentialInitializationException validation failure
    * @throws IOException failure
    */
@@ -62,11 +62,11 @@ public class MarshalledCredentialProvider extends
       final URI uri,
       final Configuration conf,
       final MarshalledCredentials credentials,
-      final boolean sessionTokenRequired)
+      final MarshalledCredentials.CredentialTypeRequired typeRequired)
       throws IOException {
     super(uri, conf);
     Preconditions.checkArgument(uri != null, "No filesystem URI");
-    this.sessionTokenRequired = sessionTokenRequired;
+    this.typeRequired = typeRequired;
     this.credentials = credentials;
     init();
   }
@@ -80,7 +80,7 @@ public class MarshalledCredentialProvider extends
   @Override
   protected AWSCredentials createCredentials(final Configuration config)
       throws IOException {
-    return credentials.toAWSCredentials(sessionTokenRequired);
+    return credentials.toAWSCredentials(typeRequired);
   }
 
 }

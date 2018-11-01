@@ -179,4 +179,9 @@ public interface S3ATestConstants {
    */
   String FS_S3A_IMPL_DISABLE_CACHE
       = "fs.s3a.impl.disable.cache";
+
+  /**
+   * Duration in seconds for role/session token requests.
+   */
+  int TEST_SESSION_TOKEN_DURATION = 900;
 }

@@ -39,6 +39,8 @@ import static org.apache.hadoop.fs.s3a.S3ATestUtils.disableFilesystemCaching;
 import static org.apache.hadoop.fs.s3a.auth.RoleModel.*;
 import static org.apache.hadoop.fs.s3a.auth.RolePolicies.*;
 import static org.apache.hadoop.test.LambdaTestUtils.intercept;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Helper class for testing roles.
@@ -151,7 +153,7 @@ public final class RoleTestUtils {
     conf.set(ASSUMED_ROLE_ARN, roleARN);
     conf.set(ASSUMED_ROLE_SESSION_NAME, "test");
     conf.set(ASSUMED_ROLE_SESSION_DURATION, "15m");
-    conf.unset(DelegationConstants.DELEGATION_TOKENS_ENABLED);
+    conf.unset(DelegationConstants.DELEGATION_TOKEN_BINDING);
     disableFilesystemCaching(conf);
     return conf;
   }
@@ -183,5 +185,28 @@ public final class RoleTestUtils {
     Assume.assumeTrue("No ARN defined in " + ASSUMED_ROLE_ARN,
         !arn.isEmpty());
     return arn;
+  }
+
+  /**
+   * Assert that credentials are equal without printing secrets.
+   * Different assertions will have different message details.
+   * @param message message to use as base of error.
+   * @param expected expected credentials
+   * @param actual actual credentials.
+   */
+  public static void assertCredentialsEqual(final String message,
+      final MarshalledCredentials expected,
+      final MarshalledCredentials actual) {
+    // DO NOT use assertEquals() here, as that could print a secret to
+    // the test report.
+    assertEquals(message + ": access key",
+        expected.getAccessKey(),
+        actual.getAccessKey());
+    assertTrue(message + ": secret key",
+        expected.getSecretKey().equals(actual.getSecretKey()));
+    assertEquals(message + ": session token",
+        expected.getSessionToken(),
+        actual.getSessionToken());
+
   }
 }

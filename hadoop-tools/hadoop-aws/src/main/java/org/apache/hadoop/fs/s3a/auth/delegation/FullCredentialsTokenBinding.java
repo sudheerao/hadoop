@@ -22,14 +22,12 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Optional;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
 import org.apache.hadoop.fs.s3a.S3AUtils;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialProvider;
-import org.apache.hadoop.fs.s3a.auth.RoleModel;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
+import org.apache.hadoop.fs.s3a.auth.RoleModel;
 import org.apache.hadoop.fs.s3native.S3xLoginHelper;
 
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.FULL_TOKEN_KIND;
@@ -48,10 +46,6 @@ public class FullCredentialsTokenBinding extends
    * Wire name of this binding includes a version marker: {@value}.
    */
   private static final String NAME = "FullCredentials/001";
-
-  @VisibleForTesting
-  public static final String E_SESSION_TOKENS_NOT_SUPPORTED
-      = "Session tokens not supported";
 
   /**
    * Long-lived AWS credentials.
@@ -96,12 +90,16 @@ public class FullCredentialsTokenBinding extends
       // if there are none, look for the environment variables.
       awsCredentials = MarshalledCredentials.fromEnvironment(
           System.getenv());
-      credentialOrigin += "; source = Environment variables";
+      if (awsCredentials.isValid(
+          MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty)) {
+        // valid tokens, so mark as origin
+        credentialOrigin += "; source = Environment variables";
+      } else {
+        credentialOrigin = "no credentials in configuration or environment variables";
+      }
     }
-    awsCredentials.validate("local AWS credentials", false);
-    if(awsCredentials.hasSessionToken()) {
-      throw new DelegationTokenIOException(E_SESSION_TOKENS_NOT_SUPPORTED);
-    }
+    awsCredentials.validate(credentialOrigin +": ",
+        MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty);
   }
 
 
@@ -119,11 +117,11 @@ public class FullCredentialsTokenBinding extends
             getFileSystem().getUri(),
             getConfig(),
             awsCredentials,
-            false));
+            MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty));
   }
 
   /**
-   * Create the DT.
+   * Create a new delegation token.
    *
    * It's slightly inefficient to create a new one every time, but
    * it avoids concurrency problems with managing any singleton.
@@ -157,7 +155,7 @@ public class FullCredentialsTokenBinding extends
             getFileSystem().getUri(),
             getConfig(),
             tokenIdentifier.getMarshalledCredentials(),
-            false));
+            MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty));
   }
 
   @Override

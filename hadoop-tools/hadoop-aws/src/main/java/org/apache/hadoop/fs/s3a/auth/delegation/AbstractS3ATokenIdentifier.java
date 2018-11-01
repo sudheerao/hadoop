@@ -31,7 +31,7 @@ import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.delegation.web.DelegationTokenIdentifier;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 /**
  * An S3A Delegation Token Identifier: contains the information needed
@@ -104,8 +104,8 @@ public abstract class AbstractS3ATokenIdentifier
       final String origin,
       final EncryptionSecrets encryptionSecrets) {
     this(kind, owner, new Text(), new Text(), uri);
-    this.origin = checkNotNull(origin);
-    this.encryptionSecrets = checkNotNull(encryptionSecrets);
+    this.origin = requireNonNull(origin);
+    this.encryptionSecrets = requireNonNull(encryptionSecrets);
   }
 
   /**
@@ -123,7 +123,7 @@ public abstract class AbstractS3ATokenIdentifier
       final Text realUser,
       final URI uri) {
     super(kind, owner, renewer, realUser);
-    this.uri = checkNotNull(uri);
+    this.uri = requireNonNull(uri);
   }
 
   /**

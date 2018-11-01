@@ -46,6 +46,7 @@ import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 
+import static java.util.Objects.requireNonNull;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.assumeSessionTestsEnabled;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.deployService;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.disableFilesystemCaching;
@@ -55,7 +56,6 @@ import static org.apache.hadoop.fs.s3a.auth.RoleTestUtils.probeForAssumedRoleARN
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.*;
 import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizedHadoopCluster.assertSecurityEnabled;
 import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizedHadoopCluster.closeUserFileSystems;
-import static org.apache.hadoop.test.GenericTestUtils.notNull;
 
 /**
  * Submit a job with S3 delegation tokens.
@@ -252,7 +252,8 @@ public class ITestDelegatedMRJob extends AbstractDelegationIT {
         JobStatus.State.RUNNING, status.getState());
 
     final Credentials submittedCredentials =
-        notNull("job submitted credentials", job.getSubmittedCredentials());
+        requireNonNull(job.getSubmittedCredentials(),
+            "job submitted credentials");
     final Collection<Token<? extends TokenIdentifier>> tokens
         = submittedCredentials.getAllTokens();
 

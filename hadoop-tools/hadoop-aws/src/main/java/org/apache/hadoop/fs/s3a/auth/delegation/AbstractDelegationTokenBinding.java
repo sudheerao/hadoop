@@ -23,7 +23,6 @@ import java.net.URI;
 import java.nio.charset.Charset;
 import java.util.Optional;
 
-import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,6 +35,7 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.token.SecretManager;
 import org.apache.hadoop.security.token.Token;
 
+import static java.util.Objects.requireNonNull;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DURATION_LOG_AT_INFO;
 
 /**
@@ -92,7 +92,7 @@ public abstract class AbstractDelegationTokenBinding extends AbstractDTService {
   protected AbstractDelegationTokenBinding(final String name,
       final Text kind) {
     super(name);
-    this.kind = Preconditions.checkNotNull(kind);
+    this.kind = requireNonNull(kind);
   }
 
   /**
@@ -127,8 +127,9 @@ public abstract class AbstractDelegationTokenBinding extends AbstractDTService {
       final EncryptionSecrets encryptionSecrets) throws IOException {
     requireServiceStarted();
     AbstractS3ATokenIdentifier tokenIdentifier =
-        Preconditions.checkNotNull(
-            createTokenIdentifier(policy, encryptionSecrets));
+        requireNonNull(
+            createTokenIdentifier(policy, encryptionSecrets),
+            "Token identifier");
 
     Token<AbstractS3ATokenIdentifier> token =
         new Token<>(tokenIdentifier, secretManager);

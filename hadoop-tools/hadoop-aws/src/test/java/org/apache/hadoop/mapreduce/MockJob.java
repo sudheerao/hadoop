@@ -92,7 +92,7 @@ public class MockJob extends Job {
 
   /** Only for mocking via unit tests. */
   @InterfaceAudience.Private
-  public JobSubmitter getJobSubmitter(FileSystem fs,
+  JobSubmitter getJobSubmitter(FileSystem fs,
       ClientProtocol submitClient) throws IOException {
 
     return new JobSubmitter(fs, mockClient);

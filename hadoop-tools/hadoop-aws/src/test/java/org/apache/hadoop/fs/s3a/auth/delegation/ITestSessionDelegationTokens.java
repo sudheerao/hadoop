@@ -38,6 +38,7 @@ import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 
+import static java.util.Objects.requireNonNull;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.assumeSessionTestsEnabled;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.roundTrip;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.unsetHadoopCredentialProviders;
@@ -45,7 +46,6 @@ import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEG
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_SESSION_BINDING;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.SESSION_TOKEN_KIND;
 import static org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding.CREDENTIALS_CONVERTED_TO_DELEGATION_TOKEN;
-import static org.apache.hadoop.test.GenericTestUtils.notNull;
 
 /**
  * Tests use of Hadoop delegation tokens to marshall S3 credentials.
@@ -107,10 +107,9 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
     assertTrue("Empty token file", tokenFile.length() > 0);
     Credentials creds = Credentials.readTokenStorageFile(tokenFile, conf);
     Text serviceId = delegationTokens.getService();
-    Token<? extends TokenIdentifier> token =
-        notNull("No token for \"" + serviceId + "\"" +
-                " in: " + creds.getAllTokens(),
-        creds.getToken(serviceId));
+    Token<? extends TokenIdentifier> token = requireNonNull(
+        creds.getToken(serviceId),
+        () -> "No token for \"" + serviceId + "\" in: " + creds.getAllTokens());
     AbstractS3ATokenIdentifier dtId =
         (AbstractS3ATokenIdentifier) token.decodeIdentifier();
     dtId.validate();
@@ -147,34 +146,46 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
 
     assertNull("Current User has delegation token",
         delegationTokens.selectTokenFromFSOwner());
-    Token<AbstractS3ATokenIdentifier> dt
-        = delegationTokens.createDelegationToken(
-            new EncryptionSecrets(S3AEncryptionMethods.SSE_KMS, "kms key"));
-    assertEquals("Token kind mismatch", getTokenKind(), dt.getKind());
+    EncryptionSecrets secrets = new EncryptionSecrets(
+        S3AEncryptionMethods.SSE_KMS, "kms key");
+    Token<AbstractS3ATokenIdentifier> originalDT
+        = delegationTokens.createDelegationToken(secrets);
+    assertEquals("Token kind mismatch", getTokenKind(), originalDT.getKind());
+
+    // decode to get the binding info
+    SessionTokenIdentifier issued =
+        requireNonNull(
+            (SessionTokenIdentifier) originalDT.decodeIdentifier(),
+            () -> "no identifier in " + originalDT);
+    issued.validate();
 
     final MarshalledCredentials creds;
-    try(S3ADelegationTokens dt2 = instantiateDTSupport(getConfiguration());) {
+    try(S3ADelegationTokens dt2 = instantiateDTSupport(getConfiguration())) {
       dt2.start();
 
-      dt2.resetTokenBindingToDT(dt);
+      dt2.resetTokenBindingToDT(originalDT);
       final AWSSessionCredentials awsSessionCreds
           = verifySessionCredentials(
           dt2.getCredentialProviders().getCredentials());
       final MarshalledCredentials origCreds = new MarshalledCredentials(
           awsSessionCreds);
 
+      Token<AbstractS3ATokenIdentifier> boundDT =
+          dt2.getBoundOrNewDT(secrets);
+      assertEquals(originalDT, boundDT);
       // simulate marshall and transmission
       creds = roundTrip(origCreds, conf);
+      SessionTokenIdentifier reissued
+          = (SessionTokenIdentifier) dt2.createDelegationToken(secrets)
+          .decodeIdentifier();
+      reissued.validate();
     }
-
-    // decode to get the binding info
-    AbstractS3ATokenIdentifier dtId =
-        notNull("no identifier in " + dt, dt.decodeIdentifier());
-    dtId.validate();
 
     // now use those chained credentials to create a new FS instance
     // and then get a session DT from it and expect equality
     verifyCredentialPropagation(fs, creds, new Configuration(conf));
+   
+    
   }
 
   /**
@@ -187,6 +198,7 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
    * @return the retrieved DT. This is only for error reporting.
    * @throws IOException failure.
    */
+  @SuppressWarnings("OptionalGetWithoutIsPresent")
   protected AbstractS3ATokenIdentifier verifyCredentialPropagation(
       final S3AFileSystem fs,
       final MarshalledCredentials session,
@@ -235,7 +247,6 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
   public void testDBindingReentrancyLock() throws Throwable {
     describe("Verify that S3ADelegationTokens cannot be bound twice when there" 
         + " is no token");
-    S3AFileSystem fs = getFileSystem();
     S3ADelegationTokens delegation = instantiateDTSupport(getConfiguration());
     delegation.start();
     assertFalse("Delegation is bound to a DT: " + delegation,

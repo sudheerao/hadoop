@@ -43,7 +43,6 @@ import org.apache.hadoop.test.GenericTestUtils;
 import org.apache.hadoop.util.concurrent.HadoopExecutors;
 
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.assumeSessionTestsEnabled;
-import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKENS_ENABLED;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_BINDING;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_SESSION_BINDING;
 
@@ -100,7 +99,6 @@ public class ILoadTestSessionCredentials extends S3AScaleTestBase {
   @Override
   protected Configuration createScaleConfiguration() {
     Configuration conf = super.createScaleConfiguration();
-    conf.setBoolean(DELEGATION_TOKENS_ENABLED, true);
     conf.set(DELEGATION_TOKEN_BINDING,
         getDelegationBinding());
     conf.setInt(Constants.MAXIMUM_CONNECTIONS,

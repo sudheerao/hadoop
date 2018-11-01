@@ -24,6 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.services.securitytoken.model.Credentials;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,9 +57,12 @@ public class RoleTokenBinding extends SessionTokenBinding {
    */
   private static final String NAME = "RoleCredentials/001";
 
+  /**
+   * Error message when there is no Role ARN.
+   */
+  @VisibleForTesting
   public static final String E_NO_ARN =
       "No role ARN defined in " + DELEGATION_TOKEN_ROLE_ARN;
-
   /**
    * Constructor.
    * Name is {@link #name}; token kind is
@@ -87,7 +91,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
             getFileSystem().getUri(),
             getConfig(),
             tokenIdentifier.getMarshalledCredentials(),
-            true));
+            MarshalledCredentials.CredentialTypeRequired.SessionOnly));
   }
 
   /**

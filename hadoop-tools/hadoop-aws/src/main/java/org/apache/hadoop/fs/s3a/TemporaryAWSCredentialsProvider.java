@@ -73,7 +73,8 @@ public class TemporaryAWSCredentialsProvider extends
   protected AWSCredentials createCredentials(Configuration config)
       throws IOException {
     return MarshalledCredentials.load(getUri(), config)
-        .toAWSCredentials(true);
+        .toAWSCredentials(
+            MarshalledCredentials.CredentialTypeRequired.SessionOnly);
   }
 
 }

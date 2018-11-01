@@ -869,16 +869,4 @@ public abstract class GenericTestUtils {
     return threadCount;
   }
 
-  /**
-   * Return the result, after verifying that it is not null.
-   * @param message message to use in assertion text if the result is null
-   * @param val value to assert is non null
-   * @param <T> type of response
-   * @return the evaluated result
-   * @throws AssertionError with the text of "message" if the  value is null.
-   */
-  public static <T> T notNull(String message, T val) {
-    Assert.assertNotNull(message, val);
-    return val;
-  }
 }

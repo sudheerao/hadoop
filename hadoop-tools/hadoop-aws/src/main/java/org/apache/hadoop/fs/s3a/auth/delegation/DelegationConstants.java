@@ -32,17 +32,13 @@ import org.apache.hadoop.io.Text;
  * STS binding, default ARN, etc. This makes documenting everything that
  * much easier and avoids trying to debug precisely which sts endpoint
  * property should be set.
+ * 
+ * Most settings here are replicated in {@code core-default.xml}; the
+ * values MUST be kept in sync.
  */
 @InterfaceAudience.Public
 @InterfaceStability.Unstable
 public final class DelegationConstants {
-
-  /**
-   * Flag to indicate that delegation tokens are to be generated
-   * from {@link S3AFileSystem#getDelegationToken(String)} : {@value}.
-   */
-  public static final String DELEGATION_TOKENS_ENABLED =
-      "fs.s3a.delegation.tokens.enabled";
 
   /**
    * Default policy about delegation token support: {@value}.
@@ -107,12 +103,16 @@ public final class DelegationConstants {
    */
   public static final String DELEGATION_TOKEN_BINDING =
       "fs.s3a.delegation.token.binding";
-
   /**
    * Session Token binding classname: {@value}.
    */
   public static final String DELEGATION_TOKEN_SESSION_BINDING =
       "org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding";
+
+  /**
+   * Default token binding {@value}.
+   */
+  public static final String DEFAULT_DELEGATION_TOKEN_BINDING = "";
 
   /**
    * Token binding to pass full credentials: {@value}.
@@ -154,13 +154,12 @@ public final class DelegationConstants {
    */
   static final boolean DURATION_LOG_AT_INFO = true;
 
-
   /**
    * If the token binding auth chain is only session-level auth, you
    * can't use the role binding: {@value}.
    */
   public static final String E_NO_SESSION_TOKENS_FOR_ROLE_BINDING
-      = "Cannot issue S3A Delegation Tokens without full AWS credentials";
+      = "Cannot issue S3A Role Delegation Tokens without full AWS credentials";
 
   private DelegationConstants() {
   }

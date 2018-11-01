@@ -73,7 +73,8 @@ public class TestS3ADelegationTokenSupport {
     decoded.validate();
     MarshalledCredentials creds
         = ((SessionTokenIdentifier) decoded).getMarshalledCredentials();
-    assertNotNull("credentials", creds.toAWSCredentials(false));
+    assertNotNull("credentials", creds.toAWSCredentials(
+        MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty));
     assertEquals(alice, decoded.getOwner());
     UserGroupInformation decodedUser = decoded.getUser();
     assertEquals("name of " + decodedUser,

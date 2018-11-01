@@ -16,7 +16,7 @@
 
 <!-- MACRO{toc|fromDepth=0|toDepth=2} -->
 
-## <a name="introduction"></a> Introducting S3A Delegation Tokens.
+## <a name="introduction"></a> Introducing S3A Delegation Tokens.
 
 The S3A filesystem client supports `Hadoop Delegation Tokens`.
 This allows YARN application like Apache Spark or services such as Apache Oozie to
@@ -91,8 +91,8 @@ tokens required to access specific filesystems *with the rights of the user
 submitting the query*.
 
 All these applications normally only retrieve delegation tokens when security
-is enabled. This is why the cluster configuration needs to enable it.
-This is expected for any secure Hadoop clusters anyway.
+is enabled. This is why the cluster configuration needs to enable Kerberos.
+Production Hadoop clusters need Kerberos for security anyway.
 
 
 ## <a name="s3a-delegation-tokens"></a> S3A Delegation Tokens.
@@ -113,6 +113,11 @@ wishes to work with must have a separate delegation token issued.
 S3A implements Delegation Tokens in its `org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens`
 class, which then supports multiple "bindings" behind it, so supporting
 different variants of S3A Delegation Tokens.
+
+Because applications only collect Delegation Tokens in secure clusters, 
+It does mean that to be able to submit delegation tokens in transient
+cloud-hosted Hadoop clusters, _these clusters must also have Kerberos enabled_.
+
 
 ### <a name="session-tokens"></a> S3A Session Delegation Tokens
 
@@ -182,25 +187,24 @@ be collected.*
 
 Once Kerberos enabled, the process for acquiring tokens is as follows:
 
-1. Enable Delegation token issuing in the S3A Filesystem in
-`fs.s3a.delegation.tokens.enabled`.
-1. Set `fs.s3a.delegation.token.binding` to the classname of the token binding
+1. Enable Delegation token support by setting `fs.s3a.delegation.token.binding`
+to the classname of the token binding to use.
 to use.
+1. Add any other binding-specific settings (STS endpoint, IAM role, etc.)
 1. Make sure the settings are the same in the service as well as the client.
 1. In the client, switch to using a [Hadoop Credential Provider](hadoop-project-dist/hadoop-common/CredentialProviderAPI.html)
 for storing your local credentials, *with a local filesystem store
  (`localjceks:` or `jcecks://file`), so as to keep the full secrets out of any
  job configurations.
-1. Execute the client from (kerberos-authenticated ) account/application configured with the
-login credentials for an AWS account able to issue session tokens.
+1. Execute the client from a Kerberos-authenticated account
+application configured with the login credentials for an AWS account able to issue session tokens.
 
 ### Configuration Parameters
 
 
-|  key | meaning | default |
+| **Key** | **Meaning** | **Default** |
 | --- | --- | --- |
-| `fs.s3a.delegation.tokens.enabled`| can delegation tokens be issued? | `false` |
-| `fs.s3a.delegation.token.binding` | delegation token binding class |  `org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding` |
+| `fs.s3a.delegation.token.binding` | delegation token binding class |  `` |
 
 
 ### Warnings
@@ -241,12 +245,17 @@ will recover from what is generally an intermittently used AWS service.
 
 ### <a name="enabling-session-tokens"></a> Enabling Session Delegation Tokens
 
-For session tokens, `fs.s3a.delegation.token.binding`
-must be set to `org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding`
+For session tokens, set `fs.s3a.delegation.token.binding`
+to `org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding`
+
+
+|  **Key** | **Value** |
+| --- | --- | 
+| `fs.s3a.delegation.token.binding` | `org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding` |
 
 There some further configuration options.
 
-|  key | meaning | default |
+| **Key** | **Meaning** | **Default** |
 | --- | --- | --- |
 | `fs.s3a.assumed.role.session.duration` | Duration of delegation tokens |  `1h` |
 | `fs.s3a.assumed.role.sts.endpoint` | URL to service issuing tokens |  (undefined) |
@@ -255,10 +264,6 @@ There some further configuration options.
 The XML settings needed to enable session tokens are:
 
 ```xml
-<property>
-  <name>fs.s3a.delegation.tokens.enabled</name>
-  <value>true</value>
-</property>
 <property>
   <name>fs.s3a.delegation.token.binding</name>
   <value>org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding</value>
@@ -344,12 +349,17 @@ because there's no way to explicitly change roles in the process.
 
 ### <a name="enabling-role-tokens"></a> Enabling Role Delegation Tokens
 
-For role delegation tokens, `fs.s3a.delegation.token.binding`
-must be set to `org.apache.hadoop.fs.s3a.auth.delegation.RoleTokenBinding`
+For role delegation tokens, set `fs.s3a.delegation.token.binding`
+to `org.apache.hadoop.fs.s3a.auth.delegation.RoleTokenBinding`
+
+|  **Key** | **Value** |
+| --- | --- | 
+| `fs.s3a.delegation.token.binding` | `org.apache.hadoop.fs.s3a.auth.delegation.SessionToRoleTokenBinding` |
+
 
 There are some further configuration options:
 
-|  key | meaning | default |
+| **Key** | **Meaning** | **Default** |
 | --- | --- | --- |
 | `fs.s3a.assumed.role.session.duration"` | Duration of delegation tokens |  `1h` |
 | `fs.s3a.assumed.role.arn` | ARN for role to request |  (undefined) |
@@ -366,16 +376,13 @@ The XML settings needed to enable session tokens are
 
 ```xml
 <property>
-  <name>fs.s3a.delegation.tokens.enabled</name>
-  <value>true</value>
-</property>
-<property>
   <name>fs.s3a.delegation.token.binding</name>
   <value>org.apache.hadoop.fs.s3a.auth.delegation.RoleTokenBinding</value>
 </property>
 <property>
   <name>fs.s3a.assumed.role.arn</name>
   <value>ARN of role to request</value>
+  <value>REQUIRED ARN</value>
 </property>
 <property>
   <name>fs.s3a.assumed.role.session.duration</name>
@@ -397,16 +404,19 @@ the issued role tokens will not have permission to access the S3Guard table.
 
 ### <a name="enabling-full-tokens"></a> Enabling Full Credential Delegation Tokens
 
-For Full Credential Delegation  tokens, `fs.s3a.delegation.token.binding`
-must be set to `org.apache.hadoop.fs.s3a.auth.delegation.FullCredentialsTokenBinding`
+This passes the full credentials in, falling back to any session credentials
+which were used to configure the S3A FileSystem instance.
+
+For Full Credential Delegation tokens, set `fs.s3a.delegation.token.binding`
+to `org.apache.hadoop.fs.s3a.auth.delegation.FullCredentialsTokenBinding`
+
+|  **Key** | **Value** |
+| --- | --- | 
+| `fs.s3a.delegation.token.binding` | `org.apache.hadoop.fs.s3a.auth.delegation.FullCredentialsTokenBinding` |
 
 There are no other configuration options.
 
 ```xml
-<property>
-  <name>fs.s3a.delegation.tokens.enabled</name>
-  <value>true</value>
-</property>
 <property>
   <name>fs.s3a.delegation.token.binding</name>
   <value>org.apache.hadoop.fs.s3a.auth.delegation.FullCredentialsTokenBinding</value>
@@ -452,7 +462,6 @@ and any other filesystem which can issue tokens, as well as HDFS itself.
 This will fetch the token and save it to the named file (here, `tokens.bin`)
 
 ```bash
-
 # Fetch a token for the AWS landsat-pds bucket and save it to tokens.bin
 $ hdfs fetchdt --webservice s3a://landsat-pds/  tokens.bin
 
@@ -504,11 +513,11 @@ There are many causes for this; delegation tokens add some more.
 
 ### Tokens are not issued
 
-* The filesystem instance on the client has not had token support enabled; it does
-not attempt to issue any.
 
 * This user is not `kinit`-ed in to Kerberos. Use `klist` and
 `hadoop kdiag` to see the Kerberos authentication state of the logged in user.
+* The filesystem instance on the client has not had a token binding set in
+`fs.s3a.delegation.token.binding`, so does not attempt to issue any.
 * The job submission is not aware that access to the specific S3 buckets
 are required. Review the application's submission mechanism to determine
 how to list source and destination paths. For example, for MapReduce,
@@ -521,22 +530,11 @@ property `spark.yarn.access.hadoopFileSystems` are queried for delegation
 tokens in secure clusters.
 See [Running on Yarn](https://spark.apache.org/docs/latest/running-on-yarn.html).
 
-### Filesystem client is not configured to use Delegation Tokens.
-
-The `fs.s3a.aws.credentials.provider` option has
-not been set, or, if set, does not list the
-delegation token credential provider as one of
-the providers.
-
-This is independent of the value of `fs.s3a.delegation.tokens.enabled`;
-the delegation token credential provider must be explicitly listed
-in your list of chosen credential providers.
-
 
 ### Tokens Expire before job completes
 
-The default duration of session and role tokens as set in `fs.s3a.assumed.role.session.duration`
-is one hour, "1h".
+The default duration of session and role tokens as set in
+`fs.s3a.assumed.role.session.duration` is one hour, "1h".
 
 For session tokens, this can be increased to any time up to 36 hours.
 
@@ -597,11 +595,6 @@ cannot use the token supplied by the client to authenticate.
 
 Fix: reference the same token binding class at both ends.
 
-### Error `Cannot issue S3A Delegation Tokens without full AWS credentials`
-
-An S3A filesystem instance has been asked for a Role Delegation Token,
-but the instance is only authenticated with session tokens.
-The AWS Assume Role operation cannot be invoked.
 
 ### Warning `Forwarding existing session credentials`
 
@@ -616,6 +609,16 @@ can be used until the existing session expires.
 The duration of this existing session is unknown: the message is warning
 you that it may expire without warning.
 
+### Error `Cannot issue S3A Role Delegation Tokens without full AWS credentials`
+
+An S3A filesystem instance has been asked for a Role Delegation Token,
+but the instance is only authenticated with session tokens.
+This means that a set of role tokens cannot be requested.
+
+Note: no attempt is made to convert the existing set of session tokens into
+a delegation token, unlike the Session Delegation Tokens. This is because
+the role of the current session (if any) is unknown.
+
 
 ## <a name="implementation"></a> Implementation Details
 
@@ -629,7 +632,7 @@ Concepts:
 1. DT binding plugins can then use these directly, or, somehow,
 manage authentication and token issue through other services
 (for example: Kerberos)
-1. Token Renewal and Revocation are not directly supported.
+1. Token Renewal and Revocation are not supported.
 
 
 There's support for different back-end token bindings through the
@@ -756,7 +759,7 @@ to include a set of full/session AWS credentials in your token identifier.
 The identifier passed in will be the one for the current filesystem URI and of your token kind.
 
 1. Use `convertTokenIdentifier` to cast it to your DT type, or fail with a meaningful `IOException`.
-1. Extract the secrets neede to authenticate with the object store (or whatever service issues
+1. Extract the secrets needed to authenticate with the object store (or whatever service issues
 object store credentials).
 1. Return a list of AWS Credential providers which can be used to authenticate the caller with
 the extracted secrets.
@@ -819,9 +822,11 @@ then perform filesystem operations. A miniKDC is instantiated
 
 * Take care to remove all login secrets from the environment, so as to make sure that
 the second instance is picking up the DT information.
-* `UserGroupInformation.reset()` can be used to reset User secrets after every test case (e.g. teardown), so that issued DTs from one test case do not contaminate the next.
-* its subclass, `ITestRoleDelegationInFileystem` add a check that the session credentials
-in the DT cannot be 
+* `UserGroupInformation.reset()` can be used to reset user secrets after every test
+case (e.g. teardown), so that issued DTs from one test case do not contaminate the next.
+* its subclass, `ITestRoleDelegationInFileystem` adds a check that the current credentials
+in the DT cannot be used to access data on other buckets —that is, the active
+session really is restricted to the target bucket.
 
 
 #### Integration Test `ITestDelegatedMRJob`

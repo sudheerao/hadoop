@@ -30,6 +30,7 @@ import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
@@ -43,6 +44,8 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.service.ServiceOperations;
 
+import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DEFAULT_DELEGATION_TOKEN_BINDING;
+import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_BINDING;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DURATION_LOG_AT_INFO;
 
 /**
@@ -72,6 +75,9 @@ public class S3ADelegationTokens extends AbstractDTService {
   @VisibleForTesting
   static final String E_ALREADY_DEPLOYED
       = "S3A Delegation tokens has already been bound/deployed";
+
+  public static final String E_DELEGATION_TOKENS_DISABLED
+      = "Delegation tokens are not enabled";
 
   /**
    * User who owns this FS; fixed at instantiation time, so that
@@ -153,12 +159,15 @@ public class S3ADelegationTokens extends AbstractDTService {
    * Init the service.
    * This identifies the token binding class to use and creates, initializes
    * and starts it.
+   * Will raise an exception if delegation tokens are not enabled.
    * @param conf configuration
    * @throws Exception any failure to start up
    */
   @Override
   protected void serviceInit(final Configuration conf) throws Exception {
     super.serviceInit(conf);
+    Preconditions.checkState(hasDelegationTokenBinding(conf),
+        E_DELEGATION_TOKENS_DISABLED);
     Class<? extends AbstractDelegationTokenBinding> binding = conf.getClass(
         DelegationConstants.DELEGATION_TOKEN_BINDING,
         SessionTokenBinding.class,
@@ -213,7 +222,7 @@ public class S3ADelegationTokens extends AbstractDTService {
       throws IOException {
     requireServiceStarted();
     Preconditions.checkState(!isBoundToDT(),
-        "Bound to a delegation token");
+        "Already Bound to a delegation token");
     LOG.info("No delegation tokens present: using direct authentication");
     credentialProviders = Optional.of(tokenBinding.deployUnbonded());
   }
@@ -599,4 +608,16 @@ public class S3ADelegationTokens extends AbstractDTService {
     return lookupToken(credentials, getTokenService(uri.toString()));
   }
 
+  /**
+   * Predicate: does this configuration enable delegation tokens.
+   * That is: is there any text in the option
+   * {@link DelegationConstants#DELEGATION_TOKEN_BINDING} ?
+   * @param conf configuration to examine
+   * @return true iff the trimmed configuration option is not empty.
+   */
+  public static boolean hasDelegationTokenBinding(Configuration conf) {
+    return StringUtils.isNotEmpty(
+        conf.getTrimmed(DELEGATION_TOKEN_BINDING,
+            DEFAULT_DELEGATION_TOKEN_BINDING));
+  }
 }

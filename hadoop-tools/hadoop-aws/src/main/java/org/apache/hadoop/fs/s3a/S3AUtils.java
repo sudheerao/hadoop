@@ -659,6 +659,12 @@ public final class S3AUtils {
     List<Class<?>> awsClasses = loadAWSProviderClasses(conf,
         key,
         defaultValues.toArray(new Class[defaultValues.size()]));
+    // and if the list is empty, switch back to the defaults.
+    // this is to address the issue that configuration.getClasses()
+    // doesn't return the default if the config value is just whitespace.
+    if (awsClasses.isEmpty()) {
+      awsClasses = defaultValues;
+    }
     // iterate through, checking for blacklists and then instantiating
     // each provider
     AWSCredentialProviderList providers = new AWSCredentialProviderList();

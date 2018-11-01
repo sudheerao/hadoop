@@ -1156,15 +1156,19 @@
 <property>
   <name>fs.s3a.delegation.tokens.enabled</name>
   <value>false</value>
-  <description>Should S3A filesystems provide delegation tokens
-    for job submission requests and simlar?</description>
+  <description></description>
 </property>
 
 <property>
   <name>fs.s3a.delegation.token.binding</name>
-  <value>org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding</value>
+  <value></value>
   <description>
-    The class implementing delegation tokens for the S3A filesystem.
+    The name of a class provide delegation tokens support in S3A.
+    If unset: delegation token support is disnabled.
+
+    Note: for job submission to actually collect these tokens,
+    Kerberos must be enabled.
+    
     Options are:
     org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding
     org.apache.hadoop.fs.s3a.auth.delegation.FullCredentialsTokenBinding

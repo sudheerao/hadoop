@@ -104,6 +104,7 @@ import org.apache.hadoop.fs.StreamCapabilities;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.s3a.auth.RoleModel;
 import org.apache.hadoop.fs.s3a.auth.delegation.AWSPolicyProvider;
+import org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants;
 import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecrets;
 import org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens;
 import org.apache.hadoop.fs.s3a.auth.delegation.AbstractS3ATokenIdentifier;
@@ -132,8 +133,7 @@ import static org.apache.hadoop.fs.s3a.Statistic.*;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 import static org.apache.hadoop.fs.s3a.auth.RolePolicies.STATEMENT_ALLOW_SSE_KMS_RW;
 import static org.apache.hadoop.fs.s3a.auth.RolePolicies.allowS3Operations;
-import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DEFAULT_DELEGATION_TOKENS_ENABLED;
-import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKENS_ENABLED;
+import static org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.hasDelegationTokenBinding;
 import static org.apache.hadoop.io.IOUtils.cleanupWithLogger;
 
 /**
@@ -262,8 +262,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     Configuration conf = propagateBucketOptions(originalConf, bucket);
     // patch the Hadoop security providers
     patchSecurityCredentialProviders(conf);
-    boolean delegationTokensEnabled = conf.getBoolean(DELEGATION_TOKENS_ENABLED,
-        DEFAULT_DELEGATION_TOKENS_ENABLED);
+    // look for delegation token support early.
+    boolean delegationTokensEnabled = hasDelegationTokenBinding(conf);
     if (delegationTokensEnabled) {
       LOG.debug("Using delegation tokens");
     }

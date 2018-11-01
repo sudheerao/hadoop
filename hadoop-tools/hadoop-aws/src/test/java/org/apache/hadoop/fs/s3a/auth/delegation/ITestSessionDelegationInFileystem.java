@@ -54,6 +54,7 @@ import org.apache.hadoop.service.ServiceStateException;
 import org.apache.hadoop.util.ExitUtil;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 
+import static java.util.Objects.requireNonNull;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION;
 import static org.apache.hadoop.fs.s3a.Constants.*;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.assumeSessionTestsEnabled;
@@ -65,7 +66,6 @@ import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationTokenIOExceptio
 import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizedHadoopCluster.ALICE;
 import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizedHadoopCluster.assertSecurityEnabled;
 import static org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.lookupS3ADelegationToken;
-import static org.apache.hadoop.test.GenericTestUtils.notNull;
 import static org.apache.hadoop.test.LambdaTestUtils.doAs;
 import static org.apache.hadoop.test.LambdaTestUtils.intercept;
 import static org.hamcrest.collection.IsCollectionWithSize.hasSize;
@@ -102,6 +102,7 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
   /**
    * Tear down the Cluster.
    */
+  @SuppressWarnings("ThrowableNotThrown")
   @AfterClass
   public static void teardownCluster() throws Exception {
     ServiceOperations.stopQuietly(LOG, cluster);
@@ -178,8 +179,8 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     super.teardown();
     ServiceOperations.stopQuietly(LOG, delegationTokens);
     FileSystem.closeAllForUGI(UserGroupInformation.getCurrentUser());
-    cluster.closeUserFileSystems(aliceUser);
-    cluster.closeUserFileSystems(bobUser);
+    MiniKerberizedHadoopCluster.closeUserFileSystems(aliceUser);
+    MiniKerberizedHadoopCluster.closeUserFileSystems(bobUser);
     cluster.resetUGI();
   }
 
@@ -201,8 +202,8 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     S3ATestUtils.MetricDiff issueDiff = new S3ATestUtils.MetricDiff(fs,
         Statistic.DELEGATION_TOKENS_ISSUED);
     Token<AbstractS3ATokenIdentifier> token =
-        notNull("no token from filesystem " + fs,
-            fs.getDelegationToken(""));
+        requireNonNull(fs.getDelegationToken(""),
+            "no token from filesystem " + fs);
     assertEquals("token kind", getTokenKind(), token.getKind());
     assertTokenCreationCount(fs, 1);
     final String fsInfo = fs.toString();
@@ -226,20 +227,20 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     Credentials cred = new Credentials();
     Token<?>[] tokens = fs.addDelegationTokens(YARN_RM, cred);
     assertEquals("Number of tokens", 1, tokens.length);
-    Token<?> token = notNull("token", tokens[0]);
+    Token<?> token = requireNonNull(tokens[0], "token");
     LOG.info("FS token is {}", token);
     Text service = delegationTokens.getService();
-    Token<? extends TokenIdentifier> retrieved = notNull(
-        "retrieved token with key " + service + "; expected " + token,
-        cred.getToken(service));
+    Token<? extends TokenIdentifier> retrieved = requireNonNull(
+        cred.getToken(service),
+        "retrieved token with key " + service + "; expected " + token);
     delegationTokens.start();
     // this only sneaks in because there isn't a state check here
     delegationTokens.resetTokenBindingToDT(
         (Token<AbstractS3ATokenIdentifier>) retrieved);
     assertTrue("bind to existing DT failed",
         delegationTokens.isBoundToDT());
-    AWSCredentialProviderList providerList = notNull("providers",
-        delegationTokens.getCredentialProviders());
+    AWSCredentialProviderList providerList = requireNonNull(
+        delegationTokens.getCredentialProviders(), "providers");
 
     providerList.getCredentials();
   }
@@ -256,8 +257,8 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     Token<?> token0 = tokens[0];
     Text service = token0.getService();
     LOG.info("Token = " + token0);
-    Token<?> token1 = notNull("Token from " +service,
-        ugi.getCredentials().getToken(service));
+    Token<?> token1 = requireNonNull(
+        ugi.getCredentials().getToken(service), "Token from " + service);
     assertEquals("retrieved token", token0, token1);
     assertNotNull("token identifier of "  + token1,
         token1.getIdentifier());
@@ -299,22 +300,21 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     // create delegation tokens from the test suites FS.
     Credentials creds = createDelegationTokens();
     final Text tokenKind = getTokenKind();
-    AbstractS3ATokenIdentifier origTokenId = notNull("original",
+    AbstractS3ATokenIdentifier origTokenId = requireNonNull(
         lookupToken(
             creds,
             uri,
-            tokenKind));
+            tokenKind), "original");
     // attach to the user, so that when tokens are looked for, they get picked
     // up
     final UserGroupInformation currentUser
         = UserGroupInformation.getCurrentUser();
     currentUser.addCredentials(creds);
     // verify that the tokens went over
-    notNull("user credentials",
-        lookupToken(
+    requireNonNull(lookupToken(
             currentUser.getCredentials(),
             uri,
-            tokenKind));
+            tokenKind), "user credentials");
     Configuration conf = new Configuration(getConfiguration());
     String bucket = fs.getBucket();
     disableFilesystemCaching(conf);
@@ -356,8 +356,8 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
       // verify that the FS returns the existing token when asked
       // so that chained deployments will work
       AbstractS3ATokenIdentifier tokenFromDelegatedFS
-          = notNull("New token",
-            delegatedFS.getDelegationToken("")).decodeIdentifier();
+          = requireNonNull(delegatedFS.getDelegationToken(""),
+          "New token").decodeIdentifier();
       assertEquals("Newly issued token != old one",
           origTokenId,
           tokenFromDelegatedFS);
@@ -378,7 +378,8 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
             secondDelegate.getServerSideEncryptionAlgorithm());
       }
       ContractTestUtils.assertDeleted(secondDelegate, testPath, true);
-      assertNotNull("unbounded DT", secondDelegate.getDelegationToken(""));
+      assertNotNull("unbounded DT",
+          secondDelegate.getDelegationToken(""));
     }
   }
 
@@ -428,10 +429,13 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     String bucket = fs.getBucket();
     removeBaseAndBucketOverrides(bucket, conf,
         ACCESS_KEY, SECRET_KEY, SESSION_TOKEN);
+    conf.set(ACCESS_KEY, "aaaaa");
+    conf.set(SECRET_KEY, "bbbb");
     bindProviderList(bucket, conf, CountInvocationsProvider.NAME);
     conf.set(DELEGATION_TOKEN_BINDING,
         DELEGATION_TOKEN_FULL_CREDENTIALS_BINDING);
-    ServiceStateException e = intercept(ServiceStateException.class,
+    ServiceStateException e = intercept(
+        ServiceStateException.class,
         TOKEN_MISMATCH,
         () -> {
           S3AFileSystem remote = newS3AInstance(uri, conf);
@@ -441,8 +445,7 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
           remote.close();
           return s;
         });
-    Throwable cause = e.getCause();
-    if (cause == null || !(cause instanceof DelegationTokenIOException)) {
+    if (!(e.getCause() instanceof DelegationTokenIOException)) {
       throw e;
     }
   }
@@ -472,16 +475,16 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
       Token<AbstractS3ATokenIdentifier> secondDT = fullFS.getDelegationToken(
           "second");
       assertTokenCreationCount(fullFS, 3);
-      assertNotEquals(firstDT.getIdentifier(), secondDT.getIdentifier());
+      assertNotEquals("DT identifiers", 
+          firstDT.getIdentifier(), secondDT.getIdentifier());
     }
 
     // expect a token
-    AbstractS3ATokenIdentifier origTokenId = notNull(
-        "token from credentials",
+    AbstractS3ATokenIdentifier origTokenId = requireNonNull(
         lookupToken(
             fullTokens,
             uri,
-            FULL_TOKEN_KIND));
+            FULL_TOKEN_KIND), "token from credentials");
     UserGroupInformation.getCurrentUser().addCredentials(
         fullTokens);
 
@@ -489,9 +492,10 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     try (S3AFileSystem delegatedFS = newS3AInstance(uri, conf)) {
       assertBoundToDT(delegatedFS, FULL_TOKEN_KIND);
       delegatedFS.getFileStatus(new Path("/"));
-      AbstractS3ATokenIdentifier tokenFromDelegatedFS
-          = notNull("New token",
-          delegatedFS.getDelegationToken("")).decodeIdentifier();
+      SessionTokenIdentifier tokenFromDelegatedFS
+          = (SessionTokenIdentifier) requireNonNull(
+              delegatedFS.getDelegationToken(""), "New token")
+          .decodeIdentifier();
       assertTokenCreationCount(delegatedFS, 0);
       assertEquals("Newly issued token != old one",
           origTokenId,
@@ -514,8 +518,7 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
           remote.close();
           return s;
         });
-    Throwable cause = e.getCause();
-    if (cause == null || !(cause instanceof DelegationTokenIOException)) {
+    if (!(e.getCause() instanceof DelegationTokenIOException)) {
       throw e;
     }
   }
@@ -611,11 +614,11 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
 
     // read in and retrieve token
     Credentials creds = Credentials.readTokenStorageFile(tokenfile, conf);
-    AbstractS3ATokenIdentifier identifier = notNull("Token lookup",
+    AbstractS3ATokenIdentifier identifier = requireNonNull(
         lookupToken(
             creds,
             fsUri,
-            getTokenKind()));
+            getTokenKind()), "Token lookup");
     assertEquals("encryption secrets",
         fs.getEncryptionSecrets(),
         identifier.getEncryptionSecrets());
@@ -648,9 +651,8 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     describe("Run tests to verify the DT Setup is bound to the creator");
 
     // quick sanity check to make sure alice and bob are different
-    assertNotEquals("Alice and bob logins",
+    assertNotEquals("Alice and Bob logins",
         aliceUser.getUserName(), bobUser.getUserName());
-
 
     final S3AFileSystem fs = getFileSystem();
     assertEquals("FS username in doAs()",
