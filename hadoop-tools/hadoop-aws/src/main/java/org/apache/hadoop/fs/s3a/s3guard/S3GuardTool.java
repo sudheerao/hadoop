@@ -1164,15 +1164,20 @@ public abstract class S3GuardTool extends Configured implements Tool {
       printOption(out, "\tInput seek policy", INPUT_FADVISE, INPUT_FADV_NORMAL);
 
       // look at delegation token support
-      S3ADelegationTokens dtIntegration = fs.getDtIntegration();
-      if (dtIntegration == null) {
-        println(out, "Delegation token support is disabled");
-      } else {
+      if (fs.getDelegationTokens().isPresent()) {
         // DT is enabled
+        S3ADelegationTokens dtIntegration = fs.getDelegationTokens().get();
         println(out, "Delegation Support enabled: token kind = %s",
             dtIntegration.getTokenKind());
-        println(out, "Hadoop security mode: %s",
-            UserGroupInformation.getCurrentUser().getAuthenticationMethod());
+        UserGroupInformation.AuthenticationMethod authenticationMethod
+            = UserGroupInformation.getCurrentUser().getAuthenticationMethod();
+        println(out, "Hadoop security mode: %s", authenticationMethod);
+        if (UserGroupInformation.isSecurityEnabled()) {
+          println(out,
+              "Warning: security is disabled; tokens will not be collected");
+        }
+      } else {
+        println(out, "Delegation token support is disabled");
       }
 
       if (usingS3Guard) {

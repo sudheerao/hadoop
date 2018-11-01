@@ -104,7 +104,6 @@ import org.apache.hadoop.fs.StreamCapabilities;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.s3a.auth.RoleModel;
 import org.apache.hadoop.fs.s3a.auth.delegation.AWSPolicyProvider;
-import org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants;
 import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecrets;
 import org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens;
 import org.apache.hadoop.fs.s3a.auth.delegation.AbstractS3ATokenIdentifier;
@@ -220,8 +219,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   private boolean useListV1;
   private MagicCommitIntegration committerIntegration;
 
-  /** Delegation token integration; non-null when DT support is enabled. */
-  private S3ADelegationTokens dtIntegration;
+  /** Delegation token integration; non-empty when DT support is enabled. */
+  private Optional<S3ADelegationTokens> delegationTokens = Optional.empty();
 
   private AWSCredentialProviderList credentials;
 
@@ -450,13 +449,14 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       // with it if so.
 
       LOG.debug("Using delegation tokens");
-      dtIntegration = new S3ADelegationTokens();
-      dtIntegration.bindToFileSystem(getCanonicalUri(), this);
-      dtIntegration.init(conf);
-      dtIntegration.start();
+      S3ADelegationTokens tokens = new S3ADelegationTokens();
+      this.delegationTokens = Optional.of(tokens);
+      tokens.bindToFileSystem(getCanonicalUri(), this);
+      tokens.init(conf);
+      tokens.start();
       // switch to the DT provider and bypass all other configured
       // providers.
-      if (dtIntegration.isBoundToDT()) {
+      if (tokens.isBoundToDT()) {
         // A DT was retrieved.
         LOG.debug("Using existing delegation token");
         // and use the encryption settings from that client, whatever they were
@@ -464,9 +464,9 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
         LOG.debug("No delegation token for this instance");
       }
       // Get new credential chain
-      credentials = dtIntegration.getCredentialProviders();
+      credentials = tokens.getCredentialProviders();
       // and any encryption secrets which came from a DT
-      dtIntegration.getEncryptionSecrets()
+      tokens.getEncryptionSecrets()
           .ifPresent(this::setEncryptionSecrets);
     } else {
       // DT support is disabled, so
@@ -2657,7 +2657,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       metadataStore = null;
       instrumentation = null;
       closeAutocloseables(LOG, credentials);
-      cleanupWithLogger(LOG, dtIntegration);
+      cleanupWithLogger(LOG, delegationTokens.orElse(null));
       credentials = null;
     }
   }
@@ -2676,11 +2676,11 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   /**
    * Get the delegation token support for this filesystem;
    * not null iff delegation support is enabled.
-   * @return the token support or null
+   * @return the token support, or an empty option.
    */
   @VisibleForTesting
-  public S3ADelegationTokens getDtIntegration() {
-    return dtIntegration;
+  public Optional<S3ADelegationTokens> getDelegationTokens() {
+    return delegationTokens;
   }
 
   /**
@@ -2689,12 +2689,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    */
   @Override
   public String getCanonicalServiceName() {
-    if (dtIntegration != null) {
-      return dtIntegration.getCanonicalServiceName();
-    } else {
-      // Does not support Token
-      return null;
-    }
+    return delegationTokens.map(S3ADelegationTokens::getCanonicalServiceName)
+        .orElse(null);
   }
 
   /**
@@ -2710,10 +2706,10 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       throws IOException {
     entryPoint(Statistic.INVOCATION_GET_DELEGATION_TOKEN);
     LOG.debug("Delegation token requested");
-    if (dtIntegration != null) {
-      return dtIntegration.getBoundOrNewDT(encryptionSecrets);
+    if (delegationTokens.isPresent()) {
+      return delegationTokens.get().getBoundOrNewDT(encryptionSecrets);
     } else {
-      // Does not support Token
+      // Delegation token support is not set up
       LOG.debug("Token support is not enabled");
       return null;
     }
@@ -3108,9 +3104,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     sb.append(", unboundedExecutor=").append(unboundedThreadPool);
     sb.append(", credentials=").append(credentials);
     sb.append(", delegation tokens=")
-        .append(dtIntegration != null ?
-            dtIntegration.toString()
-            : "disabled");
+        .append(delegationTokens.map(Objects::toString).orElse("disabled"));
     sb.append(", statistics {")
         .append(statistics)
         .append("}");

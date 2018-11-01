@@ -35,6 +35,7 @@ import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.MultiObjectDeleteException;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 import org.apache.commons.lang3.StringUtils;
@@ -129,6 +130,13 @@ public final class S3AUtils {
 
   private static final String BUCKET_PATTERN = FS_S3A_BUCKET_PREFIX + "%s.%s";
 
+  /**
+   * Error message when the AWS provider list built up contains a forbidden
+   * entry.
+   */
+  @VisibleForTesting
+  public static final String E_FORBIDDEN_AWS_PROVIDER
+      = "AWS provider class cannot be used";
 
   private S3AUtils() {
   }
@@ -671,8 +679,8 @@ public final class S3AUtils {
     for (Class<?> aClass : awsClasses) {
       
       if (forbidden.contains(aClass)) {
-        throw new IOException("AWS provider class cannot be used in option "
-        + key + ": " + aClass);
+        throw new IOException(E_FORBIDDEN_AWS_PROVIDER 
+            + " in option " + key + ": " + aClass);
       }
       providers.add(createAWSCredentialProvider(conf,
           aClass, binding));

@@ -660,7 +660,7 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
         doAs(bobUser, () -> fs.getUsername()));
 
     UserGroupInformation fsOwner = doAs(bobUser,
-        () -> fs.getDtIntegration().getOwner());
+        () -> fs.getDelegationTokens().get().getOwner());
     assertEquals("username mismatch",
         aliceUser.getUserName(), fsOwner.getUserName());
 

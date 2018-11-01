@@ -214,7 +214,7 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
         AssumedRoleCredentialProvider.NAME);
     expectFileSystemCreateFailure(conf,
         IOException.class,
-        AssumedRoleCredentialProvider.E_FORBIDDEN_PROVIDER);
+        E_FORBIDDEN_AWS_PROVIDER);
   }
 
   @Test

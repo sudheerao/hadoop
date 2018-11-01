@@ -22,10 +22,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.AmazonClientException;
@@ -53,8 +50,6 @@ import org.apache.hadoop.security.UserGroupInformation;
 
 import static org.apache.hadoop.fs.s3a.Constants.*;
 import static org.apache.hadoop.fs.s3a.S3AUtils.buildAWSProviderList;
-import static org.apache.hadoop.fs.s3a.S3AUtils.createAWSCredentialProvider;
-import static org.apache.hadoop.fs.s3a.S3AUtils.loadAWSProviderClasses;
 
 /**
  * Support IAM Assumed roles by instantiating an instance of
@@ -73,10 +68,6 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
       LoggerFactory.getLogger(AssumedRoleCredentialProvider.class);
   public static final String NAME
       = "org.apache.hadoop.fs.s3a.auth.AssumedRoleCredentialProvider";
-
-  static final String E_FORBIDDEN_PROVIDER =
-      "AssumedRoleCredentialProvider cannot be in "
-          + ASSUMED_ROLE_CREDENTIALS_PROVIDER;
 
   public static final String E_NO_ROLE = "Unset property "
       + ASSUMED_ROLE_ARN;

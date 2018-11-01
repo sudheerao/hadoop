@@ -108,8 +108,7 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
    */
   protected static void assertBoundToDT(final S3AFileSystem fs,
       final Text tokenKind) {
-    final S3ADelegationTokens dtSupport
-        = requireNonNull(fs.getDtIntegration(), "No token integration");
+    final S3ADelegationTokens dtSupport = fs.getDelegationTokens().get();
     assertTrue("Expected bound to a delegation token: " + dtSupport,
         dtSupport.isBoundToDT());
     assertEquals("Wrong token kind",
@@ -124,7 +123,7 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
    */
   protected static void assertTokenCreationCount(final S3AFileSystem fs,
       final int expected) {
-    assertEquals("DT creation count from " + fs.getDtIntegration(),
+    assertEquals("DT creation count from " + fs.getDelegationTokens().get(),
         expected,
         getTokenCreationCount(fs));
   }
@@ -135,8 +134,9 @@ public abstract class AbstractDelegationIT extends AbstractS3ATestBase {
    * @return creation count
    */
   private static int getTokenCreationCount(final S3AFileSystem fs) {
-    return requireNonNull(fs.getDtIntegration(), "DT integration")
-        .getCreationCount();
+    return fs.getDelegationTokens()
+        .map(S3ADelegationTokens::getCreationCount)
+        .get(); 
   }
 
   /**
