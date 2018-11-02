@@ -20,6 +20,7 @@ package org.apache.hadoop.fs.s3a.auth;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.Optional;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.google.common.base.Preconditions;
@@ -51,7 +52,7 @@ public class MarshalledCredentialProvider extends
 
   /**
    * Constructor.
-   * @param uri filesystem URI
+   * @param uri filesystem URI: must not be null.
    * @param conf configuration.
    * @param credentials marshalled credentials.
    * @param typeRequired credential type required.
@@ -68,7 +69,6 @@ public class MarshalledCredentialProvider extends
     Preconditions.checkArgument(uri != null, "No filesystem URI");
     this.typeRequired = typeRequired;
     this.credentials = credentials;
-    init();
   }
 
   /**

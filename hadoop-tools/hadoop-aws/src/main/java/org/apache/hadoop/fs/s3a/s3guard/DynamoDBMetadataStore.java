@@ -33,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
@@ -411,7 +412,9 @@ public class DynamoDBMetadataStore implements MetadataStore,
     region = conf.getTrimmed(S3GUARD_DDB_REGION_KEY);
     Preconditions.checkArgument(!StringUtils.isEmpty(region),
         "No DynamoDB region configured");
-    credentials = createAWSCredentialProviderSet(null, conf);
+    // there's no URI here, which complicates life: you cannot
+    // create AWS providers here which don't have any.
+    credentials = createAWSCredentialProviderSet(Optional.empty(), conf);
     dynamoDB = createDynamoDB(conf, region, null, credentials);
 
     username = UserGroupInformation.getCurrentUser().getShortUserName();

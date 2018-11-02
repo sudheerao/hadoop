@@ -95,13 +95,13 @@ public class FullCredentialsTokenBinding extends
         // valid tokens, so mark as origin
         credentialOrigin += "; source = Environment variables";
       } else {
-        credentialOrigin = "no credentials in configuration or environment variables";
+        credentialOrigin = "no credentials in configuration or" 
+            + " environment variables";
       }
     }
     awsCredentials.validate(credentialOrigin +": ",
         MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty);
   }
-
 
   /**
    * Serve up the credentials retrieved from configuration/environment in

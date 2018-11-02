@@ -222,10 +222,12 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   /** Delegation token integration; non-empty when DT support is enabled. */
   private Optional<S3ADelegationTokens> delegationTokens = Optional.empty();
 
+  /** Principal who created the FS; recorded during initialization. */
+  private UserGroupInformation owner;
+
   private AWSCredentialProviderList credentials;
 
   private S3Guard.ITtlTimeProvider ttlTimeProvider;
-  private UserGroupInformation owner;
 
   /** Add any deprecated keys. */
   @SuppressWarnings("deprecation")
@@ -471,7 +473,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     } else {
       // DT support is disabled, so
       // create the normal token set
-      credentials = createAWSCredentialProviderSet(name, conf);
+      credentials = createAWSCredentialProviderSet( 
+          Optional.of(name), conf);
     }
     LOG.debug("Using credential provider {}", credentials);
     Class<? extends S3ClientFactory> s3ClientFactoryClass = conf.getClass(

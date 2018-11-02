@@ -278,7 +278,7 @@ public final class MarshalledCredentials implements Writable,
    * @return true if the key and secrets are set.
    */
   private boolean isValid() {
-    if ( accessKey == null || secretKey == null || sessionToken == null) {
+    if (accessKey == null || secretKey == null || sessionToken == null) {
       // null fields are not permitted, empty is OK for marshalling around.
       return false;
     }
@@ -318,7 +318,7 @@ public final class MarshalledCredentials implements Writable,
    * @return true if the requirements are met.
    */
   public boolean isValid(final CredentialTypeRequired required) {
-    if ( accessKey == null || secretKey == null || sessionToken == null) {
+    if (accessKey == null || secretKey == null || sessionToken == null) {
       // null fields are not permitted, empty is OK for marshalling around.
       return false;
     }
@@ -514,7 +514,10 @@ public final class MarshalledCredentials implements Writable,
   public static MarshalledCredentials empty() {
     return new MarshalledCredentials("", "", "");
   }
-  
+
+  /**
+   * Enumeration of credential types for use in validation methods.
+   */
   public enum CredentialTypeRequired {
     /** No entry at all. */
     Empty("None"),

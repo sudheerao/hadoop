@@ -21,7 +21,6 @@ package org.apache.hadoop.fs.s3a.auth.delegation;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.s3a.Constants;
-import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.io.Text;
 
 /**

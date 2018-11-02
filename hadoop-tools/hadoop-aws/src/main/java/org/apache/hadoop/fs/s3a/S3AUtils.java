@@ -74,10 +74,12 @@ import java.nio.file.AccessDeniedException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -592,6 +594,35 @@ public final class S3AUtils {
   }
 
   /**
+   * The standard AWS provider list for AWS connections.
+   */
+  public static final List<Class<?>>
+      STANDARD_AWS_PROVIDERS = Collections.unmodifiableList(
+      Arrays.asList(
+          TemporaryAWSCredentialsProvider.class,
+          SimpleAWSCredentialsProvider.class,
+          EnvironmentVariableCredentialsProvider.class,
+          IAMInstanceCredentialsProvider.class));
+  
+  /**
+   * Create a provider list from a URI and configuration.
+   * @deprecated in favor of using Optional to indicate when
+   * an FS URI is undefined -which is only ever the case when
+   * a DynamoDBMetastore is instantiated without knowing
+   * the filesystem.
+   * @param uri Filesystem URI: may be null
+   * @param conf configuration to use
+   * @return the provider set.
+   * @throws IOException failure to instantiate.
+   */
+  @Deprecated
+  public static AWSCredentialProviderList createAWSCredentialProviderSet(
+      @Nullable URI uri,
+      Configuration conf) throws IOException {
+    return createAWSCredentialProviderSet(Optional.ofNullable(uri), conf);
+  }
+
+  /**
    * Create the AWS credentials from the providers, the URI and
    * the key {@link Constants#AWS_CREDENTIALS_PROVIDER} in the configuration.
    * @param binding Binding URI, may contain user:pass login details;
@@ -602,9 +633,10 @@ public final class S3AUtils {
    * secrets from credential files).
    */
   public static AWSCredentialProviderList createAWSCredentialProviderSet(
-      URI binding, Configuration conf) throws IOException {
+      Optional<URI> binding,
+      Configuration conf) throws IOException {
     // this will reject any user:secret entries in the URI
-    S3xLoginHelper.buildFSURI(binding);
+    binding.map(S3xLoginHelper::buildFSURI);
     AWSCredentialProviderList credentials =
         buildAWSProviderList(binding,
             conf,
@@ -613,19 +645,11 @@ public final class S3AUtils {
             new HashSet<>());
     // make sure the logging message strips out any auth details
     LOG.debug("For URI {}, using credentials {}",
-        S3xLoginHelper.toString(binding), credentials);
+        binding.map(Objects::toString).orElse("null"),
+        credentials);
     return credentials;
   }
 
-  /**
-   * The standard AWS provider list for AWS connections.
-   */
-  public static final List<Class<?>>
-      STANDARD_AWS_PROVIDERS = new ArrayList<>(Arrays.asList(
-          TemporaryAWSCredentialsProvider.class,
-          SimpleAWSCredentialsProvider.class,
-          EnvironmentVariableCredentialsProvider.class,
-          IAMInstanceCredentialsProvider.class));
   
   /**
    * Load list of AWS credential provider/credential provider factory classes.
@@ -648,7 +672,7 @@ public final class S3AUtils {
 
   /**
    * Load list of AWS credential provider/credential provider factory classes;
-   * support a forbidden list for 
+   * support a forbidden list to prevent loops, mandate full secrets, etc.
    * @param conf configuration
    * @param key key
    * @param forbidden a possibly empty set of forbidden classes. 
@@ -657,7 +681,7 @@ public final class S3AUtils {
    * @throws IOException on a failure to load the list.
    */
   public static AWSCredentialProviderList buildAWSProviderList(
-      final URI binding,
+      final Optional<URI> binding,
       final Configuration conf,
       final String key,
       final List<Class<?>> defaultValues,
@@ -682,8 +706,7 @@ public final class S3AUtils {
         throw new IOException(E_FORBIDDEN_AWS_PROVIDER 
             + " in option " + key + ": " + aClass);
       }
-      providers.add(createAWSCredentialProvider(conf,
-          aClass, binding));
+      providers.add(createAWSCredentialProvider(conf, aClass, binding));
     }
     return providers;
   }
@@ -694,6 +717,9 @@ public final class S3AUtils {
    * attempted in order:
    *
    * <ol>
+   * <li>a public constructor accepting an Optional URI.
+   * and org.apache.hadoop.conf.Configuration</li>
+   * <li>a public constructor accepting
    * <li>a public constructor accepting java.net.URI and
    *     org.apache.hadoop.conf.Configuration</li>
    * <li>a public constructor accepting
@@ -706,15 +732,15 @@ public final class S3AUtils {
    *
    * @param conf configuration
    * @param credClass credential class
-   * @param uri URI of the FS
+   * @param binding binding to the filesystem URI, if bound.
    * @return the instantiated class
    * @throws IOException on any instantiation failure.
    */
-  public static AWSCredentialsProvider createAWSCredentialProvider(
+  private static AWSCredentialsProvider createAWSCredentialProvider(
       Configuration conf,
       Class<?> credClass,
-      URI uri) throws IOException {
-    AWSCredentialsProvider credentials = null;
+      Optional<URI> binding) throws IOException {
+    AWSCredentialsProvider credentials;
     String className = credClass.getName();
     if (!AWSCredentialsProvider.class.isAssignableFrom(credClass)) {
       throw new IOException("Class " + credClass + " " + NOT_AWS_PROVIDER);
@@ -723,12 +749,18 @@ public final class S3AUtils {
       throw new IOException("Class " + credClass + " " + ABSTRACT_PROVIDER);
     }
     LOG.debug("Credential provider class is {}", className);
-
     try {
-      // new X(uri, conf)
-      Constructor cons = getConstructor(credClass, URI.class,
-          Configuration.class);
+      Constructor cons;
+      // new X(Optional<uri>, conf)
+      cons = getConstructor(credClass, Optional.class, Configuration.class);
       if (cons != null) {
+        credentials = (AWSCredentialsProvider)cons.newInstance(binding, conf);
+        return credentials;
+      }
+      // new X(uri, conf)
+      cons = getConstructor(credClass, URI.class, Configuration.class);
+      if (cons != null) {
+        URI uri = binding.orElse(null);
         credentials = (AWSCredentialsProvider)cons.newInstance(uri, conf);
         return credentials;
       }
@@ -757,9 +789,9 @@ public final class S3AUtils {
       // no supported constructor or factory method found
       throw new IOException(String.format("%s " + CONSTRUCTOR_EXCEPTION
           + ".  A class specified in %s must provide a public constructor "
-          + "accepting Configuration, or a public factory method named "
-          + "getInstance that accepts no arguments, or a public default "
-          + "constructor.", className, AWS_CREDENTIALS_PROVIDER));
+          + "of a supported signature, or a public factory method named "
+          + "getInstance that accepts no arguments.",
+          className, AWS_CREDENTIALS_PROVIDER));
     } catch (InvocationTargetException e) {
       Throwable targetException = e.getTargetException();
       if (targetException == null) {

@@ -18,13 +18,14 @@
 
 package org.apache.hadoop.fs.s3a.auth;
 
+import javax.annotation.Nullable;
 import java.net.URI;
 import java.io.IOException;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.amazonaws.SdkBaseException;
 import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
 import com.google.common.annotations.VisibleForTesting;
 
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -38,10 +39,7 @@ import org.apache.hadoop.fs.s3a.Retries;
  */
 @InterfaceAudience.Private
 public abstract class AbstractSessionCredentialsProvider
-    implements AWSCredentialsProvider {
-
-  private final Configuration conf;
-  private final URI uri;
+    extends AbstractAWSCredentialProvider {
 
   /** Credentials, created in {@link #init()}. */
   private AWSCredentials awsCredentials;
@@ -57,21 +55,24 @@ public abstract class AbstractSessionCredentialsProvider
 
   /**
    * Constructor.
-   * @param uri filesystem URI
+   * @param binding optional filesystem URI.
    * @param conf configuration.
    */
-  protected AbstractSessionCredentialsProvider(URI uri,
+  protected AbstractSessionCredentialsProvider(
+      Optional<URI> binding,
       Configuration conf) {
-    this.uri = uri;
-    this.conf = conf;
+    super(binding, conf);
   }
 
-  protected Configuration getConf() {
-    return conf;
-  }
-
-  public URI getUri() {
-    return uri;
+  /**
+   * Constructor.
+   * @param uri possibly null filesystem URI.
+   * @param conf configuration.
+   */
+  public AbstractSessionCredentialsProvider(
+      @Nullable final URI uri,
+      final Configuration conf) {
+    super(uri, conf);
   }
 
   /**
@@ -86,7 +87,7 @@ public abstract class AbstractSessionCredentialsProvider
     }
     try {
       awsCredentials = Invoker.once("create credentials", "",
-          () -> createCredentials(conf));
+          () -> createCredentials(getConf()));
     } catch (IOException e) {
       initializationException = e;
       throw e;
@@ -145,10 +146,6 @@ public abstract class AbstractSessionCredentialsProvider
 
   public final boolean hasCredentials() {
     return awsCredentials == null;
-  }
-
-  @Override
-  public void refresh() {
   }
 
   @Override

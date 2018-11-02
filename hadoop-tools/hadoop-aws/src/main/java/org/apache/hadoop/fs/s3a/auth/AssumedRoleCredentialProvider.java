@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.AmazonClientException;
@@ -103,7 +104,9 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
     }
 
     // build up the base provider
-    credentialsToSTS = buildAWSProviderList(fsUri, conf,
+    credentialsToSTS = buildAWSProviderList(
+        Optional.ofNullable(fsUri),
+        conf,
         ASSUMED_ROLE_CREDENTIALS_PROVIDER,
         Arrays.asList(
             SimpleAWSCredentialsProvider.class,
@@ -132,7 +135,7 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
     AWSSecurityTokenServiceClientBuilder stsbuilder =
         STSClientFactory.builder(
           conf,
-          fsUri.getHost(),
+          fsUri != null ?  fsUri.getHost() : "",
           credentialsToSTS,
           endpoint,
           region);

@@ -23,7 +23,9 @@ import java.io.InterruptedIOException;
 import java.net.URI;
 import java.nio.file.AccessDeniedException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
@@ -36,6 +38,7 @@ import org.junit.rules.ExpectedException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.s3a.auth.AbstractAWSCredentialProvider;
 import org.apache.hadoop.fs.s3a.auth.AssumedRoleCredentialProvider;
 import org.apache.hadoop.fs.s3a.auth.NoAuthWithAWSException;
 import org.apache.hadoop.io.retry.RetryPolicy;
@@ -52,18 +55,24 @@ import static org.junit.Assert.*;
  */
 public class TestS3AAWSCredentialsProvider {
 
+  /**
+   * URI of the landsat images.
+   */
+  private static final URI TESTFILE_URI = new Path(
+      DEFAULT_CSVTEST_FILE).toUri();
+  
   @Rule
   public ExpectedException exception = ExpectedException.none();
 
   @Test
   public void testProviderWrongClass() throws Exception {
-    expectProviderInstantiationFailure(this.getClass().getName(),
+    expectProviderInstantiationFailure(this.getClass(),
         NOT_AWS_PROVIDER);
   }
 
   @Test
   public void testProviderAbstractClass() throws Exception {
-    expectProviderInstantiationFailure(AbstractProvider.class.getName(),
+    expectProviderInstantiationFailure(AbstractProvider.class,
         ABSTRACT_PROVIDER);
   }
 
@@ -76,20 +85,20 @@ public class TestS3AAWSCredentialsProvider {
   @Test
   public void testProviderConstructorError() throws Exception {
     expectProviderInstantiationFailure(
-        ConstructorSignatureErrorProvider.class.getName(),
+        ConstructorSignatureErrorProvider.class,
         CONSTRUCTOR_EXCEPTION);
   }
 
   @Test
   public void testProviderFailureError() throws Exception {
     expectProviderInstantiationFailure(
-        ConstructorFailureProvider.class.getName(),
+        ConstructorFailureProvider.class,
         INSTANTIATION_EXCEPTION);
   }
 
   @Test
   public void testInstantiationChain() throws Throwable {
-    Configuration conf = new Configuration();
+    Configuration conf = new Configuration(false);
     conf.set(AWS_CREDENTIALS_PROVIDER,
         TemporaryAWSCredentialsProvider.NAME
             + ", \t" + SimpleAWSCredentialsProvider.NAME
@@ -97,9 +106,8 @@ public class TestS3AAWSCredentialsProvider {
     Path testFile = new Path(
         conf.getTrimmed(KEY_CSVTEST_FILE, DEFAULT_CSVTEST_FILE));
 
-    URI uri = testFile.toUri();
-    AWSCredentialProviderList list = S3AUtils.createAWSCredentialProviderSet(
-        uri, conf);
+    AWSCredentialProviderList list = createAWSCredentialProviderSet(
+        Optional.of(testFile.toUri()), conf);
     List<Class<?>> expectedClasses =
         Arrays.asList(
             TemporaryAWSCredentialsProvider.class,
@@ -111,36 +119,45 @@ public class TestS3AAWSCredentialsProvider {
   @Test
   public void testDefaultChain() throws Exception {
     URI uri1 = new URI("s3a://bucket1"), uri2 = new URI("s3a://bucket2");
-    Configuration conf = new Configuration();
+    Configuration conf = new Configuration(false);
     // use the default credential provider chain
     conf.unset(AWS_CREDENTIALS_PROVIDER);
-    AWSCredentialProviderList list1 = S3AUtils.createAWSCredentialProviderSet(
-        uri1, conf);
-    AWSCredentialProviderList list2 = S3AUtils.createAWSCredentialProviderSet(
-        uri2, conf);
+    AWSCredentialProviderList list1 = createAWSCredentialProviderSet(
+        Optional.of(uri1), conf);
+    AWSCredentialProviderList list2 = createAWSCredentialProviderSet(
+        Optional.of(uri2), conf);
     List<Class<?>> expectedClasses = STANDARD_AWS_PROVIDERS;
     assertCredentialProviders(expectedClasses, list1);
     assertCredentialProviders(expectedClasses, list2);
   }
 
   @Test
+  public void testDefaultChainNoURI() throws Exception {
+    Configuration conf = new Configuration(false);
+    // use the default credential provider chain
+    conf.unset(AWS_CREDENTIALS_PROVIDER);
+    assertCredentialProviders(STANDARD_AWS_PROVIDERS, 
+        createAWSCredentialProviderSet(Optional.empty(), conf));
+  }
+
+  @Test
   public void testConfiguredChain() throws Exception {
-    URI uri1 = new URI("s3a://bucket1"), uri2 = new URI("s3a://bucket2");
-    Configuration conf = new Configuration();
     List<Class<?>> expectedClasses =
         Arrays.asList(
             EnvironmentVariableCredentialsProvider.class,
             InstanceProfileCredentialsProvider.class,
             AnonymousAWSCredentialsProvider.class);
-    conf.set(AWS_CREDENTIALS_PROVIDER, buildClassListString(expectedClasses));
-    AWSCredentialProviderList list1 = S3AUtils.createAWSCredentialProviderSet(
-        uri1, conf);
-    AWSCredentialProviderList list2 = S3AUtils.createAWSCredentialProviderSet(
-        uri2, conf);
+    Configuration conf =
+        createProviderConfiguration(buildClassListString(expectedClasses));
+    AWSCredentialProviderList list1 = createAWSCredentialProviderSet(
+        Optional.of(new URI("s3a://bucket1")), conf);
+    AWSCredentialProviderList list2 = createAWSCredentialProviderSet(
+        Optional.of(new URI("s3a://bucket2")), conf);
     assertCredentialProviders(expectedClasses, list1);
     assertCredentialProviders(expectedClasses, list2);
   }
 
+  @SuppressWarnings("deprecation")
   @Test
   public void testConfiguredChainUsesSharedInstanceProfile() throws Exception {
     URI uri1 = new URI("s3a://bucket1"), uri2 = new URI("s3a://bucket2");
@@ -149,9 +166,9 @@ public class TestS3AAWSCredentialsProvider {
         Arrays.asList(
             InstanceProfileCredentialsProvider.class);
     conf.set(AWS_CREDENTIALS_PROVIDER, buildClassListString(expectedClasses));
-    AWSCredentialProviderList list1 = S3AUtils.createAWSCredentialProviderSet(
+    AWSCredentialProviderList list1 = createAWSCredentialProviderSet(
         uri1, conf);
-    AWSCredentialProviderList list2 = S3AUtils.createAWSCredentialProviderSet(
+    AWSCredentialProviderList list2 = createAWSCredentialProviderSet(
         uri2, conf);
     assertCredentialProviders(expectedClasses, list1);
     assertCredentialProviders(expectedClasses, list2);
@@ -159,20 +176,36 @@ public class TestS3AAWSCredentialsProvider {
 
   @Test
   public void testFallbackToDefaults() throws Throwable {
-    Configuration conf = new Configuration(false);
-    conf.set(AWS_CREDENTIALS_PROVIDER, "  ");
     // build up the base provider
     final AWSCredentialProviderList credentials = buildAWSProviderList(
-        new URI("s3a://bucket1"),
-        conf,
+        Optional.of(new URI("s3a://bucket1")),
+        createProviderConfiguration("  "),
         ASSUMED_ROLE_CREDENTIALS_PROVIDER,
         Arrays.asList(
             EnvironmentVariableCredentialsProvider.class),
         Sets.newHashSet());
     assertTrue("empty credentials", credentials.size() > 0);
+  }
 
+  @Test
+  public void testOptionalConstructorFirst() throws Throwable {
+    createAWSCredentialProviderSet(
+        Optional.of(TESTFILE_URI),
+        createProviderConfiguration(ValidOptionProvider.class));
   }
   
+  @Test
+  public void testOptionalEmpty() throws Throwable {
+    intercept(IOException.class,
+        ValidOptionProvider.NO_URI,
+        () -> {
+          return createAWSCredentialProviderSet(
+              Optional.empty(),
+              createProviderConfiguration(ValidOptionProvider.class));
+        });
+  }
+
+
   /**
    * A credential provider declared as abstract, so it cannot be instantiated.
    */
@@ -220,14 +253,140 @@ public class TestS3AAWSCredentialsProvider {
     }
   }
 
+  /**
+   * Reject any attempt to create without a binding.
+   */
+  public static class ValidOptionProvider
+      extends AbstractAWSCredentialProvider {
+
+    private static final String NO_URI = "No URI";
+
+    public static final String NAME
+        = "org.apache.hadoop.fs.s3a.TestS3AAWSCredentialsProvider.ValidOptionProvider";
+
+    public ValidOptionProvider(final Optional<URI> binding,
+        final Configuration conf) throws IOException {
+      super(binding, conf);
+      binding.orElseThrow(() -> new IOException(NO_URI));
+    }
+
+    public ValidOptionProvider(final URI uri,
+        final Configuration conf) throws IOException {
+      super(uri, conf);
+      throw new IOException("URI constructor called");
+    }
+
+
+    @Override
+    public AWSCredentials getCredentials() {
+      return null;
+    }
+  }
+
+  @Test
+  public void testAWSExceptionTranslation() throws Throwable {
+    IOException ex = expectProviderInstantiationFailure(
+        AWSExceptionRaisingFactory.class,
+        AWSExceptionRaisingFactory.NO_AUTH);
+    if (!(ex instanceof AccessDeniedException)) {
+      throw ex;
+    }
+  }
+  
+  static class AWSExceptionRaisingFactory implements AWSCredentialsProvider {
+
+    public static final String NO_AUTH = "No auth";
+
+    public static AWSCredentialsProvider getInstance() {
+      throw new NoAuthWithAWSException(NO_AUTH);
+    }
+
+    @Override
+    public AWSCredentials getCredentials() {
+      return null;
+    }
+
+    @Override
+    public void refresh() {
+
+    }
+  }
+
+  @Test
+  public void testFactoryWrongType() throws Throwable {
+    expectProviderInstantiationFailure(
+        FactoryOfWrongType.class,
+        CONSTRUCTOR_EXCEPTION);
+  }
+  
+  static class FactoryOfWrongType implements AWSCredentialsProvider {
+
+    public static final String NO_AUTH = "No auth";
+
+    public static String getInstance() {
+      return "oops";
+    }
+
+    @Override
+    public AWSCredentials getCredentials() {
+      return null;
+    }
+
+    @Override
+    public void refresh() {
+
+    }
+  }
+  
+  /**
+   * Expect a provider to raise an exception on failure.
+   * @param option aws provider option string.
+   * @param expectedErrorText error text to expect
+   * @return the exception raised
+   * @throws Exception any unexpected exception thrown.
+   */
   private IOException expectProviderInstantiationFailure(String option,
       String expectedErrorText) throws Exception {
-    Configuration conf = new Configuration();
-    conf.set(AWS_CREDENTIALS_PROVIDER, option);
-    Path testFile = new Path(
-        conf.getTrimmed(KEY_CSVTEST_FILE, DEFAULT_CSVTEST_FILE));
     return intercept(IOException.class, expectedErrorText,
-        () -> S3AUtils.createAWSCredentialProviderSet(testFile.toUri(), conf));
+        () -> createAWSCredentialProviderSet(
+            Optional.of(TESTFILE_URI),
+            createProviderConfiguration(option)));
+  }
+
+  /**
+   * Expect a provider to raise an exception on failure.
+   * @param aClass class to use
+   * @param expectedErrorText error text to expect
+   * @return the exception raised
+   * @throws Exception any unexpected exception thrown.
+   */
+  private IOException expectProviderInstantiationFailure(Class aClass,
+      String expectedErrorText) throws Exception {
+    return expectProviderInstantiationFailure(
+        buildClassListString(Collections.singletonList(aClass)),
+        expectedErrorText);
+  }
+
+  /**
+   * Create a configuration with a specific provider.
+   * @param providerOption option for the aws credential provider option. 
+   * @return a configuration to use in test cases
+   */
+  private Configuration createProviderConfiguration(
+      final String providerOption) {
+    Configuration conf = new Configuration(false);
+    conf.set(AWS_CREDENTIALS_PROVIDER, providerOption);
+    return conf;
+  }
+
+  /**
+   * Create a configuration with a specific class.
+   * @param aClass class to use
+   * @return a configuration to use in test cases
+   */
+  public Configuration createProviderConfiguration(final Class<?> aClass) {
+    return createProviderConfiguration(buildClassListString(
+        Collections.singletonList(aClass)));
   }
 
   /**
@@ -281,7 +440,7 @@ public class TestS3AAWSCredentialsProvider {
     // but that it closes safely
     providers.close();
 
-    S3ARetryPolicy retryPolicy = new S3ARetryPolicy(new Configuration());
+    S3ARetryPolicy retryPolicy = new S3ARetryPolicy(new Configuration(false));
     assertEquals("Expected no retry on auth failure",
         RetryPolicy.RetryAction.FAIL.action,
         retryPolicy.shouldRetry(noAuth, 0, 0, true).action);

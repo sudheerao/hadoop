@@ -23,6 +23,7 @@ import java.io.IOException;
 import com.amazonaws.auth.AWSCredentials;
 
 import java.net.URI;
+import java.util.Optional;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -48,18 +49,27 @@ public class TemporaryAWSCredentialsProvider extends
   public static final String NAME
       = "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider";
 
-  public TemporaryAWSCredentialsProvider(Configuration conf)
-      throws IOException {
-    this(null, conf);
+  /**
+   * Preferred constructor: the binding is empty or contains a URI.
+   * @param binding binding to a filesystem URI.
+   * @param conf configuration.
+   */
+  public TemporaryAWSCredentialsProvider(
+      final Optional<URI> binding,
+      final Configuration conf) {
+    super(binding, conf);
   }
 
-  public TemporaryAWSCredentialsProvider(URI uri, Configuration conf)
+  public TemporaryAWSCredentialsProvider(final Configuration conf)
+      throws IOException {
+    super(Optional.empty(), conf);
+  }
+
+  public TemporaryAWSCredentialsProvider(
+      final URI uri,
+      final Configuration conf)
       throws IOException {
     super(uri, conf);
-    // no attempt is made to call init() here as this provider isn't
-    // expected to fail-on-instantiate.
-    // instead the on-demand call in createCredentials will trigger the lookup
-    // and any failures.
   }
 
   /**

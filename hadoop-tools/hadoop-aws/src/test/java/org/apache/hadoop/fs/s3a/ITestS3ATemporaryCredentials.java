@@ -117,7 +117,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
             builder.build(),
             new Invoker(new S3ARetryPolicy(conf), Invoker.LOG_EVENT));
     Credentials sessionCreds = clientConnection
-        .requestSessionCredentials(TEST_SESSION_TOKEN_DURATION, TimeUnit.SECONDS);
+        .requestSessionCredentials(TEST_SESSION_TOKEN_DURATION,
+            TimeUnit.SECONDS);
     
     // clone configuration so changes here do not affect the base FS.
     Configuration conf2 = new Configuration(conf);
@@ -171,7 +172,7 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
 
   /**
    * Test that session tokens are propagated, with the origin string
-   * declaring this
+   * declaring this.
    */
   @Test
   public void testSessionTokenPropagation() throws Exception {
@@ -184,7 +185,7 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     long nowInMillis = System.currentTimeMillis();
     Date currentDate = new Date(nowInMillis);
     // date is ahead of now
-    String reason = String.format( 
+    String reason = String.format(
         "Expiry Date of %s (%d); current date %s (%d)",
         expiryDate, expirationInMillis, currentDate, nowInMillis);
     assertThat(
