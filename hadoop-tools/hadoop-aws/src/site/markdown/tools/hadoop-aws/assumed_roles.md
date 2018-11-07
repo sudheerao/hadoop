@@ -564,7 +564,7 @@ Caused by: com.amazonaws.services.securitytoken.model.MalformedPolicyDocumentExc
   at com.amazonaws.http.AmazonHttpClient$RequestExecutor.executeOneRequest(AmazonHttpClient.java:1303)
 ```
 
-### <a name="malformed_policy"></a> `MalformedPolicyDocumentException` "Syntax errors in policy"
+### <a name="policy_syntax_error"></a> `MalformedPolicyDocumentException` "Syntax errors in policy"
 
 The policy set in `fs.s3a.assumed.role.policy` is not valid JSON.
 
@@ -806,3 +806,45 @@ at com.amazonaws.thirdparty.apache.http.impl.client.InternalHttpClient.doExecute
 at com.amazonaws.thirdparty.apache.http.impl.client.CloseableHttpClient.execute(CloseableHttpClient.java:82)
 at com.amazonaws.thirdparty.apache.http.impl.client.CloseableHttpClient.execute(CloseableHttpClient.java:55)
 ```
+
+###  <a name="credential_scope"></a> Error "Credential should be scoped to a valid region"
+
+This is based on conflict between the values of `fs.s3a.assumed.role.sts.endpoint`
+and `fs.s3a.assumed.role.sts.endpoint.region`
+Two variants, "not '''"
+
+Variant 1: `Credential should be scoped to a valid region, not 'us-west-1'` (or other string)
+
+
+```
+java.nio.file.AccessDeniedException: : request session credentials:
+com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceException:
+Credential should be scoped to a valid region, not 'us-west-1'.
+(Service: AWSSecurityTokenService; Status Code: 403; Error Code: SignatureDoesNotMatch; Request ID: d9065cc4-e2b9-11e8-8b7b-f35cb8d7aea4):SignatureDoesNotMatch
+```
+
+One of:
+
+
+* the value of `fs.s3a.assumed.role.sts.endpoint.region` is not a valid region
+* the value of `fs.s3a.assumed.role.sts.endpoint.region` is not the signing
+region of the endpoint set in `fs.s3a.assumed.role.sts.endpoint`
+
+
+Variant 2: `Credential should be scoped to a valid region, not ''`
+
+```
+java.nio.file.AccessDeniedException: : request session credentials:
+com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceException:
+  Credential should be scoped to a valid region, not ''. (
+  Service: AWSSecurityTokenService; Status Code: 403; Error Code: SignatureDoesNotMatch;
+  Request ID: bd3e5121-e2ac-11e8-a566-c1a4d66b6a16):SignatureDoesNotMatch
+```
+
+This should be intercepted earlier: an endpoint has been specified but
+not a region.
+
+There's special handling for the central "sts.amazonaws.com" region; when
+that is declared as the value of fs.s3a.assumed.role.sts.endpoint.region` then
+there is no need to declare a region, instead the region value is required
+to be empty.

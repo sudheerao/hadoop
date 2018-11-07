@@ -41,6 +41,7 @@ import org.apache.hadoop.fs.s3a.Invoker;
 import org.apache.hadoop.fs.s3a.Retries;
 import org.apache.hadoop.fs.s3a.S3AUtils;
 
+import static org.apache.commons.lang3.StringUtils.isEmpty;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.*;
 
@@ -122,10 +123,19 @@ public class STSClientFactory {
     Preconditions.checkArgument(credentials != null, "No credentials");
     builder.withClientConfiguration(awsConf);
     builder.withCredentials(credentials);
-    if (isNotEmpty(stsEndpoint) || isNotEmpty(stsRegion)) {
-      LOG.debug("STS Endpoint={}; region={}", stsEndpoint, stsRegion);
+    boolean destIsStandardEndpoint = STS_STANDARD.equals(stsEndpoint);
+    if (isNotEmpty(stsEndpoint) && !destIsStandardEndpoint) {
+      Preconditions.checkArgument(
+          isNotEmpty(stsRegion),
+          "STS endpoint is set to %s but no signing region was provided",
+          stsEndpoint);
+      LOG.debug("STS Endpoint={}; region='{}'", stsEndpoint, stsRegion);
       builder.withEndpointConfiguration(
           new AwsClientBuilder.EndpointConfiguration(stsEndpoint, stsRegion));
+    } else {
+      Preconditions.checkArgument(isEmpty(stsRegion),
+          "STS signing region set set to %s but no STS endpoint specified",
+          stsRegion);
     }
     return builder;
   }
@@ -186,9 +196,10 @@ public class STSClientFactory {
       request.setDurationSeconds((int) timeUnit.toSeconds(duration));
       return invoker.retry("request session credentials", "",
           true,
-          () -> tokenService
-              .getSessionToken(request)
-              .getCredentials());
+          () ->{
+            LOG.info("Requesting token");
+            return tokenService.getSessionToken(request).getCredentials();
+      });
     }
 
     /**

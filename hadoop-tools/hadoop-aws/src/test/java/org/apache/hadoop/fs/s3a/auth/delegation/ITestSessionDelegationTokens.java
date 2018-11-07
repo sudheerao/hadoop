@@ -252,4 +252,5 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
     assertFalse("Delegation is bound to a DT: " + delegation,
         delegation.isBoundToDT());
   }
+
 }

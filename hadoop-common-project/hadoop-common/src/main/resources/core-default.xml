@@ -1116,7 +1116,7 @@
   <value>30m</value>
   <description>
     Duration of assumed roles before a refresh is attempted.
-    Only used if AssumedRoleCredentialProvider is the AWS credential provider.
+    Used when session tokens are requested.
     Range: 15m to 1h
   </description>
 </property>
@@ -1128,17 +1128,20 @@
     AWS Security Token Service Endpoint.
     If unset, uses the default endpoint.
     Only used if AssumedRoleCredentialProvider is the AWS credential provider.
+    Used by the AssumedRoleCredentialProvider and in Session and Role delegation
+    tokens.
   </description>
 </property>
 
 <property>
   <name>fs.s3a.assumed.role.sts.endpoint.region</name>
-  <value>us-west-1</value>
+  <value></value>
   <description>
     AWS Security Token Service Endpoint's region;
     Needed if fs.s3a.assumed.role.sts.endpoint points to an endpoint
     other than the default one and the v4 signature is used.
-    Only used if AssumedRoleCredentialProvider is the AWS credential provider.
+    Used by the AssumedRoleCredentialProvider and in Session and Role delegation
+    tokens.
   </description>
 </property>
 

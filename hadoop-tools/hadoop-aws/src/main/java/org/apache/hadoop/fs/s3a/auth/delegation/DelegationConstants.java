@@ -160,6 +160,12 @@ public final class DelegationConstants {
   public static final String E_NO_SESSION_TOKENS_FOR_ROLE_BINDING
       = "Cannot issue S3A Role Delegation Tokens without full AWS credentials";
 
+
+  /**
+   * The standard STS server.
+   */
+  public static final String STS_STANDARD = "sts.amazonaws.com";
+      
   private DelegationConstants() {
   }
 }

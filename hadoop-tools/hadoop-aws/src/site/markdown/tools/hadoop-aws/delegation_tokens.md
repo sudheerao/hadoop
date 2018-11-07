@@ -211,6 +211,13 @@ application configured with the login credentials for an AWS account able to iss
 
 ##### Token Life
 
+* S3A Delegation tokens cannot be renewed.
+
+* S3A Delegation tokens cannot be revoked. It is possible for an administrator
+to terminate *all AWS sessions using a specific role*
+[from the AWS IAM console](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_control-access_disable-perms.html),
+if desired.
+
 * The lifespan of Session Delegation Tokens are limited to those of AWS sessions,
 maximum of 36 hours.
 
@@ -218,12 +225,8 @@ maximum of 36 hours.
 a longer duration of up to 12 hours can be enabled in the AWS console for
 the specific role being used.
 
-* S3A Delegation tokens cannot be renewed.
-
-* S3A Delegation tokens cannot be revoked. It is possible for an administrator
-to terminate *all AWS sessions using a specific role*
-[from the AWS IAM console](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_control-access_disable-perms.html),
-if desired.
+* The lifespan of full delegation tokens is unlimited: the secret needs
+to be reset in the AWS Admin console to revoke it.
 
 ##### Service Load
 

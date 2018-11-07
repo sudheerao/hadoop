@@ -225,12 +225,13 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
     if (!hasSessionCreds) {
       String endpoint = conf.getTrimmed(DELEGATION_TOKEN_ENDPOINT,
           DEFAULT_DELEGATION_TOKEN_ENDPOINT);
-      String region = conf.getTrimmed(DELEGATION_TOKEN_REGION, "");
-      LOG.debug("Creating STS client for user {}," +
-              " endpoint {} and token duration {}",
-          getOwner().getShortUserName(), endpoint, duration);
+      String region = conf.getTrimmed(DELEGATION_TOKEN_REGION,
+          DEFAULT_DELEGATION_TOKEN_REGION);
+      LOG.info("Creating STS client for user {}," +
+              " endpoint {}, region {} and token duration {}",
+          getOwner().getShortUserName(), endpoint, region, duration);
 
-      invoker = new Invoker(new S3ARetryPolicy(conf), Invoker.LOG_EVENT);
+      invoker = new Invoker(new S3ARetryPolicy(conf), LOG_EVENT);
       ClientConfiguration awsConf =
           S3AUtils.createAwsConf(conf, uri.getHost());
       AWSSecurityTokenService tokenService =
@@ -248,6 +249,18 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
     return stsClient;
   }
 
+  /**
+   * Log retries at debug.
+   */
+  public static final Invoker.Retried LOG_EVENT =
+      (text, exception, retries, idempotent) -> {
+    LOG.info("{}: " + exception, text);
+    if (retries == 1) {
+      // stack on first attempt, to keep noise down
+      LOG.debug("{}: " + exception, text, exception);
+    }
+  };
+  
   /**
    * Get the client to AWS STS.
    * @return the STS client, when successfully inited.

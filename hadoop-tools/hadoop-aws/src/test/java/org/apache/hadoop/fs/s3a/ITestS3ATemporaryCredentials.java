@@ -19,9 +19,13 @@
 package org.apache.hadoop.fs.s3a;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.AccessDeniedException;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
+import com.amazonaws.ClientConfiguration;
+import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
 import com.amazonaws.services.securitytoken.model.Credentials;
 import org.hamcrest.Matchers;
@@ -34,6 +38,7 @@ import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenIdentifier;
+import org.apache.hadoop.fs.s3a.commit.DurationInfo;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.test.LambdaTestUtils;
 
@@ -66,6 +71,10 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
       = TemporaryAWSCredentialsProvider.NAME;
 
   private static final long TEST_FILE_SIZE = 1024;
+
+  public static final String STS_LONDON = "sts.eu-west-2.amazonaws.com";
+
+  public static final String EU_IRELAND = "eu-west-1";
 
   private AWSCredentialProviderList credentials;
 
@@ -260,6 +269,106 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     }
   }
 
+
+  @Test
+  public void testSessionCredentialsBadRegion() throws Throwable {
+    describe("Create a session with a bad region and expect failure");
+    expectedSessionRequestFailure(
+        AccessDeniedException.class,
+        DEFAULT_DELEGATION_TOKEN_ENDPOINT,
+        "us-west-12", "");
+  }
+
+  @Test
+  public void testSessionCredentialsWrongRegion() throws Throwable {
+    describe("Create a session with the wrong region and expect failure");
+    expectedSessionRequestFailure(
+        AccessDeniedException.class,
+        STS_LONDON,
+        EU_IRELAND, "");
+  }
+
+  @Test
+  public void testSessionCredentialsWrongCentralRegion() throws Throwable {
+    describe("Create a session sts.amazonaws.com; region='us-west-1'");
+    expectedSessionRequestFailure(
+        AccessDeniedException.class,
+        "sts.amazonaws.com",
+        "us-west-1", "");
+  }
+
+  @Test
+  public void testSessionCredentialsRegionNoEndpoint() throws Throwable {
+    describe("Create a session with a bad region and expect fast failure");
+    expectedSessionRequestFailure(
+        IllegalArgumentException.class,
+        "",
+        EU_IRELAND, EU_IRELAND);
+  }
+
+  @Test
+  public void testSessionCredentialsRegionBadEndpoint() throws Throwable {
+    describe("Create a session with a bad region and expect fast failure");
+    IllegalArgumentException ex
+        = expectedSessionRequestFailure(
+        IllegalArgumentException.class,
+        " ",
+        EU_IRELAND,
+        "");
+    LOG.info("Outcome: ", ex);
+    if (!(ex.getCause() instanceof URISyntaxException)) {
+      throw ex;
+    }
+  }
+
+  @Test
+  public void testSessionCredentialsEndpointNoRegion() throws Throwable {
+    expectedSessionRequestFailure(
+        IllegalArgumentException.class,
+        STS_LONDON,
+        "",
+        STS_LONDON);
+  }
+  
+  public <E extends Exception> E expectedSessionRequestFailure(
+      final Class<E> clazz,
+      final String endpoint,
+      final String region,
+      final String exceptionText) throws Exception {
+    try(AWSCredentialProviderList parentCreds =
+            getFileSystem().shareCredentials("test");
+        DurationInfo ignored = new DurationInfo(LOG, "requesting credentials")) {
+      Configuration conf = new Configuration(getContract().getConf());
+      ClientConfiguration awsConf =
+          S3AUtils.createAwsConf(conf, null);
+      return intercept(clazz, exceptionText,
+          () -> {
+            AWSSecurityTokenService tokenService =
+                STSClientFactory.builder(parentCreds,
+                    awsConf,
+                    endpoint,
+                    region)
+                    .build();
+            Invoker invoker = new Invoker(new S3ARetryPolicy(conf),
+                LOG_AT_ERROR);
+
+            STSClientFactory.STSClient stsClient
+                = STSClientFactory.createClientConnection(tokenService,
+                invoker);
+
+            return stsClient.requestSessionCredentials(30, TimeUnit.MINUTES);
+          });
+    }
+  }
+
+  /**
+   * Log retries at debug.
+   */
+  public static final Invoker.Retried LOG_AT_ERROR =
+      (text, exception, retries, idempotent) -> {
+        LOG.error("{}", text, exception);
+      };
+  
   @Test
   public void testTemporaryCredentialValidationOnLoad() throws Throwable {
     Configuration conf = new Configuration();

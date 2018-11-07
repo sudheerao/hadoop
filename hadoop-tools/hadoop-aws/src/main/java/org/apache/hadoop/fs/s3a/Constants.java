@@ -101,7 +101,7 @@ public final class Constants {
    * issue STS tokens for any region.
    */
   public static final String DEFAULT_ASSUMED_ROLE_STS_ENDPOINT =
-      "sts.amazonaws.com";
+      "";
 
   /**
    * Region for the STS endpoint; needed if the endpoint
