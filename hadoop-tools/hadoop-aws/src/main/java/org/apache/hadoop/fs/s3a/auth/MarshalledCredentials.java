@@ -38,6 +38,7 @@ import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.model.Credentials;
 import com.google.common.annotations.VisibleForTesting;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.CredentialInitializationException;
@@ -70,11 +71,18 @@ public final class MarshalledCredentials implements Writable,
     AWSCredentialsProvider {
 
   /**
-   * Error text on invalid credentials: {@value}.
+   * Error text on invalid non-empty credentials: {@value}.
    */
   @VisibleForTesting
   public static final String INVALID_CREDENTIALS
       = "Invalid AWS credentials";
+
+  /**
+   * Error text on empty credentials: {@value}.
+   */
+  @VisibleForTesting
+  public static final String NO_AWS_CREDENTIALS
+      = "No AWS credentials";
 
   /**
    * How long can any of the secrets be: {@value}.
@@ -262,13 +270,15 @@ public final class MarshalledCredentials implements Writable,
   @Override
   public String toString() {
     return String.format(
-        "Marshalled %s Credentials for user %s%s; role=\"%s\" (%s)",
+        "%s credentials for user %s%s; %s(%s)",
         (hasSessionToken() ? "Session" : "Full"),
         accessKey,
-        (expiration == 0)
+        (expiration == 0
             ? ""
-            : (" expires " + (new Date(expiration))),
-        roleARN,
+            : (" expires " + (new Date(expiration)))),
+        (isNotEmpty(roleARN)
+            ? ("role \"" + roleARN + "\" ")
+            : ""),
         isValid() ? "valid" : "invalid");
   }
 
@@ -312,6 +322,17 @@ public final class MarshalledCredentials implements Writable,
     }
   }
 
+  /**
+   * Is this empty: does it contain any credentials at all.
+   * This test returns true if the access key is empty; there's no
+   * check of the others, as if the access key is unset, there are no
+   * credentials.
+   * @return true if there are no credentials.
+   */
+  public boolean isEmpty() {
+    return StringUtils.isEmpty(accessKey);
+  }
+  
   /**
    * Is this a valid set of credentials tokens?
    * @param required credential type required.
@@ -413,8 +434,12 @@ public final class MarshalledCredentials implements Writable,
    */
   public String buildInvalidCredentialsError(
       final CredentialTypeRequired typeRequired) {
-    return INVALID_CREDENTIALS
-        + " in " + this.toString() + " required: " + typeRequired;
+    if (isEmpty()) {
+      return NO_AWS_CREDENTIALS;
+    } else {
+      return INVALID_CREDENTIALS
+          + " in " + toString() + " required: " + typeRequired;
+    }
   }
 
   /**
@@ -496,8 +521,8 @@ public final class MarshalledCredentials implements Writable,
   public static MarshalledCredentials fromEnvironment(
       final Map<String, String> env) {
     MarshalledCredentials creds = new MarshalledCredentials();
-    creds.setAccessKey(nullToEmptyString(env.get("AWS_ACCESS_KEY_ID")));
-    creds.setSecretKey(nullToEmptyString(env.get("AWS_SECRET_ACCESS_KEY")));
+    creds.setAccessKey(nullToEmptyString(env.get("AWS_ACCESS_KEY")));
+    creds.setSecretKey(nullToEmptyString(env.get("AWS_SECRET_KEY")));
     creds.setSessionToken(nullToEmptyString(env.get("AWS_SESSION_TOKEN")));
     return creds;
   }

@@ -142,4 +142,15 @@ public class RoleTokenBinding extends SessionTokenBinding {
   public RoleTokenIdentifier createEmptyIdentifier() {
     return new RoleTokenIdentifier();
   }
+
+  @Override
+  public String getDescription() {
+    return super.getDescription() + " Role ARN=" + 
+      getConfig().get(DELEGATION_TOKEN_ROLE_ARN, "(none)");
+  }
+
+  @Override
+  protected String bindingName() {
+    return "Role";
+  }
 }

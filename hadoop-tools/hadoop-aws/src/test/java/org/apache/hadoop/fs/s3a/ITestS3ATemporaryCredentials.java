@@ -276,7 +276,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     expectedSessionRequestFailure(
         AccessDeniedException.class,
         DEFAULT_DELEGATION_TOKEN_ENDPOINT,
-        "us-west-12", "");
+        "us-west-12",
+        "");
   }
 
   @Test
@@ -285,7 +286,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     expectedSessionRequestFailure(
         AccessDeniedException.class,
         STS_LONDON,
-        EU_IRELAND, "");
+        EU_IRELAND,
+        "");
   }
 
   @Test
@@ -294,7 +296,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     expectedSessionRequestFailure(
         AccessDeniedException.class,
         "sts.amazonaws.com",
-        "us-west-1", "");
+        "us-west-1",
+        "");
   }
 
   @Test
@@ -303,7 +306,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     expectedSessionRequestFailure(
         IllegalArgumentException.class,
         "",
-        EU_IRELAND, EU_IRELAND);
+        EU_IRELAND,
+        EU_IRELAND);
   }
 
   @Test
@@ -329,7 +333,18 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
         "",
         STS_LONDON);
   }
-  
+
+  /**
+   * Expect an attempt to create a session or request credentials to fail
+   * with a specific exception class, optionally text.
+   * @param clazz exact class of exception.
+   * @param endpoint value for the sts endpoint option.
+   * @param region signing region.
+   * @param exceptionText text or "" in the exception.
+   * @param <E> type of exception.
+   * @return the caught exception.
+   * @throws Exception any unexpected exception.
+   */
   public <E extends Exception> E expectedSessionRequestFailure(
       final Class<E> clazz,
       final String endpoint,
@@ -373,12 +388,28 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   public void testTemporaryCredentialValidationOnLoad() throws Throwable {
     Configuration conf = new Configuration();
     unsetHadoopCredentialProviders(conf);
+    conf.set(ACCESS_KEY, "aaa");
+    conf.set(SECRET_KEY, "bbb");
+    conf.set(SESSION_TOKEN, "");
+    final MarshalledCredentials sc = MarshalledCredentials.load(null, conf);
+    intercept(IOException.class,
+        MarshalledCredentials.INVALID_CREDENTIALS,
+        () -> {
+          sc.validate("",
+              MarshalledCredentials.CredentialTypeRequired.SessionOnly);
+          return sc.toString();
+        });
+  }  
+  @Test
+  public void testEmptyTemporaryCredentialValidation() throws Throwable {
+    Configuration conf = new Configuration();
+    unsetHadoopCredentialProviders(conf);
     conf.set(ACCESS_KEY, "");
     conf.set(SECRET_KEY, "");
     conf.set(SESSION_TOKEN, "");
     final MarshalledCredentials sc = MarshalledCredentials.load(null, conf);
     intercept(IOException.class,
-        MarshalledCredentials.INVALID_CREDENTIALS,
+        MarshalledCredentials.NO_AWS_CREDENTIALS,
         () -> {
           sc.validate("",
               MarshalledCredentials.CredentialTypeRequired.SessionOnly);

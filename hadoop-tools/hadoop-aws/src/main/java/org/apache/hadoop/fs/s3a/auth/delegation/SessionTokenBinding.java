@@ -107,6 +107,10 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
    */
   private final AtomicBoolean forwardMessageLogged = new AtomicBoolean(false);
 
+  private String endpoint;
+
+  private String region;
+
   /** Constructor for reflection. */
   public SessionTokenBinding() {
     this(NAME, SESSION_TOKEN_KIND);
@@ -133,6 +137,10 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
     duration = conf.getTimeDuration(DELEGATION_TOKEN_DURATION,
         DEFAULT_DELEGATION_TOKEN_DURATION,
         TimeUnit.SECONDS);
+    endpoint = conf.getTrimmed(DELEGATION_TOKEN_ENDPOINT,
+        DEFAULT_DELEGATION_TOKEN_ENDPOINT);
+    region = conf.getTrimmed(DELEGATION_TOKEN_REGION,
+        DEFAULT_DELEGATION_TOKEN_REGION);
 
     // create the provider set for session credentials.
     parentAuthChain = buildAWSProviderList(
@@ -189,6 +197,24 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
             MarshalledCredentials.CredentialTypeRequired.SessionOnly));
   }
 
+
+  @Override
+  public String getDescription() {
+    return String.format(bindingName() 
+            + "%s token binding for user %s," +
+            "with STS endpoint \"%s\", region \"%s\" and token duration %s",
+        bindingName(), getOwner().getShortUserName(), endpoint, region, duration);
+  }
+
+  /**
+   * Get the role of this token; subclasses should override this
+   * for better logging.
+   * @return the role of this token
+   */
+  protected String bindingName() {
+    return "Session";
+  }
+
   /**
    * Attempt to init the STS connection, only does it once.
    * If the AWS credential list to this service return session credentials
@@ -216,20 +242,14 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
     // this call may fail if there are no credentials on the auth
     // chain.
     // As no codepath (session propagation, STS creation) will work,
-    // throw
-    final AWSCredentials parentCred = once("get credentials",
+    // throw this.
+    final AWSCredentials parentCredentials = once("get credentials",
         "",
         () -> parentAuthChain.getCredentials());
-    hasSessionCreds = parentCred instanceof AWSSessionCredentials;
+    hasSessionCreds = parentCredentials instanceof AWSSessionCredentials;
 
     if (!hasSessionCreds) {
-      String endpoint = conf.getTrimmed(DELEGATION_TOKEN_ENDPOINT,
-          DEFAULT_DELEGATION_TOKEN_ENDPOINT);
-      String region = conf.getTrimmed(DELEGATION_TOKEN_REGION,
-          DEFAULT_DELEGATION_TOKEN_REGION);
-      LOG.info("Creating STS client for user {}," +
-              " endpoint {}, region {} and token duration {}",
-          getOwner().getShortUserName(), endpoint, region, duration);
+      LOG.info("Creating STS client for {}", getDescription());
 
       invoker = new Invoker(new S3ARetryPolicy(conf), LOG_EVENT);
       ClientConfiguration awsConf =

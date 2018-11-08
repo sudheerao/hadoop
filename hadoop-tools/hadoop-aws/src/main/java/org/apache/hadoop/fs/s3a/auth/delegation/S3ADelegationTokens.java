@@ -191,6 +191,10 @@ public class S3ADelegationTokens extends AbstractDTService {
     super.serviceStart();
     tokenBinding.start();
     bindToAnyDelegationToken();
+    LOG.info("S3A Delegation support {} with {}",
+        boundDT.map((t) -> "bound to token " + t)
+            .orElseGet(() -> "(not bound to any token)"),
+        tokenBinding.getDescription());
   }
 
   /**

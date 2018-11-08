@@ -227,6 +227,16 @@ public abstract class AbstractDelegationTokenBinding extends AbstractDTService {
   }
 
   /**
+   * Return a description.
+   * This is logged during after service start & binding: 
+   * it should be as informative as possible.
+   * @return a description to log.
+   */
+  public String getDescription() {
+    return "Token binding " + getKind().toString();
+  }
+
+  /**
    * Create a secret manager.
    * @return a secret manager.
    * @throws IOException on failure

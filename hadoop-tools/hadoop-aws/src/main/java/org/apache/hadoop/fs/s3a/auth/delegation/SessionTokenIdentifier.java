@@ -141,6 +141,6 @@ public class SessionTokenIdentifier extends
   @Override
   public String toString() {
     return super.toString()
-        + "; marshalledCredentials=" + marshalledCredentials;
+        + "; " + marshalledCredentials.toString();
   }
 }

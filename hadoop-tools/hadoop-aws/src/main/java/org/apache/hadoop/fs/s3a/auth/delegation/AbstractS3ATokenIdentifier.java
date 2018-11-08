@@ -224,7 +224,7 @@ public abstract class AbstractS3ATokenIdentifier
     sb.append("; uri=").append(uri);
     sb.append("; timestamp=").append(created);
     sb.append("; encryption=").append(encryptionSecrets.toString());
-    sb.append("; origin=").append(origin);
+    sb.append("; ").append(origin);
     sb.append('}');
     return sb.toString();
   }

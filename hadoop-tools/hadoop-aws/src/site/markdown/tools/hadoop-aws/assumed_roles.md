@@ -845,6 +845,5 @@ This should be intercepted earlier: an endpoint has been specified but
 not a region.
 
 There's special handling for the central "sts.amazonaws.com" region; when
-that is declared as the value of fs.s3a.assumed.role.sts.endpoint.region` then
-there is no need to declare a region, instead the region value is required
-to be empty.
+that is declared as the value of `fs.s3a.assumed.role.sts.endpoint.region` then
+there is no need to declare a region: whatever value it has is ignored.

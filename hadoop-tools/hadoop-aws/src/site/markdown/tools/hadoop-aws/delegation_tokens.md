@@ -206,7 +206,6 @@ application configured with the login credentials for an AWS account able to iss
 | --- | --- | --- |
 | `fs.s3a.delegation.token.binding` | delegation token binding class |  `` |
 
-
 ### Warnings
 
 ##### Token Life
@@ -225,7 +224,7 @@ maximum of 36 hours.
 a longer duration of up to 12 hours can be enabled in the AWS console for
 the specific role being used.
 
-* The lifespan of full delegation tokens is unlimited: the secret needs
+* The lifespan of Full Delegation tokens is unlimited: the secret needs
 to be reset in the AWS Admin console to revoke it.
 
 ##### Service Load
@@ -405,7 +404,7 @@ is the encryption policy.
 If the client doesn't have S3Guard enabled, but the remote application does,
 the issued role tokens will not have permission to access the S3Guard table.
 
-### <a name="enabling-full-tokens"></a> Enabling Full Credential Delegation Tokens
+### <a name="enabling-full-tokens"></a> Enabling Full Delegation Tokens
 
 This passes the full credentials in, falling back to any session credentials
 which were used to configure the S3A FileSystem instance.
@@ -462,22 +461,41 @@ The easiest way to test that delegation support is configured is to use
 the `hdfs fetchdt` command, which can fetch tokens from S3A, Azure ABFS
 and any other filesystem which can issue tokens, as well as HDFS itself.
 
-This will fetch the token and save it to the named file (here, `tokens.bin`)
+This will fetch the token and save it to the named file (here, `tokens.bin`),
+even if Kerberos is disabled.
 
 ```bash
 # Fetch a token for the AWS landsat-pds bucket and save it to tokens.bin
 $ hdfs fetchdt --webservice s3a://landsat-pds/  tokens.bin
-
-# now print the file
-$ bin/hdfs fetchdt --print tokens.bin
-Token (S3ATokenIdentifier{S3ADelegationToken/Session; uri=s3a://landsat-pds; timestamp=1539366853747; encryption=EncryptionSecrets{encryptionMethod=NONE}}) for s3a://landsat-pds
 ```
 
 If the command fails with `ERROR: Failed to fetch token` it means the
 filesystem does not have delegation tokens enabled.
 
+If it fails for other reasons, the likely causes are configuration and
+possibly connectivity to the AWS STS Server.
+
+Once collected, the token can be printed. This will show
+the type of token, details about encryption and expiry, and the
+host on which it was created.
+
+```bash
+$ bin/hdfs fetchdt --print tokens.bin
+
+Token (S3ATokenIdentifier{S3ADelegationToken/Session; uri=s3a://landsat-pds; 
+timestamp=1541683947569; encryption=EncryptionSecrets{encryptionMethod=SSE_S3};
+Created on vm1.local/192.168.99.1 at time 2018-11-08T13:32:26.381Z.};
+Session credentials for user AAABWL expires Thu Nov 08 14:02:27 GMT 2018; (valid))
+for s3a://landsat-pds
+```
+The "(valid)" annotation means that the AWS credentials are considered "valid":
+there is both a username and a secret. 
+
+
+
 You can use the `s3guard bucket-info` command to see what the delegation
-support is. If delegation support is enabled, it also prints the current
+support for a specific bucket is.
+If delegation support is enabled, it also prints the current
 hadoop security level.
 
 ```bash
