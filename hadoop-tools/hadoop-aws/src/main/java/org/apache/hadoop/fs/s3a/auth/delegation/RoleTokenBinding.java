@@ -132,7 +132,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
     return new RoleTokenIdentifier(
         getCanonicalUri(),
         getOwnerText(),
-        new MarshalledCredentials(credentials),
+        new MarshalledCredentials("Role Token", credentials),
         encryptionSecrets,
         AbstractS3ATokenIdentifier.createDefaultOriginMessage()
             + " Role ARN=" + roleArn);

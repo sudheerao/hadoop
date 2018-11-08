@@ -43,6 +43,8 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
+import org.apache.hadoop.fs.s3a.CredentialInitializationException;
+import org.apache.hadoop.fs.s3a.Retries;
 import org.apache.hadoop.fs.s3a.S3AUtils;
 import org.apache.hadoop.fs.s3a.Invoker;
 import org.apache.hadoop.fs.s3a.S3ARetryPolicy;
@@ -161,6 +163,7 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
    * @throws AWSSecurityTokenServiceException if none could be obtained.
    */
   @Override
+  @Retries.RetryRaw
   public AWSCredentials getCredentials() {
     try {
       return invoker.retryUntranslated("getCredentials",
@@ -171,7 +174,7 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
       // its hard to see how this could be raised, but for
       // completeness, it is wrapped as an Amazon Client Exception
       // and rethrown.
-      throw new AmazonClientException(
+      throw new CredentialInitializationException(
           "getCredentials failed: " + e,
           e);
     } catch (AWSSecurityTokenServiceException e) {

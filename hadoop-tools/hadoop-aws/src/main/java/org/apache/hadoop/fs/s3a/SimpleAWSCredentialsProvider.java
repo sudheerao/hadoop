@@ -27,14 +27,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException;
 import org.apache.hadoop.fs.s3native.S3xLoginHelper;
-import org.apache.hadoop.security.ProviderUtils;
 
 import java.io.IOException;
 import java.net.URI;
 
-import static org.apache.hadoop.fs.s3a.Constants.ACCESS_KEY;
-import static org.apache.hadoop.fs.s3a.Constants.SECRET_KEY;
 import static org.apache.hadoop.fs.s3a.S3AUtils.getAWSAccessKeys;
 
 /**
@@ -82,8 +80,8 @@ public class SimpleAWSCredentialsProvider implements AWSCredentialsProvider {
     if (!StringUtils.isEmpty(accessKey) && !StringUtils.isEmpty(secretKey)) {
       return new BasicAWSCredentials(accessKey, secretKey);
     }
-    throw new CredentialInitializationException(
-        "Access key or secret key is unset");
+    throw new NoAwsCredentialsException("SimpleAWSCredentialsProvider",
+        "No AWS credentials in the Hadoop configuration");
   }
 
   @Override

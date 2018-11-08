@@ -25,7 +25,6 @@ import java.net.URI;
 import java.util.Date;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.amazonaws.ClientConfiguration;
@@ -38,7 +37,6 @@ import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.model.Credentials;
 import com.google.common.annotations.VisibleForTesting;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.CredentialInitializationException;
@@ -53,6 +51,7 @@ import org.apache.hadoop.security.ProviderUtils;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
+import static org.apache.commons.lang3.Validate.notNull;
 import static org.apache.hadoop.fs.s3a.Constants.ACCESS_KEY;
 import static org.apache.hadoop.fs.s3a.Constants.SECRET_KEY;
 import static org.apache.hadoop.fs.s3a.Constants.SESSION_TOKEN;
@@ -90,6 +89,8 @@ public final class MarshalledCredentials implements Writable,
    * future enhancements.
    */
   private static final int MAX_SECRET_LENGTH = 8192;
+  
+  private final String component;
 
   private String accessKey = "";
 
@@ -102,14 +103,23 @@ public final class MarshalledCredentials implements Writable,
   /** Expiry time is measured in milliseconds. */
   private long expiration;
 
-  public MarshalledCredentials() {
+
+  /**
+   * Constructor.
+   * @param component component name for exception messages.
+   */
+  public MarshalledCredentials(final String component) {
+    this.component = notNull(component);
   }
 
   /**
    * Instantiate from a set of credentials issued by an STS call.
+   * @param component component name for exception messages.
    * @param credentials AWS-provided session credentials
    */
-  public MarshalledCredentials(final Credentials credentials) {
+  public MarshalledCredentials(final String component,
+      final Credentials credentials) {
+    this(component);
     accessKey = credentials.getAccessKeyId();
     secretKey = credentials.getSecretAccessKey();
     String st = credentials.getSessionToken();
@@ -121,13 +131,17 @@ public final class MarshalledCredentials implements Writable,
   /**
    * Create from a set of properties.
    * No expiry time is expected/known here.
+   * @param component component name for exception messages.
    * @param accessKey access key
    * @param secretKey secret key
    * @param sessionToken session token
    */
-  public MarshalledCredentials(final String accessKey,
+  public MarshalledCredentials(
+      final String component,
+      final String accessKey,
       final String secretKey,
       final String sessionToken) {
+    this(component);
     this.accessKey = requireNonNull(accessKey);
     this.secretKey = requireNonNull(secretKey);
     this.sessionToken = requireNonNull(sessionToken);
@@ -135,9 +149,12 @@ public final class MarshalledCredentials implements Writable,
 
   /**
    * Create from a set of AWS session credentials.
+   * @param component component name for exception messages.
    * @param awsCredentials the AWS Session info.
    */
-  public MarshalledCredentials(final AWSSessionCredentials awsCredentials) {
+  public MarshalledCredentials(final String component,
+      final AWSSessionCredentials awsCredentials) {
+    this(component);
     this.accessKey = awsCredentials.getAWSAccessKeyId();
     this.secretKey = awsCredentials.getAWSSecretKey();
     this.sessionToken = awsCredentials.getSessionToken();
@@ -226,7 +243,8 @@ public final class MarshalledCredentials implements Writable,
     String accessKey = lookupPassword(bucket, leanConf, ACCESS_KEY);
     String secretKey = lookupPassword(bucket, leanConf, SECRET_KEY);
     String sessionToken = lookupPassword(bucket, leanConf, SESSION_TOKEN);
-    MarshalledCredentials credentials = new MarshalledCredentials(accessKey,
+    MarshalledCredentials credentials = new MarshalledCredentials(
+        "Local configuration", accessKey,
         secretKey, sessionToken);
     return credentials;
   }
@@ -259,7 +277,7 @@ public final class MarshalledCredentials implements Writable,
         = STSClientFactory.createClientConnection(tokenService, invoker);
     Credentials credentials = clientConnection
         .requestSessionCredentials(duration, TimeUnit.SECONDS);
-    return new MarshalledCredentials(credentials);
+    return new MarshalledCredentials("STS client", credentials);
   }
 
   /**
@@ -293,8 +311,7 @@ public final class MarshalledCredentials implements Writable,
       return false;
     }
     // now look at whether values are set/unset.
-    boolean hasAccessAndSecretKeys = isNotEmpty(accessKey)
-        && isNotEmpty(secretKey);
+    boolean hasAccessAndSecretKeys = !isEmpty();
     boolean hasSessionToken = hasSessionToken();
     switch (CredentialTypeRequired.AnyNonEmpty) {
 
@@ -323,14 +340,12 @@ public final class MarshalledCredentials implements Writable,
   }
 
   /**
-   * Is this empty: does it contain any credentials at all.
-   * This test returns true if the access key is empty; there's no
-   * check of the others, as if the access key is unset, there are no
-   * credentials.
+   * Is this empty: does it contain any credentials at all?
+   * This test returns true if either the access key or secret key is empty.
    * @return true if there are no credentials.
    */
   public boolean isEmpty() {
-    return StringUtils.isEmpty(accessKey);
+    return !(isNotEmpty(accessKey) && isNotEmpty(secretKey)); 
   }
   
   /**
@@ -421,8 +436,8 @@ public final class MarshalledCredentials implements Writable,
   public void validate(final String message,
       final CredentialTypeRequired typeRequired) throws IOException {
     if (!isValid(typeRequired)) {
-      String error = buildInvalidCredentialsError(typeRequired);
-      throw new DelegationTokenIOException(message + error);
+      throw new DelegationTokenIOException(message
+          + buildInvalidCredentialsError(typeRequired));
     }
   }
 
@@ -435,9 +450,9 @@ public final class MarshalledCredentials implements Writable,
   public String buildInvalidCredentialsError(
       final CredentialTypeRequired typeRequired) {
     if (isEmpty()) {
-      return NO_AWS_CREDENTIALS;
+      return component + ": " + NO_AWS_CREDENTIALS;
     } else {
-      return INVALID_CREDENTIALS
+      return component + ": " + INVALID_CREDENTIALS
           + " in " + toString() + " required: " + typeRequired;
     }
   }
@@ -486,6 +501,9 @@ public final class MarshalledCredentials implements Writable,
       final CredentialTypeRequired typeRequired)
       throws CredentialInitializationException {
 
+    if (isEmpty()) {
+      throw new NoAwsCredentialsException(component, NO_AWS_CREDENTIALS);
+    }
     if (!isValid(typeRequired)) {
       throw new CredentialInitializationException(
           buildInvalidCredentialsError(typeRequired));
@@ -520,15 +538,22 @@ public final class MarshalledCredentials implements Writable,
    */
   public static MarshalledCredentials fromEnvironment(
       final Map<String, String> env) {
-    MarshalledCredentials creds = new MarshalledCredentials();
+    MarshalledCredentials creds = new MarshalledCredentials(
+        "Environment Variables");
     creds.setAccessKey(nullToEmptyString(env.get("AWS_ACCESS_KEY")));
     creds.setSecretKey(nullToEmptyString(env.get("AWS_SECRET_KEY")));
     creds.setSessionToken(nullToEmptyString(env.get("AWS_SESSION_TOKEN")));
     return creds;
   }
   
+
+  /**
+   * Take a string where a null value is remapped to an empty string.
+   * @param src source string.
+   * @return the value of the string or ""
+   */
   private static String nullToEmptyString(final String src) {
-    return Optional.ofNullable(src).orElse("");
+    return src == null ? "" : src;
   }
 
   /**
@@ -537,7 +562,7 @@ public final class MarshalledCredentials implements Writable,
    * @return a new set of credentials.
    */
   public static MarshalledCredentials empty() {
-    return new MarshalledCredentials("", "", "");
+    return new MarshalledCredentials("", "", "", "");
   }
 
   /**

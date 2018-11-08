@@ -312,7 +312,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
     if (client.isPresent()) {
       // this is the normal route: ask for a new STS token
       marshalledCredentials = new MarshalledCredentials(
-          client.get()
+          "Session Token", client.get()
               .requestSessionCredentials(duration, TimeUnit.SECONDS));
     } else {
       // get a new set of parental session credentials (pick up IAM refresh)
@@ -326,7 +326,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
           = parentAuthChain.getCredentials();
       if (awsCredentials instanceof AWSSessionCredentials) {
         marshalledCredentials = new MarshalledCredentials(
-            (AWSSessionCredentials) awsCredentials);
+            "Session Token", (AWSSessionCredentials) awsCredentials);
       } else {
         throw new DelegationTokenIOException(
             "AWS Authentication chain is no longer supplying session secrets");

@@ -40,17 +40,9 @@ public class TestMarshalledCredentials extends HadoopTestBase {
 
   private int expiration;
 
-  private static URI landsatUri;
-
-
-  @BeforeClass
-  public static void classSetup() throws Exception {
-    landsatUri = new URI(S3ATestConstants.DEFAULT_CSVTEST_FILE);
-  }
-
   @Before
   public void createSessionToken() {
-    credentials = new MarshalledCredentials("accessKey",
+    credentials = new MarshalledCredentials("", "accessKey",
         "secretKey", "sessionToken");
     credentials.setRoleARN("roleARN");
     expiration = 1970;
@@ -71,7 +63,7 @@ public class TestMarshalledCredentials extends HadoopTestBase {
 
   @Test
   public void testRoundTripNoSessionData() throws Throwable {
-    MarshalledCredentials c = new MarshalledCredentials();
+    MarshalledCredentials c = new MarshalledCredentials("test");
     c.setAccessKey("A");
     c.setSecretKey("K");
     MarshalledCredentials c2 = S3ATestUtils.roundTrip(c,
@@ -86,7 +78,7 @@ public class TestMarshalledCredentials extends HadoopTestBase {
         "key");
     EncryptionSecrets result = S3ATestUtils.roundTrip(secrets,
         new Configuration());
-    assertEquals(secrets, result);
+    assertEquals("round trip", secrets, result);
   }
 
 }

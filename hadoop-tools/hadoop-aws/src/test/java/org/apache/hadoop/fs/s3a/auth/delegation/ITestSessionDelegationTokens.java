@@ -168,7 +168,7 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
           = verifySessionCredentials(
           dt2.getCredentialProviders().getCredentials());
       final MarshalledCredentials origCreds = new MarshalledCredentials(
-          awsSessionCreds);
+          "test", awsSessionCreds);
 
       Token<AbstractS3ATokenIdentifier> boundDT =
           dt2.getBoundOrNewDT(secrets);
@@ -224,7 +224,7 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
 
       LOG.info("Regenerated DT is {}", newDT);
       final MarshalledCredentials creds2 = new MarshalledCredentials(
-          verifySessionCredentials(
+          "test", verifySessionCredentials(
               delegationTokens2.getCredentialProviders().getCredentials()));
       assertEquals("Credentials", session, creds2);
       assertTrue("Origin in " + boundId,

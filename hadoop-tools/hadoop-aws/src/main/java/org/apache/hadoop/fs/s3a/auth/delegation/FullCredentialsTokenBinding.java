@@ -84,7 +84,7 @@ public class FullCredentialsTokenBinding extends
     S3xLoginHelper.Login secrets = S3AUtils.getAWSAccessKeys(uri, conf);
     if (secrets.hasLogin()) {
       awsCredentials = new MarshalledCredentials(
-          secrets.getUser(), secrets.getPassword(), "");
+          "Full Token", secrets.getUser(), secrets.getPassword(), "");
       credentialOrigin += "; source = Hadoop configuration data";
     } else {
       // if there are none, look for the environment variables.

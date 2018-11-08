@@ -40,6 +40,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.s3a.auth.NoAuthWithAWSException;
+import org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException;
 import org.apache.hadoop.io.IOUtils;
 
 /**
@@ -53,7 +54,8 @@ import org.apache.hadoop.io.IOUtils;
  *   an {@link AmazonClientException}, that is rethrown, rather than
  *   swallowed.</li>
  *   <li>Has some more diagnostics.</li>
- *   <li>On failure, the last AmazonClientException raised is rethrown.</li>
+ *   <li>On failure, the last "relevant" AmazonClientException raised is
+ *   rethrown; exceptions other than 'no credentials' have priority.</li>
  *   <li>Special handling of {@link AnonymousAWSCredentials}.</li>
  * </ol>
  */
@@ -153,6 +155,18 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
           LOG.debug("Using credentials from {}", provider);
           return credentials;
         }
+      } catch (NoAwsCredentialsException e) {
+        // don't bother with the stack trace here as it is usually a 
+        // minor detail.
+        
+        // only update the last exception if it isn't set.
+        // Why so? Stops delegation token issues being lost on the fallback
+        // values.
+        if (lastException == null) {
+          lastException = e;
+        }
+        LOG.debug("No credentials from {}: {}", 
+            provider, e.toString());
       } catch (AmazonClientException e) {
         lastException = e;
         LOG.debug("No credentials provided by {}: {}",
@@ -167,7 +181,12 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
     if (lastException != null) {
       message += ": " + lastException;
     }
-    throw new NoAuthWithAWSException(message, lastException);
+    LOG.warn(message);
+    if (lastException instanceof CredentialInitializationException ) {
+      throw lastException;
+    } else {
+      throw new NoAuthWithAWSException(message, lastException);
+    }
   }
 
   /**
