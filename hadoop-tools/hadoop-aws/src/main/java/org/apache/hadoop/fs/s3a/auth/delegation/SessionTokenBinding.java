@@ -197,7 +197,6 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
             MarshalledCredentials.CredentialTypeRequired.SessionOnly));
   }
 
-
   @Override
   public String getDescription() {
     return String.format(bindingName() 

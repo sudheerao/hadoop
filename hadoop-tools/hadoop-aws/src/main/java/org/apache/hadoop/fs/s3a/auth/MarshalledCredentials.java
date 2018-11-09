@@ -229,10 +229,13 @@ public final class MarshalledCredentials implements Writable,
   /**
    * Loads the credentials from the owning FS.
    * There is no validation.
+   * @param component component name for exception messages.
    * @param conf configuration to load from
+   * @return the component
    * @throws IOException on any load failure
    */
   public static MarshalledCredentials load(
+      final String component,
       final URI uri,
       final Configuration conf) throws IOException {
     // determine the bucket
@@ -244,8 +247,7 @@ public final class MarshalledCredentials implements Writable,
     String secretKey = lookupPassword(bucket, leanConf, SECRET_KEY);
     String sessionToken = lookupPassword(bucket, leanConf, SESSION_TOKEN);
     MarshalledCredentials credentials = new MarshalledCredentials(
-        "Local configuration", accessKey,
-        secretKey, sessionToken);
+        component, accessKey, secretKey, sessionToken);
     return credentials;
   }
 
@@ -495,17 +497,18 @@ public final class MarshalledCredentials implements Writable,
    * Create an AWS credential set from these values.
    * @param typeRequired type of credentials required
    * @return a new set of credentials
-   * @throws CredentialInitializationException validation failure
+   * @throws NoAuthWithAWSException validation failure
+   * @throws NoAwsCredentialsException the credentials are actually empty.
    */
   public AWSCredentials toAWSCredentials(
       final CredentialTypeRequired typeRequired)
-      throws CredentialInitializationException {
+      throws NoAuthWithAWSException {
 
     if (isEmpty()) {
       throw new NoAwsCredentialsException(component, NO_AWS_CREDENTIALS);
     }
     if (!isValid(typeRequired)) {
-      throw new CredentialInitializationException(
+      throw new NoAuthWithAWSException(
           buildInvalidCredentialsError(typeRequired));
     }
     if (hasSessionToken()) {

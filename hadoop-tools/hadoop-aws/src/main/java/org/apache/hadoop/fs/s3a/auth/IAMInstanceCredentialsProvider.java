@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.s3a.auth;
 import java.io.Closeable;
 import java.io.IOException;
 
+import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.InstanceProfileCredentialsProvider;
@@ -33,6 +34,7 @@ import org.apache.hadoop.classification.InterfaceStability;
  * async refresh for lower-latency on IO calls.
  * Initially it does not do this, simply shares the single IAM instance
  * across all instances. This makes it less expensive to declare.
+ * 
  */
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
@@ -45,9 +47,24 @@ public class IAMInstanceCredentialsProvider
   public IAMInstanceCredentialsProvider() {
   }
 
+  /**
+   * Ask for the credentials.
+   * TODO: convert connectivity problems down to no credentials exceptions
+   * as it invariably means "you aren't running on EC2"
+   * @return the credentials
+   */
   @Override
   public AWSCredentials getCredentials() {
-    return instance.getCredentials();
+    try {
+      return instance.getCredentials();
+    } catch (AmazonClientException e) {
+      throw e;
+/*
+      throw new NoAwsCredentialsException("IAMInstanceCredentialsProvider",
+          e.getMessage(),
+          e);
+*/
+    }
   }
 
   @Override

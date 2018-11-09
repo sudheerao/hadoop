@@ -42,16 +42,28 @@ public class NoAwsCredentialsException extends
   public NoAwsCredentialsException(
       @Nonnull final String credentialProvider,
       @Nonnull final String message) {
-    super(credentialProvider + ": " + message);
+    this(credentialProvider, message, null);
   }
 
   /**
-   * Construct with the default message of {@link #E_NO_AWS_CREDENTIALS}
+   * Construct with the default message of {@link #E_NO_AWS_CREDENTIALS}.
    * @param credentialProvider name of the credential provider.
    */
   public NoAwsCredentialsException(
       @Nonnull final String credentialProvider) {
-    this(credentialProvider, E_NO_AWS_CREDENTIALS);
+    this(credentialProvider, E_NO_AWS_CREDENTIALS, null);
   }
-  
+
+  /**
+   * Construct with exception.
+   * @param credentialProvider name of the credential provider.
+   * @param message message.
+   * @param thrown inner exception
+   */
+  public NoAwsCredentialsException(
+      @Nonnull final String credentialProvider,
+      @Nonnull final String message,
+      final Throwable thrown) {
+    super(credentialProvider + ": " + message, thrown);
+  }
 }

@@ -113,6 +113,14 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
   }
 
   /**
+   * Add all providers from another list to this one.
+   * @param other the other list.
+   */
+  public void addAll(AWSCredentialProviderList other) {
+    providers.addAll(other.providers);
+  }
+  
+  /**
    * Refresh all child entries.
    */
   @Override

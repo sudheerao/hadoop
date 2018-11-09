@@ -30,6 +30,8 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.auth.AbstractSessionCredentialsProvider;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
+import org.apache.hadoop.fs.s3a.auth.NoAuthWithAWSException;
+import org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException;
 
 /**
  * Support session credentials for authenticating with AWS.
@@ -48,6 +50,9 @@ public class TemporaryAWSCredentialsProvider extends
 
   public static final String NAME
       = "org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider";
+
+  public static final String COMPONENT
+      = "Session credentials in Hadoop configuration";
 
   /**
    * Preferred constructor: the binding is empty or contains a URI.
@@ -78,13 +83,21 @@ public class TemporaryAWSCredentialsProvider extends
    * @param config the configuration
    * @return temporary credentials.
    * @throws IOException on any failure to load the credentials.
+   * @throws NoAuthWithAWSException validation failure
+   * @throws NoAwsCredentialsException the credentials are actually empty.
    */
   @Override
   protected AWSCredentials createCredentials(Configuration config)
       throws IOException {
-    return MarshalledCredentials.load(getUri(), config)
-        .toAWSCredentials(
-            MarshalledCredentials.CredentialTypeRequired.SessionOnly);
+    MarshalledCredentials creds = MarshalledCredentials.load(COMPONENT,
+        getUri(), config);
+    MarshalledCredentials.CredentialTypeRequired sessionOnly
+        = MarshalledCredentials.CredentialTypeRequired.SessionOnly;
+    // treat only having non-session creds as empty. 
+    if (!creds.isValid(sessionOnly)) {
+      throw new NoAwsCredentialsException(COMPONENT);
+    }
+    return creds.toAWSCredentials(sessionOnly);
   }
 
 }
