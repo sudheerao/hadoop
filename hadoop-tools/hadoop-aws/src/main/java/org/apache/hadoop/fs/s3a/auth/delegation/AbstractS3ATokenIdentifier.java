@@ -25,6 +25,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Objects;
+import java.util.UUID;
 
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.net.NetUtils;
@@ -87,6 +88,12 @@ public abstract class AbstractS3ATokenIdentifier
    * An origin string for diagnostics.
    */
   private String origin = "";
+
+  /**
+   * This marshalled UUID can be used in testing to verify transmission,
+   * and reuse; as it is printed you can see what is happending too. 
+   */
+  private String uuid = UUID.randomUUID().toString();
 
   /**
    *
@@ -179,6 +186,7 @@ public abstract class AbstractS3ATokenIdentifier
     super.write(out);
     Text.writeString(out, uri.toString());
     Text.writeString(out, origin);
+    Text.writeString(out, uuid);
     encryptionSecrets.write(out);
     out.writeLong(created);
   }
@@ -202,6 +210,7 @@ public abstract class AbstractS3ATokenIdentifier
     super.readFields(in);
     uri = URI.create(Text.readString(in, MAX_TEXT_LENGTH));
     origin = Text.readString(in, MAX_TEXT_LENGTH);
+    uuid = Text.readString(in, MAX_TEXT_LENGTH);
     encryptionSecrets.readFields(in);
     created = in.readLong();
   }
@@ -224,6 +233,7 @@ public abstract class AbstractS3ATokenIdentifier
     sb.append("; uri=").append(uri);
     sb.append("; timestamp=").append(created);
     sb.append("; encryption=").append(encryptionSecrets.toString());
+    sb.append("; ").append(uuid);
     sb.append("; ").append(origin);
     sb.append('}');
     return sb.toString();
@@ -246,7 +256,7 @@ public abstract class AbstractS3ATokenIdentifier
       return false;
     }
     final AbstractS3ATokenIdentifier that = (AbstractS3ATokenIdentifier) o;
-    return created == that.created &&
+    return Objects.equals(uuid, that.uuid) && 
         Objects.equals(uri, that.uri);
   }
 
@@ -261,6 +271,14 @@ public abstract class AbstractS3ATokenIdentifier
    */
   public long getExpiryTime() {
     return 0;
+  }
+
+  /**
+   * Get the UUID of this token identifier.
+   * @return a UUID.
+   */
+  public String getUuid() {
+    return uuid;
   }
 
   /**

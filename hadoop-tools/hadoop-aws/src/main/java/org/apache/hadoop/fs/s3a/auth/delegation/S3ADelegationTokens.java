@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -191,10 +192,18 @@ public class S3ADelegationTokens extends AbstractDTService {
     super.serviceStart();
     tokenBinding.start();
     bindToAnyDelegationToken();
-    LOG.info("S3A Delegation support {} with {}",
-        boundDT.map((t) -> "bound to token " + t)
-            .orElseGet(() -> "(not bound to any token)"),
+    LOG.info("S3A Delegation support token {} with {}",
+        identifierToString(),
         tokenBinding.getDescription());
+  }
+
+  /**
+   * Get the identifier as a string, or "(none)"
+   * @return a string value for logs etc.
+   */
+  private String identifierToString() {
+    return decodedIdentifier.map(Objects::toString)
+        .orElse("(none)");
   }
 
   /**
@@ -492,6 +501,7 @@ public class S3ADelegationTokens extends AbstractDTService {
     sb.append("; isBoundToDT=").append(isBoundToDT());
     sb.append("; token creation count=").append(getCreationCount());
     sb.append("; tokenManager=").append(tokenBinding);
+    sb.append("; token=").append(identifierToString());
     sb.append('}');
     return sb.toString();
   }
