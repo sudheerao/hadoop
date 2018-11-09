@@ -63,6 +63,9 @@ public class RoleTokenBinding extends SessionTokenBinding {
   @VisibleForTesting
   public static final String E_NO_ARN =
       "No role ARN defined in " + DELEGATION_TOKEN_ROLE_ARN;
+
+  public static final String COMPONENT = "Role Delegation Token";
+
   /**
    * Constructor.
    * Name is {@link #name}; token kind is
@@ -88,7 +91,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
             RoleTokenIdentifier.class);
     return new AWSCredentialProviderList(
         new MarshalledCredentialProvider(
-            getFileSystem().getUri(),
+            COMPONENT, getFileSystem().getUri(),
             getConfig(),
             tokenIdentifier.getMarshalledCredentials(),
             MarshalledCredentials.CredentialTypeRequired.SessionOnly));
@@ -132,7 +135,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
     return new RoleTokenIdentifier(
         getCanonicalUri(),
         getOwnerText(),
-        new MarshalledCredentials("Role Token", credentials),
+        new MarshalledCredentials(credentials),
         encryptionSecrets,
         AbstractS3ATokenIdentifier.createDefaultOriginMessage()
             + " Role ARN=" + roleArn);

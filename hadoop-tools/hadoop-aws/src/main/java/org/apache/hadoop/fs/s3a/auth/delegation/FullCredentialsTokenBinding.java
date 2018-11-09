@@ -47,6 +47,8 @@ public class FullCredentialsTokenBinding extends
    */
   private static final String NAME = "FullCredentials/001";
 
+  public static final String FULL_TOKEN = "Full Delegation Token";
+
   /**
    * Long-lived AWS credentials.
    */
@@ -84,7 +86,7 @@ public class FullCredentialsTokenBinding extends
     S3xLoginHelper.Login secrets = S3AUtils.getAWSAccessKeys(uri, conf);
     if (secrets.hasLogin()) {
       awsCredentials = new MarshalledCredentials(
-          "Full Token", secrets.getUser(), secrets.getPassword(), "");
+          secrets.getUser(), secrets.getPassword(), "");
       credentialOrigin += "; source = Hadoop configuration data";
     } else {
       // if there are none, look for the environment variables.
@@ -114,6 +116,7 @@ public class FullCredentialsTokenBinding extends
     requireServiceStarted();
     return new AWSCredentialProviderList(
         new MarshalledCredentialProvider(
+            FULL_TOKEN,
             getFileSystem().getUri(),
             getConfig(),
             awsCredentials,
@@ -152,6 +155,7 @@ public class FullCredentialsTokenBinding extends
             FullCredentialsTokenIdentifier.class);
     return new AWSCredentialProviderList(
         new MarshalledCredentialProvider(
+            FULL_TOKEN,
             getFileSystem().getUri(),
             getConfig(),
             tokenIdentifier.getMarshalledCredentials(),

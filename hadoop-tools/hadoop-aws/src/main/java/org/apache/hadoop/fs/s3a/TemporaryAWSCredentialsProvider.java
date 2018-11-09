@@ -97,7 +97,7 @@ public class TemporaryAWSCredentialsProvider extends
     if (!creds.isValid(sessionOnly)) {
       throw new NoAwsCredentialsException(COMPONENT);
     }
-    return creds.toAWSCredentials(sessionOnly);
+    return creds.toAWSCredentials(sessionOnly, COMPONENT);
   }
 
 }

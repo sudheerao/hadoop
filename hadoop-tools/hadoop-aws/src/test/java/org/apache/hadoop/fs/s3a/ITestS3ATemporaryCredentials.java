@@ -136,7 +136,7 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     S3AUtils.clearBucketOption(conf2, bucket, SECRET_KEY);
     S3AUtils.clearBucketOption(conf2, bucket, SESSION_TOKEN);
 
-    MarshalledCredentials mc = new MarshalledCredentials("test",
+    MarshalledCredentials mc = new MarshalledCredentials(
         sessionCreds);
     updateConfigWithSessionCreds(conf2, mc);
 

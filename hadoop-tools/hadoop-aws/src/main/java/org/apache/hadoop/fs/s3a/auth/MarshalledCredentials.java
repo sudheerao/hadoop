@@ -51,7 +51,6 @@ import org.apache.hadoop.security.ProviderUtils;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
-import static org.apache.commons.lang3.Validate.notNull;
 import static org.apache.hadoop.fs.s3a.Constants.ACCESS_KEY;
 import static org.apache.hadoop.fs.s3a.Constants.SECRET_KEY;
 import static org.apache.hadoop.fs.s3a.Constants.SESSION_TOKEN;
@@ -89,8 +88,11 @@ public final class MarshalledCredentials implements Writable,
    * future enhancements.
    */
   private static final int MAX_SECRET_LENGTH = 8192;
-  
-  private final String component;
+
+  /**
+   * Component name used in exception messages.
+   */
+  public static final String COMPONENT = "Marshalled Credentials";
 
   private String accessKey = "";
 
@@ -103,23 +105,18 @@ public final class MarshalledCredentials implements Writable,
   /** Expiry time is measured in milliseconds. */
   private long expiration;
 
-
   /**
    * Constructor.
-   * @param component component name for exception messages.
    */
-  public MarshalledCredentials(final String component) {
-    this.component = notNull(component);
+  public MarshalledCredentials() {
   }
 
   /**
    * Instantiate from a set of credentials issued by an STS call.
-   * @param component component name for exception messages.
    * @param credentials AWS-provided session credentials
    */
-  public MarshalledCredentials(final String component,
-      final Credentials credentials) {
-    this(component);
+  public MarshalledCredentials(final Credentials credentials) {
+    this();
     accessKey = credentials.getAccessKeyId();
     secretKey = credentials.getSecretAccessKey();
     String st = credentials.getSessionToken();
@@ -131,17 +128,15 @@ public final class MarshalledCredentials implements Writable,
   /**
    * Create from a set of properties.
    * No expiry time is expected/known here.
-   * @param component component name for exception messages.
    * @param accessKey access key
    * @param secretKey secret key
    * @param sessionToken session token
    */
   public MarshalledCredentials(
-      final String component,
       final String accessKey,
       final String secretKey,
       final String sessionToken) {
-    this(component);
+    this();
     this.accessKey = requireNonNull(accessKey);
     this.secretKey = requireNonNull(secretKey);
     this.sessionToken = requireNonNull(sessionToken);
@@ -149,12 +144,10 @@ public final class MarshalledCredentials implements Writable,
 
   /**
    * Create from a set of AWS session credentials.
-   * @param component component name for exception messages.
    * @param awsCredentials the AWS Session info.
    */
-  public MarshalledCredentials(final String component,
-      final AWSSessionCredentials awsCredentials) {
-    this(component);
+  public MarshalledCredentials(final AWSSessionCredentials awsCredentials) {
+    this();
     this.accessKey = awsCredentials.getAWSAccessKeyId();
     this.secretKey = awsCredentials.getAWSSecretKey();
     this.sessionToken = awsCredentials.getSessionToken();
@@ -247,7 +240,7 @@ public final class MarshalledCredentials implements Writable,
     String secretKey = lookupPassword(bucket, leanConf, SECRET_KEY);
     String sessionToken = lookupPassword(bucket, leanConf, SESSION_TOKEN);
     MarshalledCredentials credentials = new MarshalledCredentials(
-        component, accessKey, secretKey, sessionToken);
+        accessKey, secretKey, sessionToken);
     return credentials;
   }
 
@@ -279,7 +272,7 @@ public final class MarshalledCredentials implements Writable,
         = STSClientFactory.createClientConnection(tokenService, invoker);
     Credentials credentials = clientConnection
         .requestSessionCredentials(duration, TimeUnit.SECONDS);
-    return new MarshalledCredentials("STS client", credentials);
+    return new MarshalledCredentials(credentials);
   }
 
   /**
@@ -289,6 +282,9 @@ public final class MarshalledCredentials implements Writable,
    */
   @Override
   public String toString() {
+    if (isEmpty()) {
+      return "Empty credentials";
+    }
     return String.format(
         "%s credentials for user %s%s; %s(%s)",
         (hasSessionToken() ? "Session" : "Full"),
@@ -452,9 +448,9 @@ public final class MarshalledCredentials implements Writable,
   public String buildInvalidCredentialsError(
       final CredentialTypeRequired typeRequired) {
     if (isEmpty()) {
-      return component + ": " + NO_AWS_CREDENTIALS;
+      return " " + NO_AWS_CREDENTIALS;
     } else {
-      return component + ": " + INVALID_CREDENTIALS
+      return " " + INVALID_CREDENTIALS
           + " in " + toString() + " required: " + typeRequired;
     }
   }
@@ -469,7 +465,7 @@ public final class MarshalledCredentials implements Writable,
   @Override
   public AWSCredentials getCredentials() throws
       CredentialInitializationException {
-    return toAWSCredentials(CredentialTypeRequired.AnyNonEmpty);
+    return toAWSCredentials(CredentialTypeRequired.AnyNonEmpty,  COMPONENT);
   }
 
   /**
@@ -480,10 +476,9 @@ public final class MarshalledCredentials implements Writable,
   public BasicSessionCredentials getSessionCredentials()
       throws CredentialInitializationException {
     return (BasicSessionCredentials) toAWSCredentials(
-        CredentialTypeRequired.SessionOnly);
+        CredentialTypeRequired.SessionOnly, COMPONENT);
   }
 
-  
   /**
    * From {@code AWSCredentialProvider}.
    * No-op.
@@ -496,12 +491,14 @@ public final class MarshalledCredentials implements Writable,
   /**
    * Create an AWS credential set from these values.
    * @param typeRequired type of credentials required
+   * @param component component name for exception messages.
    * @return a new set of credentials
    * @throws NoAuthWithAWSException validation failure
    * @throws NoAwsCredentialsException the credentials are actually empty.
    */
   public AWSCredentials toAWSCredentials(
-      final CredentialTypeRequired typeRequired)
+      final CredentialTypeRequired typeRequired,
+      final String component)
       throws NoAuthWithAWSException {
 
     if (isEmpty()) {
@@ -542,7 +539,7 @@ public final class MarshalledCredentials implements Writable,
   public static MarshalledCredentials fromEnvironment(
       final Map<String, String> env) {
     MarshalledCredentials creds = new MarshalledCredentials(
-        "Environment Variables");
+    );
     creds.setAccessKey(nullToEmptyString(env.get("AWS_ACCESS_KEY")));
     creds.setSecretKey(nullToEmptyString(env.get("AWS_SECRET_KEY")));
     creds.setSessionToken(nullToEmptyString(env.get("AWS_SESSION_TOKEN")));
@@ -565,7 +562,7 @@ public final class MarshalledCredentials implements Writable,
    * @return a new set of credentials.
    */
   public static MarshalledCredentials empty() {
-    return new MarshalledCredentials("", "", "", "");
+    return new MarshalledCredentials("", "", "");
   }
 
   /**

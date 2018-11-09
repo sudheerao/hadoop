@@ -18,15 +18,11 @@
 
 package org.apache.hadoop.fs.s3a.auth;
 
-import java.net.URI;
-
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.S3AEncryptionMethods;
-import org.apache.hadoop.fs.s3a.S3ATestConstants;
 import org.apache.hadoop.fs.s3a.S3ATestUtils;
 import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecrets;
 import org.apache.hadoop.test.HadoopTestBase;
@@ -42,7 +38,7 @@ public class TestMarshalledCredentials extends HadoopTestBase {
 
   @Before
   public void createSessionToken() {
-    credentials = new MarshalledCredentials("", "accessKey",
+    credentials = new MarshalledCredentials("accessKey",
         "secretKey", "sessionToken");
     credentials.setRoleARN("roleARN");
     expiration = 1970;
@@ -63,7 +59,7 @@ public class TestMarshalledCredentials extends HadoopTestBase {
 
   @Test
   public void testRoundTripNoSessionData() throws Throwable {
-    MarshalledCredentials c = new MarshalledCredentials("test");
+    MarshalledCredentials c = new MarshalledCredentials();
     c.setAccessKey("A");
     c.setSecretKey("K");
     MarshalledCredentials c2 = S3ATestUtils.roundTrip(c,

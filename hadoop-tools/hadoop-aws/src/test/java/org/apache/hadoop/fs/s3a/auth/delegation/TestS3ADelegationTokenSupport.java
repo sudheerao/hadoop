@@ -63,7 +63,7 @@ public class TestS3ADelegationTokenSupport {
         = new SessionTokenIdentifier(SESSION_TOKEN_KIND,
         alice, 
         new URI("s3a://landsat-pds/"),
-        new MarshalledCredentials("", "a", "b", ""),
+        new MarshalledCredentials("a", "b", ""),
         new EncryptionSecrets(S3AEncryptionMethods.SSE_S3, ""),
         "origin");
     Token<AbstractS3ATokenIdentifier> t1 =
@@ -74,7 +74,7 @@ public class TestS3ADelegationTokenSupport {
     MarshalledCredentials creds
         = ((SessionTokenIdentifier) decoded).getMarshalledCredentials();
     assertNotNull("credentials", creds.toAWSCredentials(
-        MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty));
+        MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty, ""));
     assertEquals(alice, decoded.getOwner());
     UserGroupInformation decodedUser = decoded.getUser();
     assertEquals("name of " + decodedUser,
@@ -99,7 +99,7 @@ public class TestS3ADelegationTokenSupport {
         SESSION_TOKEN_KIND,
         new Text(),
         landsatUri,
-        new MarshalledCredentials("", "a", "b", "c"),
+        new MarshalledCredentials("a", "b", "c"),
         new EncryptionSecrets(), "");
 
     SessionTokenIdentifier result = S3ATestUtils.roundTrip(id, null);
@@ -115,7 +115,7 @@ public class TestS3ADelegationTokenSupport {
     RoleTokenIdentifier id = new RoleTokenIdentifier(
         landsatUri,
         new Text(),
-        new MarshalledCredentials("", "a", "b", "c"),
+        new MarshalledCredentials("a", "b", "c"),
         new EncryptionSecrets(), "");
 
     RoleTokenIdentifier result = S3ATestUtils.roundTrip(id, null);
@@ -131,7 +131,7 @@ public class TestS3ADelegationTokenSupport {
     FullCredentialsTokenIdentifier id = new FullCredentialsTokenIdentifier(
         landsatUri,
         new Text(),
-        new MarshalledCredentials("", "a", "b", ""),
+        new MarshalledCredentials("a", "b", ""),
         new EncryptionSecrets(), "");
 
     FullCredentialsTokenIdentifier result = S3ATestUtils.roundTrip(id, null);

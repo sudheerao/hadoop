@@ -49,7 +49,7 @@ public class SessionTokenIdentifier extends
    * Session credentials: initially empty but non-null.
    */
   private MarshalledCredentials marshalledCredentials
-      = new MarshalledCredentials("Session Tokens");
+      = new MarshalledCredentials();
 
   /**
    * Constructor for service loader use.
