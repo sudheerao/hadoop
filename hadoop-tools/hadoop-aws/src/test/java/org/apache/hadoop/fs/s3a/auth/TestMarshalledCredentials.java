@@ -18,6 +18,10 @@
 
 package org.apache.hadoop.fs.s3a.auth;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+
+import com.amazonaws.auth.AWSCredentials;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -27,8 +31,10 @@ import org.apache.hadoop.fs.s3a.S3ATestUtils;
 import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecrets;
 import org.apache.hadoop.test.HadoopTestBase;
 
+import static org.apache.hadoop.test.LambdaTestUtils.intercept;
+
 /**
- * Unit test of session credential support.
+ * Unit test of marshalled credential support.
  */
 public class TestMarshalledCredentials extends HadoopTestBase {
 
@@ -36,8 +42,11 @@ public class TestMarshalledCredentials extends HadoopTestBase {
 
   private int expiration;
 
+  private URI bucketURI;
+
   @Before
-  public void createSessionToken() {
+  public void createSessionToken() throws URISyntaxException {
+    bucketURI = new URI("s3a://bucket1");
     credentials = new MarshalledCredentials("accessKey",
         "secretKey", "sessionToken");
     credentials.setRoleARN("roleARN");
@@ -77,4 +86,53 @@ public class TestMarshalledCredentials extends HadoopTestBase {
     assertEquals("round trip", secrets, result);
   }
 
+  @Test
+  public void testMarshalledCredentialProviderSession() throws Throwable {
+    MarshalledCredentialProvider provider
+        = new MarshalledCredentialProvider("test",
+        bucketURI,
+        new Configuration(false),
+        credentials,
+        MarshalledCredentials.CredentialTypeRequired.SessionOnly);
+    AWSCredentials aws = provider.getCredentials();
+    assertEquals(credentials.toString(),
+        credentials.getAccessKey(),
+        aws.getAWSAccessKeyId());
+    assertEquals(credentials.toString(),
+        credentials.getSecretKey(),
+        aws.getAWSSecretKey());
+    // because the credentials are set to full only, creation will fail
+  }
+
+  /**
+   * Create with a mismatch of type and supplied credentials.
+   * Verify that the operation fails, but only when credentials
+   * are actually requested.
+   */
+  @Test
+  public void testCredentialTypeMismatch() throws Throwable {
+    MarshalledCredentialProvider provider
+        = new MarshalledCredentialProvider("test",
+        bucketURI,
+        new Configuration(false),
+        credentials,
+        MarshalledCredentials.CredentialTypeRequired.FullOnly);
+    // because the credentials are set to full only, creation will fail
+    intercept(NoAuthWithAWSException.class, "test",
+        () ->  provider.getCredentials());
+  }
+
+  /**
+   * This provider fails fast if there's no URL
+   */
+  @Test
+  public void testCredentialProviderNullURI() throws Throwable {
+    intercept(NullPointerException.class, "",
+        () ->
+            new MarshalledCredentialProvider("test",
+            null,
+            new Configuration(false),
+            credentials,
+            MarshalledCredentials.CredentialTypeRequired.FullOnly));
+  }
 }

@@ -275,7 +275,7 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   public void testSessionCredentialsBadRegion() throws Throwable {
     describe("Create a session with a bad region and expect failure");
     expectedSessionRequestFailure(
-        AccessDeniedException.class,
+        IllegalArgumentException.class,
         DEFAULT_DELEGATION_TOKEN_ENDPOINT,
         "us-west-12",
         "");
@@ -295,7 +295,7 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
   public void testSessionCredentialsWrongCentralRegion() throws Throwable {
     describe("Create a session sts.amazonaws.com; region='us-west-1'");
     expectedSessionRequestFailure(
-        AccessDeniedException.class,
+        IllegalArgumentException.class,
         "sts.amazonaws.com",
         "us-west-1",
         "");

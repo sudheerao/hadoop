@@ -25,7 +25,6 @@ import java.nio.file.AccessDeniedException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
@@ -38,7 +37,6 @@ import org.junit.rules.ExpectedException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.s3a.auth.AbstractAWSCredentialProvider;
 import org.apache.hadoop.fs.s3a.auth.AssumedRoleCredentialProvider;
 import org.apache.hadoop.fs.s3a.auth.NoAuthWithAWSException;
 import org.apache.hadoop.io.retry.RetryPolicy;
@@ -107,7 +105,7 @@ public class TestS3AAWSCredentialsProvider {
         conf.getTrimmed(KEY_CSVTEST_FILE, DEFAULT_CSVTEST_FILE));
 
     AWSCredentialProviderList list = createAWSCredentialProviderSet(
-        Optional.of(testFile.toUri()), conf);
+        testFile.toUri(), conf);
     List<Class<?>> expectedClasses =
         Arrays.asList(
             TemporaryAWSCredentialsProvider.class,
@@ -123,9 +121,9 @@ public class TestS3AAWSCredentialsProvider {
     // use the default credential provider chain
     conf.unset(AWS_CREDENTIALS_PROVIDER);
     AWSCredentialProviderList list1 = createAWSCredentialProviderSet(
-        Optional.of(uri1), conf);
+        uri1, conf);
     AWSCredentialProviderList list2 = createAWSCredentialProviderSet(
-        Optional.of(uri2), conf);
+        uri2, conf);
     List<Class<?>> expectedClasses = STANDARD_AWS_PROVIDERS;
     assertCredentialProviders(expectedClasses, list1);
     assertCredentialProviders(expectedClasses, list2);
@@ -137,11 +135,12 @@ public class TestS3AAWSCredentialsProvider {
     // use the default credential provider chain
     conf.unset(AWS_CREDENTIALS_PROVIDER);
     assertCredentialProviders(STANDARD_AWS_PROVIDERS, 
-        createAWSCredentialProviderSet(Optional.empty(), conf));
+        createAWSCredentialProviderSet(null, conf));
   }
 
   @Test
   public void testConfiguredChain() throws Exception {
+    URI uri1 = new URI("s3a://bucket1"), uri2 = new URI("s3a://bucket2");
     List<Class<?>> expectedClasses =
         Arrays.asList(
             EnvironmentVariableCredentialsProvider.class,
@@ -150,14 +149,13 @@ public class TestS3AAWSCredentialsProvider {
     Configuration conf =
         createProviderConfiguration(buildClassListString(expectedClasses));
     AWSCredentialProviderList list1 = createAWSCredentialProviderSet(
-        Optional.of(new URI("s3a://bucket1")), conf);
+        uri1, conf);
     AWSCredentialProviderList list2 = createAWSCredentialProviderSet(
-        Optional.of(new URI("s3a://bucket2")), conf);
+        uri2, conf);
     assertCredentialProviders(expectedClasses, list1);
     assertCredentialProviders(expectedClasses, list2);
   }
 
-  @SuppressWarnings("deprecation")
   @Test
   public void testConfiguredChainUsesSharedInstanceProfile() throws Exception {
     URI uri1 = new URI("s3a://bucket1"), uri2 = new URI("s3a://bucket2");
@@ -178,34 +176,16 @@ public class TestS3AAWSCredentialsProvider {
   public void testFallbackToDefaults() throws Throwable {
     // build up the base provider
     final AWSCredentialProviderList credentials = buildAWSProviderList(
-        Optional.of(new URI("s3a://bucket1")),
+        new URI("s3a://bucket1"),
         createProviderConfiguration("  "),
         ASSUMED_ROLE_CREDENTIALS_PROVIDER,
         Arrays.asList(
             EnvironmentVariableCredentialsProvider.class),
         Sets.newHashSet());
     assertTrue("empty credentials", credentials.size() > 0);
-  }
 
-  @Test
-  public void testOptionalConstructorFirst() throws Throwable {
-    createAWSCredentialProviderSet(
-        Optional.of(TESTFILE_URI),
-        createProviderConfiguration(ValidOptionProvider.class));
   }
   
-  @Test
-  public void testOptionalEmpty() throws Throwable {
-    intercept(IOException.class,
-        ValidOptionProvider.NO_URI,
-        () -> {
-          return createAWSCredentialProviderSet(
-              Optional.empty(),
-              createProviderConfiguration(ValidOptionProvider.class));
-        });
-  }
-
-
   /**
    * A credential provider declared as abstract, so it cannot be instantiated.
    */
@@ -250,36 +230,6 @@ public class TestS3AAWSCredentialsProvider {
 
     @Override
     public void refresh() {
-    }
-  }
-
-  /**
-   * Reject any attempt to create without a binding.
-   */
-  public static class ValidOptionProvider
-      extends AbstractAWSCredentialProvider {
-
-    private static final String NO_URI = "No URI";
-
-    public static final String NAME
-        = "org.apache.hadoop.fs.s3a.TestS3AAWSCredentialsProvider.ValidOptionProvider";
-
-    public ValidOptionProvider(final Optional<URI> binding,
-        final Configuration conf) throws IOException {
-      super(binding, conf);
-      binding.orElseThrow(() -> new IOException(NO_URI));
-    }
-
-    public ValidOptionProvider(final URI uri,
-        final Configuration conf) throws IOException {
-      super(uri, conf);
-      throw new IOException("URI constructor called");
-    }
-
-
-    @Override
-    public AWSCredentials getCredentials() {
-      return null;
     }
   }
 
@@ -349,7 +299,7 @@ public class TestS3AAWSCredentialsProvider {
       String expectedErrorText) throws Exception {
     return intercept(IOException.class, expectedErrorText,
         () -> createAWSCredentialProviderSet(
-            Optional.of(TESTFILE_URI),
+            TESTFILE_URI,
             createProviderConfiguration(option)));
   }
 

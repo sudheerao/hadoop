@@ -30,6 +30,7 @@ import java.util.stream.IntStream;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceException;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -139,6 +140,34 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
   public void testCreateCredentialProvider() throws IOException {
     describe("Create the credential provider");
 
+    Configuration conf = createValidRoleConf();
+    try (AssumedRoleCredentialProvider provider
+             = new AssumedRoleCredentialProvider(uri, conf)) {
+      LOG.info("Provider is {}", provider);
+      AWSCredentials credentials = provider.getCredentials();
+      assertNotNull("Null credentials from " + provider, credentials);
+    }
+  }
+
+  @Test
+  public void testCreateCredentialProviderNoURI() throws IOException {
+    describe("Create the credential provider");
+
+    Configuration conf = createValidRoleConf();
+    try (AssumedRoleCredentialProvider provider
+             = new AssumedRoleCredentialProvider(null, conf)) {
+      LOG.info("Provider is {}", provider);
+      AWSCredentials credentials = provider.getCredentials();
+      assertNotNull("Null credentials from " + provider, credentials);
+    }
+  }
+
+  /**
+   * Create a valid role configuration.
+   * @return a configuration set to use to the role ARN.
+   * @throws JsonProcessingException problems working with JSON policies.
+   */
+  protected Configuration createValidRoleConf() throws JsonProcessingException {
     String roleARN = getAssumedRoleARN();
 
     Configuration conf = new Configuration(getContract().getConf());
@@ -147,12 +176,7 @@ public class ITestAssumeRole extends AbstractS3ATestBase {
     conf.set(ASSUMED_ROLE_SESSION_NAME, "valid");
     conf.set(ASSUMED_ROLE_SESSION_DURATION, "45m");
     bindRolePolicy(conf, RESTRICTED_POLICY);
-    try (AssumedRoleCredentialProvider provider
-             = new AssumedRoleCredentialProvider(uri, conf)) {
-      LOG.info("Provider is {}", provider);
-      AWSCredentials credentials = provider.getCredentials();
-      assertNotNull("Null credentials from " + provider, credentials);
-    }
+    return conf;
   }
 
   @Test

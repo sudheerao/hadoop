@@ -505,7 +505,7 @@ public final class MarshalledCredentials implements Writable,
       throw new NoAwsCredentialsException(component, NO_AWS_CREDENTIALS);
     }
     if (!isValid(typeRequired)) {
-      throw new NoAuthWithAWSException(
+      throw new NoAuthWithAWSException(component + ":" + 
           buildInvalidCredentialsError(typeRequired));
     }
     if (hasSessionToken()) {

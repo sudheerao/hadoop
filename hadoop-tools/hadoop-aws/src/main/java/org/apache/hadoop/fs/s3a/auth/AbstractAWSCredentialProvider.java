@@ -20,7 +20,6 @@ package org.apache.hadoop.fs.s3a.auth;
 
 import javax.annotation.Nullable;
 import java.net.URI;
-import java.util.Optional;
 
 import com.amazonaws.auth.AWSCredentialsProvider;
 
@@ -28,30 +27,14 @@ import org.apache.hadoop.conf.Configuration;
 
 /**
  * Base class for AWS credential providers which
- * take an optional URI and config in their constructor.
- * 
- * The call
- * {@link org.apache.hadoop.fs.s3a.S3AUtils#createAWSCredentialProvider(Configuration, Class, Optional)}
- * looks for the {@code Optional<URI>} constructor first.
+ * take a URI and config in their constructor.
  */
 public abstract class AbstractAWSCredentialProvider 
     implements AWSCredentialsProvider {
 
-  private final Optional<URI> binding;
+  private final URI binding;
 
   private final Configuration conf;
-
-  /**
-   * Constructor.
-   * @param binding optional filesystem URI.
-   * @param conf configuration.
-   */
-  protected AbstractAWSCredentialProvider(
-      final Optional<URI> binding,
-      final Configuration conf) {
-    this.binding = binding;
-    this.conf = conf;
-  }
 
   /**
    * Construct from URI + configuration.
@@ -62,11 +45,7 @@ public abstract class AbstractAWSCredentialProvider
       @Nullable final URI uri,
       final Configuration conf) {
     this.conf = conf;
-    this.binding = Optional.ofNullable(uri);
-  }
-
-  public Optional<URI> getBinding() {
-    return binding;
+    this.binding = uri;
   }
 
   public Configuration getConf() {
@@ -79,7 +58,7 @@ public abstract class AbstractAWSCredentialProvider
    * if any.
    */
   public URI getUri() {
-    return binding.orElse(null);
+    return binding;
   }
 
   /**

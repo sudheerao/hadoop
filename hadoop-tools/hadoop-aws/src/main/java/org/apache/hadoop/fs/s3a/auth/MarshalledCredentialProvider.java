@@ -29,6 +29,8 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.CredentialInitializationException;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 /**
  * AWS credential provider driven from marshalled session/full credentials
  * (full, simple session or role).
@@ -69,11 +71,10 @@ public class MarshalledCredentialProvider extends
       final MarshalledCredentials credentials,
       final MarshalledCredentials.CredentialTypeRequired typeRequired)
       throws IOException {
-    super(uri, conf);
+    super(checkNotNull(uri, "No filesystem URI") , conf);
     this.component = component;
-    Preconditions.checkArgument(uri != null, "No filesystem URI");
     this.typeRequired = typeRequired;
-    this.credentials = credentials;
+    this.credentials = checkNotNull(credentials);
   }
 
   /**

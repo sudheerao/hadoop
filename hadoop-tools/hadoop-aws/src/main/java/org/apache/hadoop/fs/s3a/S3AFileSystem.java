@@ -471,10 +471,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       tokens.getEncryptionSecrets()
           .ifPresent(this::setEncryptionSecrets);
     } else {
-      // DT support is disabled, so
-      // create the normal token set
-      credentials = createAWSCredentialProviderSet( 
-          Optional.of(name), conf);
+      // DT support is disabled, so create the normal credential chain
+      credentials = createAWSCredentialProviderSet(name, conf);
     }
     LOG.debug("Using credential provider {}", credentials);
     Class<? extends S3ClientFactory> s3ClientFactoryClass = conf.getClass(

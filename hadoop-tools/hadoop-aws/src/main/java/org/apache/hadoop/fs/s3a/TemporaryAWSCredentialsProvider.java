@@ -18,12 +18,12 @@
 
 package org.apache.hadoop.fs.s3a;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 
 import com.amazonaws.auth.AWSCredentials;
 
 import java.net.URI;
-import java.util.Optional;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -55,23 +55,21 @@ public class TemporaryAWSCredentialsProvider extends
       = "Session credentials in Hadoop configuration";
 
   /**
-   * Preferred constructor: the binding is empty or contains a URI.
-   * @param binding binding to a filesystem URI.
+   * Construct from just a configuration.
+   * @param conf configuration.
+   */
+  public TemporaryAWSCredentialsProvider(final Configuration conf)
+      throws IOException {
+    this(null, conf);
+  }
+
+  /**
+   * Constructor: the URI will be null if 
+   * @param uri binding to a filesystem URI.
    * @param conf configuration.
    */
   public TemporaryAWSCredentialsProvider(
-      final Optional<URI> binding,
-      final Configuration conf) {
-    super(binding, conf);
-  }
-
-  public TemporaryAWSCredentialsProvider(final Configuration conf)
-      throws IOException {
-    super(Optional.empty(), conf);
-  }
-
-  public TemporaryAWSCredentialsProvider(
-      final URI uri,
+      @Nullable final URI uri,
       final Configuration conf)
       throws IOException {
     super(uri, conf);

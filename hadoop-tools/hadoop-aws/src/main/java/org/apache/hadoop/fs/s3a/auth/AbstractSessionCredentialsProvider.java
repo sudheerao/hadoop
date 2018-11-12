@@ -21,7 +21,6 @@ package org.apache.hadoop.fs.s3a.auth;
 import javax.annotation.Nullable;
 import java.net.URI;
 import java.io.IOException;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.amazonaws.SdkBaseException;
@@ -52,17 +51,6 @@ public abstract class AbstractSessionCredentialsProvider
    * Used for testing.
    */
   private IOException initializationException;
-
-  /**
-   * Constructor.
-   * @param binding optional filesystem URI.
-   * @param conf configuration.
-   */
-  protected AbstractSessionCredentialsProvider(
-      Optional<URI> binding,
-      Configuration conf) {
-    super(binding, conf);
-  }
 
   /**
    * Constructor.

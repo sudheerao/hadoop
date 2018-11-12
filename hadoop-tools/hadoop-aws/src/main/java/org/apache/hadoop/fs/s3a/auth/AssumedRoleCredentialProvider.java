@@ -18,15 +18,14 @@
 
 package org.apache.hadoop.fs.s3a.auth;
 
+import javax.annotation.Nullable;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
@@ -91,13 +90,13 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
    * Instantiate.
    * This calls {@link #getCredentials()} to fail fast on the inner
    * role credential retrieval.
-   * @param fsUri URI of the filesystem.
+   * @param fsUri possibly null URI of the filesystem.
    * @param conf configuration
    * @throws IOException on IO problems and some parameter checking
    * @throws IllegalArgumentException invalid parameters
    * @throws AWSSecurityTokenServiceException problems getting credentials
    */
-  public AssumedRoleCredentialProvider(URI fsUri, Configuration conf)
+  public AssumedRoleCredentialProvider(@Nullable URI fsUri, Configuration conf)
       throws IOException {
 
     arn = conf.getTrimmed(ASSUMED_ROLE_ARN, "");
@@ -106,9 +105,7 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
     }
 
     // build up the base provider
-    credentialsToSTS = buildAWSProviderList(
-        Optional.ofNullable(fsUri),
-        conf,
+    credentialsToSTS = buildAWSProviderList(fsUri, conf,
         ASSUMED_ROLE_CREDENTIALS_PROVIDER,
         Arrays.asList(
             SimpleAWSCredentialsProvider.class,

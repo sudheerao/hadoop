@@ -147,7 +147,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
 
     // create the provider set for session credentials.
     parentAuthChain = buildAWSProviderList(
-        Optional.of(getCanonicalUri()),
+        getCanonicalUri(),
         conf,
         AWS_CREDENTIALS_PROVIDER,
         STANDARD_AWS_PROVIDERS,
