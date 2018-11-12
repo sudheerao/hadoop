@@ -191,13 +191,14 @@ public class STSClientFactory {
     public Credentials requestSessionCredentials(
         final long duration,
         final TimeUnit timeUnit) throws IOException {
+      int durationSeconds = (int) timeUnit.toSeconds(duration);
       LOG.debug("Requesting session token of duration {}", duration);
       final GetSessionTokenRequest request = new GetSessionTokenRequest();
-      request.setDurationSeconds((int) timeUnit.toSeconds(duration));
+      request.setDurationSeconds(durationSeconds);
       return invoker.retry("request session credentials", "",
           true,
           () ->{
-            LOG.info("Requesting token");
+            LOG.info("Requesting Amazon STS Session credentials");
             return tokenService.getSessionToken(request).getCredentials();
       });
     }

@@ -417,7 +417,7 @@ public class S3ADelegationTokens extends AbstractDTService {
    * @param token token created
    */
   private void noteTokenCreated(final Token<AbstractS3ATokenIdentifier> token) {
-    LOG.info("Created delegation token {}", token);
+    LOG.info("Created S3A Delegation Token: {}", token);
     creationCount.incrementAndGet();
     stats.tokenIssued();
   }

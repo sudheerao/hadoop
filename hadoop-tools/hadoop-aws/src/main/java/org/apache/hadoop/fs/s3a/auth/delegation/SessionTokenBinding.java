@@ -90,7 +90,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
   private Optional<STSClientFactory.STSClient> stsClient = Optional.empty();
 
   /**
-   * duration of session.
+   * Duration of session in seconds.
    */
   private long duration;
 
@@ -203,10 +203,13 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
 
   @Override
   public String getDescription() {
-    return String.format(bindingName() 
-            + "%s token binding for user %s," +
-            "with STS endpoint \"%s\", region \"%s\" and token duration %s",
-        bindingName(), getOwner().getShortUserName(), endpoint, region, duration);
+    return String.format(
+            "%s token binding for user %s, " +
+            "with STS endpoint \"%s\", region \"%s\"" 
+                + " and token duration %d:%02d",
+        bindingName(), getOwner().getShortUserName(), endpoint, region,
+        TimeUnit.SECONDS.toMinutes(duration),
+        duration % 60);
   }
 
   /**

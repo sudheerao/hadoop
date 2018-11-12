@@ -252,10 +252,8 @@ public class EncryptionSecrets implements Writable, Serializable {
    */
   @Override
   public String toString() {
-    final StringBuilder sb = new StringBuilder(
-        "EncryptionSecrets{");
-    sb.append("encryptionMethod=").append(encryptionMethod);
-    sb.append('}');
-    return sb.toString();
+    return S3AEncryptionMethods.NONE.equals(encryptionMethod) 
+        ? "(no encryption)"
+        : encryptionMethod.getMethod();
   }
 }

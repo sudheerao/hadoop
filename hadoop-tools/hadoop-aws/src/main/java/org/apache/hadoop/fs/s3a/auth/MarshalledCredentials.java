@@ -286,9 +286,8 @@ public final class MarshalledCredentials implements Writable,
       return "Empty credentials";
     }
     return String.format(
-        "%s credentials for user %s%s; %s(%s)",
+        "%s credentials%s; %s(%s)",
         (hasSessionToken() ? "Session" : "Full"),
-        accessKey,
         (expiration == 0
             ? ""
             : (" expires " + (new Date(expiration)))),
