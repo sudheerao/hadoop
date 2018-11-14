@@ -29,6 +29,7 @@ import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
 import org.apache.hadoop.fs.s3a.Retries;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialProvider;
@@ -67,12 +68,23 @@ public class RoleTokenBinding extends SessionTokenBinding {
   public static final String COMPONENT = "Role Delegation Token";
 
   /**
+   * Role ARN to use when requesting new tokens.
+   */
+  private String roleArn;
+
+  /**
    * Constructor.
    * Name is {@link #name}; token kind is
    * {@link DelegationConstants#ROLE_TOKEN_KIND}.
    */
   public RoleTokenBinding() {
     super(NAME, DelegationConstants.ROLE_TOKEN_KIND);
+  }
+
+  @Override
+  protected void serviceInit(final Configuration conf) throws Exception {
+    super.serviceInit(conf);
+    roleArn = getConfig().getTrimmed(DELEGATION_TOKEN_ROLE_ARN, "");
   }
 
   /**
@@ -113,7 +125,6 @@ public class RoleTokenBinding extends SessionTokenBinding {
       final Optional<RoleModel.Policy> policy,
       final EncryptionSecrets encryptionSecrets) throws IOException {
     requireServiceStarted();
-    String roleArn = getConfig().get(DELEGATION_TOKEN_ROLE_ARN, "");
     Preconditions.checkState(!roleArn.isEmpty(), E_NO_ARN);
     String policyJson = policy.isPresent() ?
         MODEL.toJson(policy.get()) : "";
@@ -148,8 +159,8 @@ public class RoleTokenBinding extends SessionTokenBinding {
 
   @Override
   public String getDescription() {
-    return super.getDescription() + " Role ARN=" + 
-      getConfig().get(DELEGATION_TOKEN_ROLE_ARN, "(none)");
+    return super.getDescription() + " Role ARN=" +
+    (roleArn.isEmpty() ? "(none)" : ('"' +  roleArn +'"') );
   }
 
   @Override

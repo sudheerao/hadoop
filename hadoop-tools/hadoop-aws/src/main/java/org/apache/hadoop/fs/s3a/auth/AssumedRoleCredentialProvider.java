@@ -128,8 +128,8 @@ public class AssumedRoleCredentialProvider implements AWSCredentialsProvider,
       LOG.debug("Scope down policy {}", policy);
       builder.withScopeDownPolicy(policy);
     }
-    String endpoint = conf.get(ASSUMED_ROLE_STS_ENDPOINT, "");
-    String region = conf.get(ASSUMED_ROLE_STS_ENDPOINT_REGION,
+    String endpoint = conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT, "");
+    String region = conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT_REGION,
         ASSUMED_ROLE_STS_ENDPOINT_REGION_DEFAULT);
     AWSSecurityTokenServiceClientBuilder stsbuilder =
         STSClientFactory.builder(

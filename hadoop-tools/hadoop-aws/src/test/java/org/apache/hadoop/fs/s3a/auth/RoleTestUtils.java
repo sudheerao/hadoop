@@ -181,7 +181,7 @@ public final class RoleTestUtils {
    * @return the string
    */
   public static String probeForAssumedRoleARN(Configuration conf) {
-    String arn = conf.get(ASSUMED_ROLE_ARN, "");
+    String arn = conf.getTrimmed(ASSUMED_ROLE_ARN, "");
     Assume.assumeTrue("No ARN defined in " + ASSUMED_ROLE_ARN,
         !arn.isEmpty());
     return arn;

@@ -74,9 +74,9 @@ public class STSClientFactory {
       final String bucket,
       final AWSCredentialsProvider credentials) throws IOException {
     final ClientConfiguration awsConf = S3AUtils.createAwsConf(conf, bucket);
-    String endpoint = conf.get(DELEGATION_TOKEN_ENDPOINT,
+    String endpoint = conf.getTrimmed(DELEGATION_TOKEN_ENDPOINT,
         DEFAULT_DELEGATION_TOKEN_ENDPOINT);
-    String region = conf.get(DELEGATION_TOKEN_REGION,
+    String region = conf.getTrimmed(DELEGATION_TOKEN_REGION,
         DEFAULT_DELEGATION_TOKEN_REGION);
     return builder(credentials, awsConf, endpoint, region);
   }
