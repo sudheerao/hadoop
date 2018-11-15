@@ -287,10 +287,10 @@ public final class MarshalledCredentials implements Writable,
     }
     return String.format(
         "%s credentials%s; %s(%s)",
-        (hasSessionToken() ? "Session" : "Full"),
+        (hasSessionToken() ? "session" : "full"),
         (expiration == 0
             ? ""
-            : (" expires " + (new Date(expiration)))),
+            : (" expiring on " + (new Date(expiration)))),
         (isNotEmpty(roleARN)
             ? ("role \"" + roleARN + "\" ")
             : ""),
