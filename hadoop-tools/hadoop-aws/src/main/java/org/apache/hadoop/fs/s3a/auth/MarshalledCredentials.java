@@ -21,6 +21,7 @@ package org.apache.hadoop.fs.s3a.auth;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.io.Serializable;
 import java.net.URI;
 import java.util.Date;
 import java.util.Map;
@@ -66,7 +67,7 @@ import static org.apache.hadoop.fs.s3a.S3AUtils.lookupPassword;
  */
 @InterfaceAudience.Private
 public final class MarshalledCredentials implements Writable,
-    AWSCredentialsProvider {
+    AWSCredentialsProvider, Serializable {
 
   /**
    * Error text on invalid non-empty credentials: {@value}.
@@ -94,15 +95,34 @@ public final class MarshalledCredentials implements Writable,
    */
   public static final String COMPONENT = "Marshalled Credentials";
 
+  private static final long serialVersionUID = 8444610385533920692L;
+
+  /**
+   * Access key of IAM account.
+   */
   private String accessKey = "";
 
+  /**
+   * Secret key of IAM account.
+   */
   private String secretKey = "";
 
+  /**
+   * Optional session token.
+   * If non-empty: the credentials can be converted into
+   * session credentials.
+   */
   private String sessionToken = "";
 
+  /**
+   * ARN of a role. Purely for diagnostics.
+   */
   private String roleARN = "";
 
-  /** Expiry time is measured in milliseconds. */
+  /**
+   * Expiry time milliseconds.
+   * 0 means "does not expire/unknown".
+   */
   private long expiration;
 
   /**
@@ -222,13 +242,11 @@ public final class MarshalledCredentials implements Writable,
   /**
    * Loads the credentials from the owning FS.
    * There is no validation.
-   * @param component component name for exception messages.
    * @param conf configuration to load from
    * @return the component
    * @throws IOException on any load failure
    */
   public static MarshalledCredentials load(
-      final String component,
       final URI uri,
       final Configuration conf) throws IOException {
     // determine the bucket
@@ -294,46 +312,7 @@ public final class MarshalledCredentials implements Writable,
         (isNotEmpty(roleARN)
             ? ("role \"" + roleARN + "\" ")
             : ""),
-        isValid() ? "valid" : "invalid");
-  }
-
-  /**
-   * Is this a valid set of credentials tokens?
-   * The requirement is {@link CredentialTypeRequired#AnyNonEmpty}
-   * @return true if the key and secrets are set.
-   */
-  private boolean isValid() {
-    if (accessKey == null || secretKey == null || sessionToken == null) {
-      // null fields are not permitted, empty is OK for marshalling around.
-      return false;
-    }
-    // now look at whether values are set/unset.
-    boolean hasAccessAndSecretKeys = !isEmpty();
-    boolean hasSessionToken = hasSessionToken();
-    switch (CredentialTypeRequired.AnyNonEmpty) {
-
-    case AnyIncludingEmpty:
-      // this is simplest.
-      return true;
-
-    case Empty:
-      // empty. ignore session value if the other keys are unset.
-      return !hasAccessAndSecretKeys;
-
-    case AnyNonEmpty:
-      // just look for the access key and secret key being non-empty
-      return hasAccessAndSecretKeys;
-
-    case FullOnly:
-      return hasAccessAndSecretKeys && !hasSessionToken;
-
-    case SessionOnly:
-      return hasAccessAndSecretKeys && hasSessionToken();
-
-      // this is here to keep the IDE quiet
-    default:
-      return false;
-    }
+        isValid(CredentialTypeRequired.AnyNonEmpty) ? "valid" : "invalid");
   }
 
   /**
@@ -419,7 +398,6 @@ public final class MarshalledCredentials implements Writable,
     accessKey = Text.readString(in, MAX_SECRET_LENGTH);
     secretKey = Text.readString(in, MAX_SECRET_LENGTH);
     sessionToken = Text.readString(in, MAX_SECRET_LENGTH);
-
     roleARN = Text.readString(in, MAX_SECRET_LENGTH);
     expiration = in.readLong();
   }
@@ -440,7 +418,7 @@ public final class MarshalledCredentials implements Writable,
 
   /**
    * Build an error string for when the credentials do not match
-   * that required.
+   * those required.
    * @param typeRequired credential type required.
    * @return an error string.
    */
@@ -537,14 +515,12 @@ public final class MarshalledCredentials implements Writable,
    */
   public static MarshalledCredentials fromEnvironment(
       final Map<String, String> env) {
-    MarshalledCredentials creds = new MarshalledCredentials(
-    );
+    MarshalledCredentials creds = new MarshalledCredentials();
     creds.setAccessKey(nullToEmptyString(env.get("AWS_ACCESS_KEY")));
     creds.setSecretKey(nullToEmptyString(env.get("AWS_SECRET_KEY")));
     creds.setSessionToken(nullToEmptyString(env.get("AWS_SESSION_TOKEN")));
     return creds;
   }
-  
 
   /**
    * Take a string where a null value is remapped to an empty string.

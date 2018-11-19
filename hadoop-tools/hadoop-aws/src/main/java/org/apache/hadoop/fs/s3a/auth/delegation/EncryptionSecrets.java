@@ -46,11 +46,9 @@ import static org.apache.hadoop.fs.s3a.S3AUtils.getServerSideEncryptionKey;
  * Maintainers: For security reasons, don't print any of this.
  *
  * Note this design marshalls/unmarshalls its serialVersionUID
- * in its writable, which is used compare versions.
- * This is a placeholder for adding support for client side encryption,
- * which may need new values included in the payload.
+ * in its writable, which is used to compare versions.
  *
- * If the secrets are ever changed incompatibly,
+ * If the wire format is ever changed incompatibly,
  * update the serial version UID to ensure that older clients get safely
  * rejected.
  */
@@ -60,8 +58,14 @@ public class EncryptionSecrets implements Writable, Serializable {
 
   private static final long serialVersionUID = 1208329045511296375L;
 
+  /**
+   * Encryption algorithm to use: must match one in{@link #S3AEncryptionMethods}.
+   */
   private String encryptionAlgorithm = "";
 
+  /**
+   * Encryption key: possibly sensitive information.
+   */
   private String encryptionKey = "";
 
   /**

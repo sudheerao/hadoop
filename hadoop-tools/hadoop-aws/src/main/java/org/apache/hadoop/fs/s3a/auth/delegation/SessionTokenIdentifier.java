@@ -39,8 +39,8 @@ import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.SESSI
  *
  * <b>Note 2:</b>
  * This class does support subclassing, but every subclass MUST declare itself
- * to be of a different kind. Otherwise the process for decoding tokens
- * breaks.
+ * to be of a different token kind.
+ * Otherwise the process for decoding tokens breaks.
  */
 public class SessionTokenIdentifier extends
     AbstractS3ATokenIdentifier {

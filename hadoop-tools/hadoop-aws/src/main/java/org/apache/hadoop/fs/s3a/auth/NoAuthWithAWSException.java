@@ -21,8 +21,8 @@ package org.apache.hadoop.fs.s3a.auth;
 import org.apache.hadoop.fs.s3a.CredentialInitializationException;
 
 /**
- * A specific subclass of {@code AmazonClientException} which can
- * be used in the retry logic to fail fast when there is any
+ * A specific subclass of {@code AmazonClientException} which is
+ * used in the S3A retry policy to fail fast when there is any
  * authentication problem.
  */
 public class NoAuthWithAWSException extends CredentialInitializationException {

@@ -393,7 +393,6 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     conf.set(SECRET_KEY, "bbb");
     conf.set(SESSION_TOKEN, "");
     final MarshalledCredentials sc = MarshalledCredentials.load(
-        "Session credentials in Hadoop configuration",
         null, conf);
     intercept(IOException.class,
         MarshalledCredentials.INVALID_CREDENTIALS,
@@ -411,7 +410,7 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     conf.set(SECRET_KEY, "");
     conf.set(SESSION_TOKEN, "");
     final MarshalledCredentials sc = MarshalledCredentials.load(
-        "Local configuration", null, conf);
+        null, conf);
     intercept(IOException.class,
         MarshalledCredentials.NO_AWS_CREDENTIALS,
         () -> {

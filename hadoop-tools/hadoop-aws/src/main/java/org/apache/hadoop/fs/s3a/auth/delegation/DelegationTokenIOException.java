@@ -21,7 +21,7 @@ package org.apache.hadoop.fs.s3a.auth.delegation;
 import java.io.IOException;
 
 /**
- * General exception for DT issues.
+ * General IOException for Delegation Token issues.
  * Includes recommended error strings, which can be used in tests when
  * looking for specific errors.
  */

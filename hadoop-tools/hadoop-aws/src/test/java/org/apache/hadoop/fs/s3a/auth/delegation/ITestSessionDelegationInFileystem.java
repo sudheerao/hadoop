@@ -18,8 +18,10 @@
 
 package org.apache.hadoop.fs.s3a.auth.delegation;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.URI;
 import java.nio.file.AccessDeniedException;
 
@@ -47,11 +49,13 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.security.TokenCache;
 import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.token.DtUtilShell;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.security.token.TokenIdentifier;
 import org.apache.hadoop.service.ServiceOperations;
 import org.apache.hadoop.service.ServiceStateException;
 import org.apache.hadoop.util.ExitUtil;
+import org.apache.hadoop.util.ToolRunner;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 
 import static java.util.Objects.requireNonNull;
@@ -68,6 +72,7 @@ import static org.apache.hadoop.fs.s3a.auth.delegation.MiniKerberizedHadoopClust
 import static org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.lookupS3ADelegationToken;
 import static org.apache.hadoop.test.LambdaTestUtils.doAs;
 import static org.apache.hadoop.test.LambdaTestUtils.intercept;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.collection.IsCollectionWithSize.hasSize;
 
 /**
@@ -586,15 +591,14 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
 
     URI fsUri = fs.getUri();
     String fsurl = fsUri.toString();
-    File tokenfile = File.createTempFile("tokens", ".bin",
-        cluster.getWorkDir());
-    tokenfile.delete();
+    File tokenfile = createTempTokenFile();
 
     // this will create (& leak) a new FS instance as caching is disabled.
     // but as teardown destroys all filesystems for this user, it
     // gets cleaned up at the end of the test
     String tokenFilePath = tokenfile.getAbsolutePath();
 
+    
     // create the tokens as Bob.
     doAs(bobUser,
         () -> DelegationTokenFetcher.main(conf,
@@ -630,6 +634,13 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
 
     // cancel
     DelegationTokenFetcher.main(conf, args("--cancel", tokenFilePath));
+  }
+
+  protected File createTempTokenFile() throws IOException {
+    File tokenfile = File.createTempFile("tokens", ".bin",
+        cluster.getWorkDir());
+    tokenfile.delete();
+    return tokenfile;
   }
 
   /**
@@ -670,6 +681,44 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     UserGroupInformation user = identifier.getUser();
     assertEquals("User in DT",
         aliceUser.getUserName(), user.getUserName());
+  }
+
+
+  protected String dtutil(int expected, String ...args) throws Exception {
+    final ByteArrayOutputStream dtUtilContent = new ByteArrayOutputStream();
+    DtUtilShell dt = new DtUtilShell();
+    dt.setOut(new PrintStream(dtUtilContent));
+    dtUtilContent.reset();
+    int r =  doAs(aliceUser, 
+        () ->ToolRunner.run(getConfiguration(), dt, args));
+    String s = dtUtilContent.toString();
+    LOG.info("\n{}", s);
+    assertEquals(expected, r);
+    return s;
+  }
+  
+  @Test
+  public void testDTUtilShell() throws Throwable {
+    describe("Verify the dtutil shell command can fetch tokens");
+    File tokenfile = createTempTokenFile();
+
+    String tfs = tokenfile.toString();
+    String fsURI = getFileSystem().getCanonicalUri().toString();
+    dtutil(0,
+        "get", fsURI,
+        "-format", "protobuf",
+        tfs);
+    assertTrue("not created: " + tokenfile,
+        tokenfile.exists());
+    assertTrue("File is empty" + tokenfile,
+        tokenfile.length() > 0);
+    assertTrue("File only contains header" + tokenfile,
+        tokenfile.length() > 6);
+
+    String printed = dtutil(0, "print", tfs);
+    assertThat(printed, containsString(fsURI));
+    assertThat(printed, containsString(getTokenKind().toString()));
+
   }
 
 }

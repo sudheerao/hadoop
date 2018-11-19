@@ -24,9 +24,8 @@ import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.io.Text;
 
 /**
- * The full credentials are the same of that for a session token; a different
- * name is used to ensure that the class which is marshalled is different
- * at the far end.
+ * The full credentials payload is the same of that for a session token, but 
+ * a different token kind is used.
  *
  * Token kind is {@link DelegationConstants#FULL_TOKEN_KIND}.
  */

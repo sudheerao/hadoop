@@ -87,7 +87,7 @@ public class TemporaryAWSCredentialsProvider extends
   @Override
   protected AWSCredentials createCredentials(Configuration config)
       throws IOException {
-    MarshalledCredentials creds = MarshalledCredentials.load(COMPONENT,
+    MarshalledCredentials creds = MarshalledCredentials.load(
         getUri(), config);
     MarshalledCredentials.CredentialTypeRequired sessionOnly
         = MarshalledCredentials.CredentialTypeRequired.SessionOnly;
