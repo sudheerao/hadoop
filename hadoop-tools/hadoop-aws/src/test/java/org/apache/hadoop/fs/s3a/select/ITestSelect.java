@@ -35,6 +35,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathIOException;
 import org.apache.hadoop.fs.StreamCapabilities;
 import org.apache.hadoop.fs.s3a.AbstractS3ATestBase;
 import org.apache.hadoop.fs.s3a.Statistic;
@@ -43,6 +44,7 @@ import static org.apache.hadoop.fs.s3a.select.SelectConstants.*;
 import static org.apache.hadoop.fs.s3a.select.SelectBinding.*;
 
 import static org.apache.hadoop.fs.s3a.select.CsvFile.*;
+import static org.apache.hadoop.test.LambdaTestUtils.intercept;
 import static org.hamcrest.CoreMatchers.*;
 
 /**
@@ -190,9 +192,11 @@ public class ITestSelect extends AbstractS3ATestBase {
 
     createStandardCsvFile(ALL_QUOTES);
     int lines;
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(
-        getFileSystem().open(csvPath)))) {
+    try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(
+            getFileSystem().open(csvPath)))) {
       lines = 0;
+      // seek to 0, which is what some input formats do
       String line;
       while ((line = reader.readLine()) != null) {
         lines++;
@@ -269,6 +273,26 @@ public class ITestSelect extends AbstractS3ATestBase {
         TRUE);
   }
 
+  @Test
+  public void testSelectSeekRestricted() throws Throwable {
+    describe("Verify that only seeks to the current pos work");
+    createStandardCsvFile(ALL_QUOTES);
+    selectConf.set(HEADER, HEADER_OPT_NONE);
+    try (FSDataInputStream stream = select(selectConf,
+        "SELECT * FROM S3OBJECT s WHERE s._1 = '1'")) {
+      stream.seek(0);
+      stream.read();
+      stream.seek(1);
+      stream.seek(1);
+      intercept(PathIOException.class,
+          () -> stream.seek(0));
+      byte[] buffer = new byte[1];
+      stream.readFully(stream.getPos(), buffer);
+      intercept(PathIOException.class,
+          () -> stream.readFully(1, buffer));
+    }
+  }
+
 
   @Test
   public void testSelectOddLinesNoHeader() throws Throwable {
@@ -321,12 +345,10 @@ public class ITestSelect extends AbstractS3ATestBase {
 
   @Test
   public void testBackslashExpansion() throws Throwable {
-
     assertEquals("\t\r\n", expandBackslashChars("\t\r\n"));
     assertEquals("\t", expandBackslashChars("\\t"));
     assertEquals("\r", expandBackslashChars("\\r"));
     assertEquals("\r \n", expandBackslashChars("\\r \\n"));
-
   }
 
   /**
@@ -385,13 +407,10 @@ public class ITestSelect extends AbstractS3ATestBase {
       final String template,
       final Object... args) throws IOException {
     List<String> result = new ArrayList<>();
-    String expression = sql(template, args);
-    describe("Execution Select call: %s", expression);
-    FSDataInputStream select = getFileSystem()
-        .select(csvPath,
-            expression,
-            conf);
-    try (Scanner scanner = new Scanner(
+    String stats = "";
+    try (
+        FSDataInputStream select = select(conf, template, args);
+        Scanner scanner = new Scanner(
              new BufferedReader(new InputStreamReader(select)))) {
       scanner.useDelimiter("\n");
       while (scanner.hasNextLine()) {
@@ -399,10 +418,32 @@ public class ITestSelect extends AbstractS3ATestBase {
         LOG.info("{}", l);
         result.add(l);
       }
+      stats = select.toString();
     }
     describe("Result line count: %s\nStatistics\n%s",
-        result.size(), select);
+        result.size(), stats);
+    
     return result;
   }
+
+  /**
+   * Select from the CSV file.
+   * @param conf config for the select call.
+   * @param template template for a formatted SQL request.
+   * @param args arguments for the formatted request.
+   * @return the input stream.
+   * @throws IOException failure
+   */
+  private FSDataInputStream select(final Configuration conf,
+      final String template, final Object... args) throws IOException {
+    String expression = sql(template, args);
+    describe("Execution Select call: %s", expression);
+    return getFileSystem()
+        .select(csvPath,
+            expression,
+            conf);
+  }
+  
+  
 
 }

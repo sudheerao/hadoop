@@ -34,6 +34,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.FSExceptionMessages;
 import org.apache.hadoop.fs.FSInputStream;
+import org.apache.hadoop.fs.PathIOException;
 import org.apache.hadoop.fs.s3a.S3AInstrumentation;
 import org.apache.hadoop.fs.s3a.S3AReadOpContext;
 import org.apache.hadoop.fs.s3a.S3ObjectAttributes;
@@ -202,19 +203,30 @@ public class SelectInputStream extends FSInputStream {
   // We don't support seek.
   @Override
   public void seek(long p) throws IOException {
-    throw unsupported("Seek");
+    if (p == getPos()) {
+      LOG.debug("ignoring seek to current position.");
+    } else {
+      throw unsupported("Seek");
+    }
   }
 
-  protected IOException unsupported(final String action) {
-    return new IOException(action + " not supported");
+  /**
+   * Build an exception to raise when an operation is not supported here. 
+   * @param action action which is unsupported.
+   * @return an exception to throw.
+   */
+  protected PathIOException unsupported(final String action) {
+    return new PathIOException(
+        String.format("s3a://%s/%s", bucket, key),
+        action + " not supported");
   }
 
   @Override
   public boolean seekToNewSource(long targetPos) throws IOException {
     throw unsupported("Seek");
   }
-  // Not supported.
 
+  // Not supported.
   @Override
   public boolean markSupported() {
     return false;
