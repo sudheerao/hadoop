@@ -64,7 +64,8 @@ public class TemporaryAWSCredentialsProvider extends
   }
 
   /**
-   * Constructor: the URI will be null if 
+   * Constructor: the URI will be null if the provider is inited unbonded
+   * to a filesystem.
    * @param uri binding to a filesystem URI.
    * @param conf configuration.
    */

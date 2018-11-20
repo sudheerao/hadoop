@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.net.URI;
 
 import com.amazonaws.auth.AWSCredentials;
-import com.google.common.base.Preconditions;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -71,7 +70,7 @@ public class MarshalledCredentialProvider extends
       final MarshalledCredentials credentials,
       final MarshalledCredentials.CredentialTypeRequired typeRequired)
       throws IOException {
-    super(checkNotNull(uri, "No filesystem URI") , conf);
+    super(checkNotNull(uri, "No filesystem URI"), conf);
     this.component = component;
     this.typeRequired = typeRequired;
     this.credentials = checkNotNull(credentials);

@@ -280,11 +280,11 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
    */
   public static final Invoker.Retried LOG_EVENT =
       (text, exception, retries, idempotent) -> {
-    LOG.info("{}: " + exception, text);
-    if (retries == 1) {
-      // stack on first attempt, to keep noise down
-      LOG.debug("{}: " + exception, text, exception);
-    }
+        LOG.info("{}: " + exception, text);
+        if (retries == 1) {
+          // stack on first attempt, to keep noise down
+          LOG.debug("{}: " + exception, text, exception);
+        }
   };
   
   /**

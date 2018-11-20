@@ -684,7 +684,7 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
   }
 
 
-  protected String dtutil(int expected, String ...args) throws Exception {
+  protected String dtutil(int expected, String...args) throws Exception {
     final ByteArrayOutputStream dtUtilContent = new ByteArrayOutputStream();
     DtUtilShell dt = new DtUtilShell();
     dt.setOut(new PrintStream(dtUtilContent));

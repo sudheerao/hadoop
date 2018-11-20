@@ -41,7 +41,7 @@ import org.apache.hadoop.classification.InterfaceStability;
 public class IAMInstanceCredentialsProvider
     implements AWSCredentialsProvider, Closeable {
 
-  private static final InstanceProfileCredentialsProvider instance =
+  private static final InstanceProfileCredentialsProvider INSTANCE =
       InstanceProfileCredentialsProvider.getInstance();
 
   public IAMInstanceCredentialsProvider() {
@@ -56,7 +56,7 @@ public class IAMInstanceCredentialsProvider
   @Override
   public AWSCredentials getCredentials() {
     try {
-      return instance.getCredentials();
+      return INSTANCE.getCredentials();
     } catch (AmazonClientException e) {
       throw e;
 /*
@@ -69,7 +69,7 @@ public class IAMInstanceCredentialsProvider
 
   @Override
   public void refresh() {
-    instance.refresh();
+    INSTANCE.refresh();
   }
 
   @Override

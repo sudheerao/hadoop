@@ -160,7 +160,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
   @Override
   public String getDescription() {
     return super.getDescription() + " Role ARN=" +
-    (roleArn.isEmpty() ? "(none)" : ('"' +  roleArn +'"') );
+        (roleArn.isEmpty() ? "(none)" : ('"' +  roleArn +'"'));
   }
 
   @Override

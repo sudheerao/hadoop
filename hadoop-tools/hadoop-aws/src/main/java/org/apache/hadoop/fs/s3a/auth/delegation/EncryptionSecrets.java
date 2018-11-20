@@ -59,7 +59,8 @@ public class EncryptionSecrets implements Writable, Serializable {
   private static final long serialVersionUID = 1208329045511296375L;
 
   /**
-   * Encryption algorithm to use: must match one in{@link #S3AEncryptionMethods}.
+   * Encryption algorithm to use: must match one in
+   * {@link S3AEncryptionMethods}.
    */
   private String encryptionAlgorithm = "";
 
@@ -121,7 +122,7 @@ public class EncryptionSecrets implements Writable, Serializable {
 
   /**
    * Write out the encryption secrets.
-   * @param out {@code >DataOutput} to serialize this object into.
+   * @param out {@code DataOutput} to serialize this object into.
    * @throws IOException IO failure
    */
   @Override

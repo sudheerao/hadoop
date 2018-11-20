@@ -93,6 +93,9 @@ public class S3ADelegationTokens extends AbstractDTService {
    */
   private final AtomicInteger creationCount = new AtomicInteger(0);
 
+  /**
+   * Text value of this token service.
+   */
   private Text service;
 
   /**
@@ -198,7 +201,7 @@ public class S3ADelegationTokens extends AbstractDTService {
   }
 
   /**
-   * Get the identifier as a string, or "(none)"
+   * Get the identifier as a string, or "(none)".
    * @return a string value for logs etc.
    */
   private String identifierToString() {

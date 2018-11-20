@@ -200,7 +200,7 @@ public class STSClientFactory {
           () ->{
             LOG.info("Requesting Amazon STS Session credentials");
             return tokenService.getSessionToken(request).getCredentials();
-      });
+          });
     }
 
     /**

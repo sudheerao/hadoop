@@ -190,7 +190,7 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
       message += ": " + lastException;
     }
     LOG.warn(message);
-    if (lastException instanceof CredentialInitializationException ) {
+    if (lastException instanceof CredentialInitializationException) {
       throw lastException;
     } else {
       throw new NoAuthWithAWSException(message, lastException);

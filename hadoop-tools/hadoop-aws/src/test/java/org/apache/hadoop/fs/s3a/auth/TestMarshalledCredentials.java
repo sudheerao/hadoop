@@ -123,7 +123,7 @@ public class TestMarshalledCredentials extends HadoopTestBase {
   }
 
   /**
-   * This provider fails fast if there's no URL
+   * This provider fails fast if there's no URL.
    */
   @Test
   public void testCredentialProviderNullURI() throws Throwable {
