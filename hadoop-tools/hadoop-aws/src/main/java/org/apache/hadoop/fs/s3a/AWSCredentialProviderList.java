@@ -189,7 +189,6 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
     if (lastException != null) {
       message += ": " + lastException;
     }
-    LOG.warn(message);
     if (lastException instanceof CredentialInitializationException) {
       throw lastException;
     } else {

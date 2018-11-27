@@ -1026,7 +1026,7 @@
     com.amazonaws.auth.AWSCredentialsProvider.
 
     When S3A delegation tokens are not enabled, this list will be used
-    to directly authenticate with S3 and DynamoDB services..
+    to directly authenticate with S3 and DynamoDB services.
     When S3A Delegation tokens are enabled, depending upon the delegation
     token binding it may be used
     to communicate wih the STS endpoint to request session/role
@@ -1035,13 +1035,13 @@
     These are loaded and queried in sequence for a valid set of credentials.
     Each listed class must implement one of the following means of
     construction, which are attempted in order:
-    1. a public constructor accepting java.net.URI and
+    * a public constructor accepting java.net.URI and
         org.apache.hadoop.conf.Configuration,
-    1. a public constructor accepting org.apache.hadoop.conf.Configuration,
-    2. a public static method named getInstance that accepts no
+    * a public constructor accepting org.apache.hadoop.conf.Configuration,
+    * a public static method named getInstance that accepts no
        arguments and returns an instance of
        com.amazonaws.auth.AWSCredentialsProvider, or
-    3. a public default constructor.
+    * a public default constructor.
 
     Specifying org.apache.hadoop.fs.s3a.AnonymousAWSCredentialsProvider allows
     anonymous access to a publicly accessible S3 bucket without any credentials.

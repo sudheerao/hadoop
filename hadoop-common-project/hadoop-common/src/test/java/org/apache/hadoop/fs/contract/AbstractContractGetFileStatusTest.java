@@ -520,7 +520,7 @@ public abstract class AbstractContractGetFileStatusTest extends
       Path path,
       PathFilter filter) throws IOException {
     FileStatus[] result = getFileSystem().listStatus(path, filter);
-    assertEquals("length of listStatus(" + path + ", " + filter + " )" +
+    assertEquals("length of listStatus(" + path + ", " + filter + " ) " +
         Arrays.toString(result),
         expected, result.length);
     return result;

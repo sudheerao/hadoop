@@ -58,12 +58,9 @@ public class IAMInstanceCredentialsProvider
     try {
       return INSTANCE.getCredentials();
     } catch (AmazonClientException e) {
-      throw e;
-/*
       throw new NoAwsCredentialsException("IAMInstanceCredentialsProvider",
           e.getMessage(),
           e);
-*/
     }
   }
 

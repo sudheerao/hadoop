@@ -503,7 +503,7 @@ This means that the default S3A authentication chain can be defined as
   <description>
     List of credential providers to authenticate with AWS.
     When delegation tokens are not enabled, this list will be used
-    to directly authenticate with S3 and DynamoDB services..
+    to directly authenticate with S3 and DynamoDB services.
     When S3A Delegation tokens are enabled, it may be used
     to communicate wih the STS endpoint to request session/role
     credentials.

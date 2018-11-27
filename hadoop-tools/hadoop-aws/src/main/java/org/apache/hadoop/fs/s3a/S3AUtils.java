@@ -1685,7 +1685,6 @@ public final class S3AUtils {
       sessionKey = sessionKey.split(":")[0];
     }
     if (StringUtils.isEmpty(sessionKey)) {
-//      sessionKey = "default";
       sessionKey = "";
     }
     return sessionKey.isEmpty()? uri

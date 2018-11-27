@@ -100,8 +100,7 @@ public final class Constants {
    * This is the central STS endpoint which, for v3 signing, can
    * issue STS tokens for any region.
    */
-  public static final String DEFAULT_ASSUMED_ROLE_STS_ENDPOINT =
-      "";
+  public static final String DEFAULT_ASSUMED_ROLE_STS_ENDPOINT = "";
 
   /**
    * Region for the STS endpoint; needed if the endpoint
