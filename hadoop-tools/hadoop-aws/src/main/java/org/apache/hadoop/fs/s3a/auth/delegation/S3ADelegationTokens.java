@@ -27,7 +27,6 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,6 +44,8 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.service.ServiceOperations;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DEFAULT_DELEGATION_TOKEN_BINDING;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_BINDING;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DURATION_LOG_AT_INFO;
@@ -170,7 +171,7 @@ public class S3ADelegationTokens extends AbstractDTService {
   @Override
   protected void serviceInit(final Configuration conf) throws Exception {
     super.serviceInit(conf);
-    Preconditions.checkState(hasDelegationTokenBinding(conf),
+    checkState(hasDelegationTokenBinding(conf),
         E_DELEGATION_TOKENS_DISABLED);
     Class<? extends AbstractDelegationTokenBinding> binding = conf.getClass(
         DelegationConstants.DELEGATION_TOKEN_BINDING,
@@ -237,7 +238,7 @@ public class S3ADelegationTokens extends AbstractDTService {
   private void deployUnbonded()
       throws IOException {
     requireServiceStarted();
-    Preconditions.checkState(!isBoundToDT(),
+    checkState(!isBoundToDT(),
         "Already Bound to a delegation token");
     LOG.info("No delegation tokens present: using direct authentication");
     credentialProviders = Optional.of(tokenBinding.deployUnbonded());
@@ -268,8 +269,7 @@ public class S3ADelegationTokens extends AbstractDTService {
    * @throws IOException selection/extraction/validation failure.
    */
   private void bindToAnyDelegationToken() throws IOException {
-    Preconditions.checkState(!credentialProviders.isPresent(),
-        E_ALREADY_DEPLOYED);
+    checkState(!credentialProviders.isPresent(), E_ALREADY_DEPLOYED);
     Token<AbstractS3ATokenIdentifier> token = selectTokenFromFSOwner();
     if (token != null) {
       bindToDelegationToken(token);
@@ -320,8 +320,7 @@ public class S3ADelegationTokens extends AbstractDTService {
   public void bindToDelegationToken(
       final Token<AbstractS3ATokenIdentifier> token)
       throws IOException {
-    Preconditions.checkState(!credentialProviders.isPresent(),
-        E_ALREADY_DEPLOYED);
+    checkState(!credentialProviders.isPresent(), E_ALREADY_DEPLOYED);
     boundDT = Optional.of(token);
     AbstractS3ATokenIdentifier dti = extractIdentifier(token);
     LOG.info("Using delegation token {}", dti);
@@ -395,7 +394,7 @@ public class S3ADelegationTokens extends AbstractDTService {
   public Token<AbstractS3ATokenIdentifier> createDelegationToken(
       final EncryptionSecrets encryptionSecrets) throws IOException {
     requireServiceStarted();
-    Preconditions.checkArgument(encryptionSecrets != null,
+    checkArgument(encryptionSecrets != null,
         "Null encryption secrets");
     // this isn't done in in advance as it needs S3Guard initialized in the
     // filesystem before it can generate complete policies.
@@ -538,7 +537,8 @@ public class S3ADelegationTokens extends AbstractDTService {
   public AbstractS3ATokenIdentifier extractIdentifier(
       final Token<? extends AbstractS3ATokenIdentifier> token)
       throws IOException {
-    Preconditions.checkArgument(token != null, "null token");
+
+    checkArgument(token != null, "null token");
     AbstractS3ATokenIdentifier identifier;
     // harden up decode beyond that Token does itself
     try {
@@ -576,6 +576,7 @@ public class S3ADelegationTokens extends AbstractDTService {
       final Text service,
       final Text kind)
       throws DelegationTokenIOException {
+
     LOG.debug("Looking for token for service {} in credentials", service);
     Token<?> token = credentials.getToken(service);
     if (token != null) {
@@ -621,12 +622,12 @@ public class S3ADelegationTokens extends AbstractDTService {
    */
   public static Token<AbstractS3ATokenIdentifier> lookupS3ADelegationToken(
       final Credentials credentials,
-      final URI uri) throws DelegationTokenIOException {
+      final URI uri) {
     return lookupToken(credentials, getTokenService(uri.toString()));
   }
 
   /**
-   * Predicate: does this configuration enable delegation tokens.
+   * Predicate: does this configuration enable delegation tokens?
    * That is: is there any text in the option
    * {@link DelegationConstants#DELEGATION_TOKEN_BINDING} ?
    * @param conf configuration to examine

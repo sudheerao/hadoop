@@ -96,7 +96,6 @@ public abstract class AbstractS3ATokenIdentifier
   private String uuid = UUID.randomUUID().toString();
 
   /**
-   *
    * Constructor.
    * @param kind token kind.
    * @param uri filesystem URI.
@@ -240,7 +239,7 @@ public abstract class AbstractS3ATokenIdentifier
   }
 
   /**
-   * Equality check is on superclass and URI only.
+   * Equality check is on superclass and UUID only.
    * @param o other.
    * @return true if the base class considers them equal and the URIs match.
    */
@@ -290,7 +289,7 @@ public abstract class AbstractS3ATokenIdentifier
   }
 
   /**
-   * Create the default origin text message with hostname and
+   * Create the default origin text message with local hostname and
    * timestamp.
    * @return a string for token diagnostics.
    */

@@ -628,7 +628,7 @@ public final class S3AUtils {
         binding, credentials);
     return credentials;
   }
-  
+
   /**
    * Load list of AWS credential provider/credential provider factory classes.
    * @param conf configuration
@@ -784,6 +784,24 @@ public final class S3AUtils {
       throw new IOException(className + " " + INSTANTIATION_EXCEPTION
           + ": " + e,
           e);
+    }
+  }
+
+  /**
+   * Set a key if the value is non-empty.
+   * @param config config to patch
+   * @param key key to set
+   * @param val value to probe and set
+   * @param origin origin
+   * @return true if the property was set
+   */
+  public static boolean setIfDefined(Configuration config, String key,
+      String val, String origin) {
+    if (StringUtils.isNotEmpty(val)) {
+      config.set(key, val, origin);
+      return true;
+    } else {
+      return false;
     }
   }
 
@@ -1673,40 +1691,5 @@ public final class S3AUtils {
       return "ACCEPT_ALL";
     }
   };
-
-  /**
-   * Get the canonical service URI.
-   * @param uri the URI to canonicalize
-   * @return URI to consider the canonical one of the FS.
-   */
-  public static URI getCanonicalServiceURI(URI uri) {
-    String sessionKey = uri.getUserInfo();
-    if (sessionKey != null) {
-      sessionKey = sessionKey.split(":")[0];
-    }
-    if (StringUtils.isEmpty(sessionKey)) {
-      sessionKey = "";
-    }
-    return sessionKey.isEmpty()? uri
-        : URI.create(FS_S3A + "://" + sessionKey + "@" + uri.getHost());
-  }
-
-  /**
-   * Set a key if the value is non-empty.
-   * @param config config to patch
-   * @param key key to set
-   * @param val value to probe and set
-   * @param origin origin
-   * @return true if the property was set
-   */
-  public static boolean setIfDefined(Configuration config, String key,
-      String val, String origin) {
-    if (StringUtils.isNotEmpty(val)) {
-      config.set(key, val, origin);
-      return true;
-    } else {
-      return false;
-    }
-  }
 
 }

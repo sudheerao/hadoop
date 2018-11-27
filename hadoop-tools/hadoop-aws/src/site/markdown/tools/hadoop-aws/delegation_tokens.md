@@ -144,7 +144,6 @@ This role is restricted to only grant access the S3 bucket, the S3Guard table
 and all KMS keys,
 They are marshalled into the S3A Delegation Token.
 
-
 Other S3A connectors can extract these credentials and use them to
 talk to S3 and related services.
 They may only work with the explicit AWS resources identified when the token was generated.
@@ -208,6 +207,25 @@ application configured with the login credentials for an AWS account able to iss
 
 ### Warnings
 
+##### Use Hadoop Credential Providers to keep secrets out of job configurations.
+
+Hadoop MapReduce jobs copy their client-side configurations with the job.
+If your AWS login secrets are set in an XML file then they are picked up
+and passed in with the job, _even if delegation tokens are used to propagate
+session or role secrets.
+
+Spark-submit will take any credentials in the `spark-defaults.conf`file
+and again, spread them across the cluster.
+It wil also pick up any `AWS_` environment variables and convert them into
+`fs.s3a.access.key`, `fs.s3a.secret.key` and `fs.s3a.session.key` configuration
+options.
+
+To guarantee that the secrets are not passed in, keep your secrets in
+a [hadoop credential provider file on the local filesystem](index.html#hadoop_credential_providers").
+Secrets stored here will not be propagated -the delegation tokens collected
+during job submission will be the sole AWS secrets passed in.
+
+
 ##### Token Life
 
 * S3A Delegation tokens cannot be renewed.
@@ -227,7 +245,7 @@ the specific role being used.
 * The lifespan of Full Delegation tokens is unlimited: the secret needs
 to be reset in the AWS Admin console to revoke it.
 
-##### Service Load
+##### Service Load on the AWS Secure Token Service
 
 All delegation tokens are issued on a bucket-by-bucket basis: clients
 must request a delegation token from every S3A filesystem to which it desires
@@ -306,7 +324,7 @@ other than the central `sts.amazonaws.com` endpoint, then the region property
 *must* be set.
 
 
-Both the Session and the Role Delegation Token bindings both use the option
+Both the Session and the Role Delegation Token bindings use the option
 `fs.s3a.aws.credentials.provider` to define the credential providers
 to authenticate to the AWS STS with.
 
@@ -373,8 +391,7 @@ associated S3Guard table and any KMS encryption keys. The actual
 requested role will be this role, explicitly restricted to the specific
 bucket and S3Guard table.
 
-
-The XML settings needed to enable session tokens are
+The XML settings needed to enable session tokens are:
 
 ```xml
 <property>
@@ -491,8 +508,6 @@ for s3a://landsat-pds
 The "(valid)" annotation means that the AWS credentials are considered "valid":
 there is both a username and a secret. 
 
-
-
 You can use the `s3guard bucket-info` command to see what the delegation
 support for a specific bucket is.
 If delegation support is enabled, it also prints the current
@@ -527,6 +542,9 @@ the delegation state of a bucket.
 Consult [troubleshooting Assumed Roles](assumed_roles.html#troubleshooting)
 for details on AWS error messages related to AWS IAM roles.
 
+The [cloudstore](https://github.com/steveloughran/cloudstore) module's StoreDiag
+utility can also be used to explore delegation token support
+
 
 ### Submitted job cannot authenticate
 
@@ -552,6 +570,11 @@ tokens in secure clusters.
 See [Running on Yarn](https://spark.apache.org/docs/latest/running-on-yarn.html).
 
 
+### Error `No AWS login credentials`
+
+The client does not have any valid credentials to request a token
+from the Amazon STS service.
+
 ### Tokens Expire before job completes
 
 The default duration of session and role tokens as set in
@@ -562,39 +585,6 @@ For session tokens, this can be increased to any time up to 36 hours.
 For role tokens, it can be increased up to 12 hours, *but only if
 the role is configured in the AWS IAM Console to have a longer lifespan*.
 
-### Error `No AWS login credentials`
-
-The client does not have any valid credentials to request a token
-from the Amazon STS service.
-
-### Error `Cannot call GetSessionToken with session credentials`
-
-AWS will not issue session credentials to a client logged in with session credentials.
-Accordingly: delegation tokens cannot be issued by an S3A filesystem connection
-authenticated with session credentials.
-
-This includes not just clients configured with session details set in
-`fs.s3a.secret.key` and `fs.s3a.session.token` or the equivalent in the `AWS_` environment variables,
-*it includes VMs running in EC2 which pick up their credentials from the IAM service*.
-
-Those credentials are just session credentials (refreshed regularly), so cannot be
-used to issue delegation tokens.
-
-```
-java.nio.file.AccessDeniedException: : request session credentials:
-  com.amazonaws.services.securitytoken.model.AWSSecurityTokenServiceException:
-  Cannot call GetSessionToken with session credentials
-  (Service: AWSSecurityTokenService; Status Code: 403; Error Code:
-  AccessDenied; Request ID: 21369f91-55bc-11e7-9b6b-05ee810e5300)
-
-at org.apache.hadoop.fs.s3a.S3AUtils.translateException(S3AUtils.java:174)
-at org.apache.hadoop.fs.s3a.auth.MarshalledCredentials.requestSessionCredentials(SessionCredentials.java:182)
-at org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.createTokenIdentifier(S3ADelegationTokens.java:141)
-at org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.createDelegationToken(S3ADelegationTokens.java:103)
-at org.apache.hadoop.fs.s3a.S3AFileSystem.getDelegationToken(S3AFileSystem.java:1860)
-at org.apache.hadoop.fs.s3a.ITestS3ATemporaryCredentials.testSTSBinding(ITestS3ATemporaryCredentials.java:85)
-...
-```
 
 ### Error `DelegationTokenIOException: Token mismatch`
 
@@ -700,7 +690,7 @@ is needed to keep them out of logs.
   may perform to those needed to access data in the S3 bucket. This potentially
   includes a DynamoDB table, KMS access, etc.
 * Implementations need to be resistant to attacks which pass in invalid data as
-their token identifier: validate the types of the unmarshalled data, set limits
+their token identifier: validate the types of the unmarshalled data; set limits
 on the size of all strings and other arrays to read in, etc.
 
 ### <a name="resilience"></a> Resilience
@@ -834,7 +824,7 @@ This tests marshalling and unmarshalling of tokens identifiers.
 
 #### Integration Test `ITestSessionDelegationTokens`
 
-Tests the lifecycle of a 
+Tests the lifecycle of session tokens.
 
 #### Integration Test `ITestSessionDelegationInFileystem`.
 
@@ -859,11 +849,14 @@ have been collected in the job context,
 
 #### Load Test `ILoadTestSessionCredentials`
 
-This attempts to collect many, many delegation tokens simultaneously and sees what happens.
+This attempts to collect many, many delegation tokens simultaneously and sees 
+what happens.
 
-Worth doing if you have a new auth service; consider also something for going from DT to
-AWS credentials if this is also implemented by your own service. This is left as an exercise
-for the developer.
+Worth doing if you have a new authentication service provider, or
+implementing custom DT support.
+Consider also something for going from DT to
+AWS credentials if this is also implemented by your own service.
+This is left as an exercise for the developer.
 
 **Tip**: don't go overboard here, especially against AWS itself. 
 

@@ -495,18 +495,51 @@ This means that the default S3A authentication chain can be defined as
 <property>
   <name>fs.s3a.aws.credentials.provider</name>
   <value>
-  org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider,
-  org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider,
-  com.amazonaws.auth.EnvironmentVariableCredentialsProvider,
-  com.amazonaws.auth.InstanceProfileCredentialsProvider
+    org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider,
+    org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider,
+    com.amazonaws.auth.EnvironmentVariableCredentialsProvider,
+    org.apache.hadoop.fs.s3a.auth.IAMInstanceCredentialsProvider
   </value>
   <description>
-    List of credential providers to authenticate with AWS.
-    When delegation tokens are not enabled, this list will be used
+    Comma-separated class names of credential provider classes which implement
+    com.amazonaws.auth.AWSCredentialsProvider.
+
+    When S3A delegation tokens are not enabled, this list will be used
     to directly authenticate with S3 and DynamoDB services.
-    When S3A Delegation tokens are enabled, it may be used
+    When S3A Delegation tokens are enabled, depending upon the delegation
+    token binding it may be used
     to communicate wih the STS endpoint to request session/role
     credentials.
+    
+    These are loaded and queried in sequence for a valid set of credentials.
+    Each listed class must implement one of the following means of
+    construction, which are attempted in order:
+    * a public constructor accepting java.net.URI and
+        org.apache.hadoop.conf.Configuration,
+    * a public constructor accepting org.apache.hadoop.conf.Configuration,
+    * a public static method named getInstance that accepts no
+       arguments and returns an instance of
+       com.amazonaws.auth.AWSCredentialsProvider, or
+    * a public default constructor.
+
+    Specifying org.apache.hadoop.fs.s3a.AnonymousAWSCredentialsProvider allows
+    anonymous access to a publicly accessible S3 bucket without any credentials.
+    Please note that allowing anonymous access to an S3 bucket compromises
+    security and therefore is unsuitable for most use cases. It can be useful
+    for accessing public data sets without requiring AWS credentials.
+
+    If unspecified, then the default list of credential provider classes,
+    queried in sequence, is:
+    * org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider: looks
+       for session login secrets in the Hadoop configuration.
+    * org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider:
+       Uses the values of fs.s3a.access.key and fs.s3a.secret.key.
+    * com.amazonaws.auth.EnvironmentVariableCredentialsProvider: supports
+        configuration of AWS access key ID and secret access key in
+        environment variables named AWS_ACCESS_KEY_ID and
+        AWS_SECRET_ACCESS_KEY, as documented in the AWS SDK.
+    * com.amazonaws.auth.InstanceProfileCredentialsProvider: supports use
+        of instance profile credentials if running in an EC2 VM.
   </description>
 </property>
 ```
@@ -521,9 +554,6 @@ and significantly damage your organisation.
 
 1. Never commit your secrets into an SCM repository.
 The [git secrets](https://github.com/awslabs/git-secrets) can help here.
-
-1. Avoid using s3a URLs which have key and secret in the URL. This
-is dangerous as the secrets leak into the logs.
 
 1. Never include AWS credentials in bug reports, files attached to them,
 or similar.

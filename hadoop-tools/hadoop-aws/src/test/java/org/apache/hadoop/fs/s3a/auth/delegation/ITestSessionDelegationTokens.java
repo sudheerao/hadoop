@@ -20,6 +20,7 @@ package org.apache.hadoop.fs.s3a.auth.delegation;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSSessionCredentials;
@@ -94,6 +95,21 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
     super.teardown();
   }
 
+  /**
+   * Checks here to catch any regressions in canonicalization
+   * logic.
+   */
+  @Test
+  public void testCanonicalization() throws Throwable {
+    S3AFileSystem fs = getFileSystem();
+    assertEquals("Default port has changed",
+        0, fs.getDefaultPort());
+    URI uri = fs.getCanonicalUri();
+    String service = fs.getCanonicalServiceName();
+    assertEquals("canonical URI and service name mismatch",
+        uri, new URI(service));
+  }
+  
   @Test
   public void testSaveLoadTokens() throws Throwable {
     File tokenFile = File.createTempFile("token", "bin");

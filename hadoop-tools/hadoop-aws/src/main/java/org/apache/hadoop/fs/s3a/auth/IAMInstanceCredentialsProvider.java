@@ -49,7 +49,6 @@ public class IAMInstanceCredentialsProvider
 
   /**
    * Ask for the credentials.
-   * TODO: convert connectivity problems down to no credentials exceptions
    * as it invariably means "you aren't running on EC2"
    * @return the credentials
    */

@@ -110,8 +110,10 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
    */
   private final AtomicBoolean forwardMessageLogged = new AtomicBoolean(false);
 
+  /** STS endpoint. */
   private String endpoint;
 
+  /** STS region. */
   private String region;
 
   /** Constructor for reflection. */

@@ -181,14 +181,18 @@ public class EncryptionSecrets implements Writable, Serializable {
   }
 
   /**
-   * Does this instance have encryption options. That is: is the
-   * algorithm non-null.
-   * @return encryption settings.
+   * Does this instance have encryption options?
+   * That is: is the algorithm non-null.
+   * @return true if there's an encryption algorithm.
    */
   public boolean hasEncryptionAlgorithm() {
     return StringUtils.isNotEmpty(encryptionAlgorithm);
   }
 
+  /**
+   * Does this instance have an encryption key?
+   * @return true if there's an encryption key.
+   */
   public boolean hasEncryptionKey() {
     return StringUtils.isNotEmpty(encryptionKey);
   }

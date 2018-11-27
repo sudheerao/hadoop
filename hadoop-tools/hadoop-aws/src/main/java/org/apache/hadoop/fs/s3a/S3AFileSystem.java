@@ -210,6 +210,12 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   private MetadataStore metadataStore;
   private boolean allowAuthoritative;
 
+  /** Delegation token integration; non-empty when DT support is enabled. */
+  private Optional<S3ADelegationTokens> delegationTokens = Optional.empty();
+
+  /** Principal who created the FS; recorded during initialization. */
+  private UserGroupInformation owner;
+  
   // The maximum number of entries that can be deleted in any call to s3
   private static final int MAX_ENTRIES_TO_DELETE = 1000;
   private String blockOutputBuffer;
@@ -218,12 +224,6 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   private WriteOperationHelper writeHelper;
   private boolean useListV1;
   private MagicCommitIntegration committerIntegration;
-
-  /** Delegation token integration; non-empty when DT support is enabled. */
-  private Optional<S3ADelegationTokens> delegationTokens = Optional.empty();
-
-  /** Principal who created the FS; recorded during initialization. */
-  private UserGroupInformation owner;
 
   private AWSCredentialProviderList credentials;
 
@@ -282,8 +282,6 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
           getServerSideEncryptionKey(bucket, getConf())));
 
       invoker = new Invoker(new S3ARetryPolicy(getConf()), onRetry);
-
-
       instrumentation = new S3AInstrumentation(uri);
 
       // Username is the current user at the time the FS was instantiated.
@@ -338,7 +336,6 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       }
       useListV1 = (listVersion == 1);
 
-
       // creates the AWS client, including overriding auth chain if
       // the FS came with a DT
       // this may do some patching of the configuration (e.g. setting
@@ -350,7 +347,6 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       initCannedAcls(conf);
 
       verifyBucketExists();
-
 
       inputPolicy = S3AInputPolicy.getPolicy(
           conf.getTrimmed(INPUT_FADVISE, INPUT_FADV_NORMAL));
@@ -592,13 +588,13 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * @return the canonical URI of this FS.
    */
   public URI getCanonicalUri() {
-    return S3AUtils.getCanonicalServiceURI(uri);
+    return uri;
   }
 
+  @VisibleForTesting
   @Override
   public int getDefaultPort() {
     return 0;
-//    return Constants.S3A_DEFAULT_PORT;
   }
 
   /**
