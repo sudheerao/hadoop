@@ -287,7 +287,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
           // stack on first attempt, to keep noise down
           LOG.debug("{}: " + exception, text, exception);
         }
-  };
+      };
   
   /**
    * Get the client to AWS STS.
