@@ -1293,4 +1293,5 @@ public class HarFileSystem extends FileSystem {
   public FSDataOutputStreamBuilder appendFile(Path path) {
     return fs.appendFile(path);
   }
+
 }

@@ -1636,6 +1636,67 @@
 </property>
 
 <property>
+  <name>fs.s3a.select.enabled</name>
+  <value>true</value>
+  <description>Is S3 Select enabled?</description>
+</property>
+
+<property>
+  <name>fs.s3a.select.input.csv.comment.marker</name>
+  <value>#</value>
+  <description>In S3 Select queries: the marker for comment lines in CSV files</description>
+</property>
+
+<property>
+  <name>fs.s3a.select.input.csv.record.delimiter</name>
+  <value>\n</value>
+  <description>In S3 Select queries over CSV files: the record delimiter.
+    \t is remapped to the TAB character, \r to CR \n to newline. \\ to \
+    and \" to "
+  </description>
+</property>
+
+<property>
+  <name>fs.s3a.select.input.csv.field.delimiter</name>
+  <value>,</value>
+  <description>In S3 Select queries over CSV files: the field delimiter.
+    \t is remapped to the TAB character, \r to CR \n to newline. \\ to \
+    and \" to "
+  </description>
+</property>
+
+<property>
+  <name>fs.s3a.select.input.csv.quote.character</name>
+  <value>"</value>
+  <description>In S3 Select queries over CSV files: quote character.
+    \t is remapped to the TAB character, \r to CR \n to newline. \\ to \
+    and \" to "
+  </description>
+</property>
+
+<property>
+  <name>fs.s3a.select.input.csv.quote.escape.character</name>
+  <value></value>
+  <description>In S3 Select queries over CSV files: quote escape character.
+    \t is remapped to the TAB character, \r to CR \n to newline. \\ to \
+    and \" to "
+  </description>
+</property>
+
+<property>
+  <name>fs.s3a.select.input.csv.header</name>
+  <value>none</value>
+  <description>In S3 Select queries over CSV files: what is the role of the header? One of "none", "ignore" and "use"</description>
+</property>
+
+<property>
+  <name>fs.s3a.select.input.compression</name>
+  <value></value>
+  <description>In S3 Select queries, the source compression
+    algorithm. One of: "none" and "gzip"</description>
+</property>
+
+<property>
   <name>fs.AbstractFileSystem.s3a.impl</name>
   <value>org.apache.hadoop.fs.s3a.S3A</value>
   <description>The implementation class of the S3A AbstractFileSystem.</description>

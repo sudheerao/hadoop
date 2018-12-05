@@ -37,7 +37,6 @@ import org.apache.hadoop.fs.s3a.S3AUtils;
 import org.apache.hadoop.util.StopWatch;
 import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.FileSystem;
-import org.junit.Assume;
 import org.junit.Test;
 
 import org.apache.hadoop.conf.Configuration;
@@ -361,20 +360,6 @@ public abstract class AbstractS3GuardToolTestBase extends AbstractS3ATestBase {
         throw e;
       }
     }
-  }
-
-  /**
-   * Get the test CSV file; assume() that it is not modified (i.e. we haven't
-   * switched to a new storage infrastructure where the bucket is no longer
-   * read only).
-   * @return test file.
-   */
-  protected String getLandsatCSVFile() {
-    String csvFile = getConfiguration()
-        .getTrimmed(KEY_CSVTEST_FILE, DEFAULT_CSVTEST_FILE);
-    Assume.assumeTrue("CSV test file is not the default",
-        DEFAULT_CSVTEST_FILE.equals(csvFile));
-    return csvFile;
   }
 
   /**

@@ -18,6 +18,8 @@
 
 package org.apache.hadoop.fs.s3a;
 
+import javax.annotation.Nullable;
+
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
@@ -112,12 +114,11 @@ public class S3AInputStream extends FSInputStream implements CanSetReadahead {
    * @param s3Attributes object attributes from a HEAD request
    * @param contentLength length of content
    * @param client S3 client to use
-   * @param readahead readahead bytes
-   * @param inputPolicy IO policy
    */
-  public S3AInputStream(S3AReadOpContext ctx, S3ObjectAttributes s3Attributes,
-      long contentLength, AmazonS3 client, long readahead,
-      S3AInputPolicy inputPolicy) {
+  public S3AInputStream(S3AReadOpContext ctx,
+      S3ObjectAttributes s3Attributes,
+      long contentLength,
+      AmazonS3 client) {
     Preconditions.checkArgument(isNotEmpty(s3Attributes.getBucket()),
         "No Bucket");
     Preconditions.checkArgument(isNotEmpty(s3Attributes.getKey()), "No Key");
@@ -133,8 +134,8 @@ public class S3AInputStream extends FSInputStream implements CanSetReadahead {
     this.serverSideEncryptionAlgorithm =
         s3Attributes.getServerSideEncryptionAlgorithm();
     this.serverSideEncryptionKey = s3Attributes.getServerSideEncryptionKey();
-    setInputPolicy(inputPolicy);
-    setReadahead(readahead);
+    setInputPolicy(ctx.getInputPolicy());
+    setReadahead(ctx.getReadahead());
   }
 
   /**
@@ -722,12 +723,7 @@ public class S3AInputStream extends FSInputStream implements CanSetReadahead {
 
   @Override
   public synchronized void setReadahead(Long readahead) {
-    if (readahead == null) {
-      this.readahead = Constants.DEFAULT_READAHEAD_RANGE;
-    } else {
-      Preconditions.checkArgument(readahead >= 0, "Negative readahead value");
-      this.readahead = readahead;
-    }
+    this.readahead = validateReadahead(readahead);
   }
 
   /**
@@ -780,4 +776,19 @@ public class S3AInputStream extends FSInputStream implements CanSetReadahead {
     return rangeLimit;
   }
 
+  /**
+   * from a possibly null Long value, return a valid
+   * readahead.
+   * @param readahead new readahead
+   * @return a natural number.
+   * @throws IllegalArgumentException if the range is invalid.
+   */
+  public static long validateReadahead(@Nullable Long readahead) {
+    if (readahead == null) {
+      return Constants.DEFAULT_READAHEAD_RANGE;
+    } else {
+      Preconditions.checkArgument(readahead >= 0, "Negative readahead value");
+      return readahead;
+    }
+  }
 }

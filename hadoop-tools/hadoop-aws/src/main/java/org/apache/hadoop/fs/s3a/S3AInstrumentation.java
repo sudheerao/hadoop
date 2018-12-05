@@ -550,7 +550,7 @@ public class S3AInstrumentation implements Closeable, MetricsSource {
    * Create a stream input statistics instance.
    * @return the new instance
    */
-  InputStreamStatistics newInputStreamStatistics() {
+  public InputStreamStatistics newInputStreamStatistics() {
     return new InputStreamStatistics();
   }
 

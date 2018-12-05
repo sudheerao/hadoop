@@ -28,6 +28,7 @@ import java.nio.file.AccessDeniedException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -39,6 +40,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -50,6 +52,7 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
+import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.CopyObjectRequest;
 import com.amazonaws.services.s3.model.DeleteObjectsRequest;
@@ -67,6 +70,8 @@ import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
 import com.amazonaws.services.s3.model.SSECustomerKey;
+import com.amazonaws.services.s3.model.SelectObjectContentRequest;
+import com.amazonaws.services.s3.model.SelectObjectContentResult;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import com.amazonaws.services.s3.model.UploadPartResult;
 import com.amazonaws.services.s3.transfer.Copy;
@@ -87,6 +92,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CreateFlag;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.util.LambdaUtils;
 import org.apache.hadoop.fs.FileAlreadyExistsException;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -108,8 +114,12 @@ import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecrets;
 import org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens;
 import org.apache.hadoop.fs.s3a.auth.delegation.AbstractS3ATokenIdentifier;
 import org.apache.hadoop.fs.s3a.commit.CommitConstants;
+import org.apache.hadoop.fs.s3a.commit.DurationInfo;
 import org.apache.hadoop.fs.s3a.commit.PutTracker;
 import org.apache.hadoop.fs.s3a.commit.MagicCommitIntegration;
+import org.apache.hadoop.fs.s3a.select.SelectBinding;
+import org.apache.hadoop.fs.s3a.select.SelectConstants;
+import org.apache.hadoop.fs.s3a.select.SelectInputStream;
 import org.apache.hadoop.fs.s3a.s3guard.DirListingMetadata;
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStoreListFilesIterator;
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStore;
@@ -125,6 +135,7 @@ import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.SemaphoredDelegatingExecutor;
 
+import static org.apache.hadoop.fs.impl.AbstractFSBuilderImpl.rejectUnknownMandatoryKeys;
 import static org.apache.hadoop.fs.s3a.Constants.*;
 import static org.apache.hadoop.fs.s3a.Invoker.*;
 import static org.apache.hadoop.fs.s3a.S3AUtils.*;
@@ -166,6 +177,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * retryable results in files being deleted.
   */
   public static final boolean DELETE_CONSIDERED_IDEMPOTENT = true;
+
   private URI uri;
   private Path workingDir;
   private String username;
@@ -226,6 +238,10 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   private MagicCommitIntegration committerIntegration;
 
   private AWSCredentialProviderList credentials;
+
+  private S3Guard.ITtlTimeProvider ttlTimeProvider;
+
+  private SelectBinding selectBinding;
 
   /** Add any deprecated keys. */
   @SuppressWarnings("deprecation")
@@ -380,6 +396,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
             getMetadataStore(), allowAuthoritative);
       }
       initMultipartUploads(conf);
+      selectBinding = new SelectBinding(this);
     } catch (AmazonClientException e) {
       throw translateException("initializing ", new Path(name), e);
     }
@@ -821,8 +838,20 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    */
   public FSDataInputStream open(Path f, int bufferSize)
       throws IOException {
+    return open(f, inputPolicy);
+  }
+
+  /**
+   * Opens an FSDataInputStream at the indicated Path.
+   * @param f the file name to open
+   * @param fadvise input policy for a read
+   */
+  private FSDataInputStream open(Path f,
+      final S3AInputPolicy fadvise)
+      throws IOException {
+    // special select() call.
     entryPoint(INVOCATION_OPEN);
-    LOG.debug("Opening '{}' for reading; input policy = {}", f, inputPolicy);
+    LOG.debug("Opening '{}' for reading; input policy = {}", f, fadvise);
     final FileStatus fileStatus = getFileStatus(f);
     if (fileStatus.isDirectory()) {
       throw new FileNotFoundException("Can't open " + f
@@ -830,20 +859,39 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     }
 
     return new FSDataInputStream(
-        new S3AInputStream(new S3AReadOpContext(hasMetadataStore(),
-            invoker,
-            s3guardInvoker,
-            statistics,
-            instrumentation,
-            fileStatus),
-            new S3ObjectAttributes(bucket,
-                pathToKey(f),
-                getServerSideEncryptionAlgorithm(),
-                encryptionSecrets.getEncryptionKey()),
+        new S3AInputStream(
+            createReadContext(fileStatus, fadvise),
+            createObjectAttributes(f),
             fileStatus.getLen(),
-            s3,
-            readAhead,
-            inputPolicy));
+            s3
+        ));
+  }
+
+  /**
+   * Create the read context for reading from the referenced file,
+   * using FS state as well as the status.
+   * @param fileStatus file status.
+   * @param seekPolicy input policy for this operation
+   * @return a context for read and select operations.
+   */
+  private S3AReadOpContext createReadContext(final FileStatus fileStatus,
+      S3AInputPolicy seekPolicy) {
+    return new S3AReadOpContext(fileStatus.getPath(),
+        hasMetadataStore(),
+        invoker,
+        s3guardInvoker,
+        statistics,
+        instrumentation,
+        fileStatus,
+        seekPolicy,
+        readAhead);
+  }
+
+  private S3ObjectAttributes createObjectAttributes(final Path f) {
+    return new S3ObjectAttributes(bucket,
+        pathToKey(f),
+        getServerSideEncryptionAlgorithm(),
+        encryptionSecrets.getEncryptionKey());
   }
 
   /**
@@ -3514,6 +3562,10 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       // capability depends on FS configuration
       return isMagicCommitEnabled();
 
+    case SelectConstants.S3_SELECT_CAPABILITY:
+      // select is only supported if enabled
+      return selectBinding.isEnabled();
+
     default:
       return false;
     }
@@ -3531,4 +3583,156 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     LOG.debug("Sharing credentials for: {}", purpose);
     return credentials.share();
   }
+
+  /**
+   * This is a proof of concept of a select API.
+   * Once a proper factory mechanism for opening files is added to the
+   * FileSystem APIs, this will be deleted <i>without any warning</i>.
+   * @param source path to source data
+   * @param expression select expression
+   * @param conf request configuration from the builder.
+   * @return the stream of the results
+   * @throws IOException IO failure
+   */
+  @InterfaceStability.Unstable
+  @InterfaceAudience.LimitedPrivate("S3 Select testing")
+  @Retries.RetryTranslated
+  public FSDataInputStream select(final Path source,
+      final String expression,
+      final Configuration conf)
+      throws IOException {
+    entryPoint(OBJECT_SELECT_REQUESTS);
+    requireSelectSupport(source);
+    final Path path = makeQualified(source);
+    // call getFileStatus(), which will look at S3Guard first,
+    // so the operation will fail if S3Guard believes it has been deleted.
+    final FileStatus fileStatus = getFileStatus(source);
+    if (fileStatus.isDirectory()) {
+      throw new FileNotFoundException("Can't open " + path
+          + " because it is a directory");
+    }
+    return new FSDataInputStream(
+        new SelectInputStream(
+            createReadContext(fileStatus, inputPolicy),
+            createObjectAttributes(path),
+            select(
+                path,
+                selectBinding.buildSelectRequest(
+                    path,
+                    expression,
+                    conf))));
+  }
+
+  /**
+   * Create a S3 Select request for the destination path.
+   * This does not build the query.
+   * @param path pre-qualified path for query
+   * @return the request
+   */
+  public SelectObjectContentRequest newSelectRequest(Path path) {
+    SelectObjectContentRequest request = new SelectObjectContentRequest();
+    request.setBucketName(getBucket());
+    request.setKey(pathToKey(path));
+    return request;
+  }
+
+  /**
+   * Issue an S3 Select call.
+   * @param source source for selection
+   * @param request Select request to issue.
+   * @return response
+   * @throws IOException failure
+   */
+  @Retries.RetryTranslated
+  private SelectObjectContentResult select(
+      final Path source,
+      final SelectObjectContentRequest request)
+      throws IOException {
+    Preconditions.checkArgument(bucket.equals(request.getBucketName()),
+        "wrong bucket: %s", request.getBucketName());
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Initiating select call {} {}",
+          source, request.getExpression());
+      LOG.debug(SelectBinding.toString(request));
+    }
+    return invoker.retry(
+        "Select",
+        source.toString(),
+        true,
+        () -> {
+          try(DurationInfo ignored =
+                  new DurationInfo(LOG, "S3 Select operation")) {
+            try {
+              return getAmazonS3Client().selectObjectContent(request);
+            } catch (AmazonS3Exception e) {
+              LOG.error("Failure of S3 Select request {}",
+                  SelectBinding.toString(request));
+              throw e;
+            }
+          }
+        });
+  }
+
+  /**
+   * Verify the FS supports S3 Select.
+   * @throws IllegalArgumentException if not.
+   * @param source source file.
+   */
+  private void requireSelectSupport(final Path source) throws PathIOException {
+    if (!selectBinding.isEnabled()) {
+      throw new PathIOException(source.toString(),
+          SelectConstants.SELECT_UNSUPPORTED);
+    }
+  }
+
+  /**
+   * The known keys used in a standard openFile call.
+   * if there's a select marker in there then the keyset
+   * used becomes that of the select operation.
+   */
+  private static final Set<String> STANDARD_KEYS =
+      s3aset(Arrays.asList(INPUT_FADVISE));
+
+  /**
+   * Initiate the open or select operation.
+   * This is invoked from both the FileSystem and FileContext APIs
+   * @param path path to the file
+   * @param mandatoryKeys set of options declared as mandatory.
+   * @param options options set during the build sequence.
+   * @return a future which will evaluate to the opened/selected file.
+   * @throws IOException failure to resolve the link.
+   * @throws IllegalArgumentException unknown mandatory key
+   */
+  @Override
+  public CompletableFuture<FSDataInputStream> openFileWithOptions(
+      final Path path,
+      final Set<String> mandatoryKeys,
+      final Configuration options,
+      final int bufferSize) throws IOException {
+    String sql = options.get(SelectConstants.S3A_SELECT_SQL, null);
+    boolean isSelect = sql != null;
+    // choice of keys depends on open type
+    Collection<String> keys = isSelect
+        ? SelectConstants.SELECT_OPTIONS
+        : STANDARD_KEYS;
+    rejectUnknownMandatoryKeys(mandatoryKeys, keys);
+    CompletableFuture<FSDataInputStream> result = new CompletableFuture<>();
+    if (!isSelect) {
+      // normal path. Open the file with the chosen seek policy
+      S3AInputPolicy policy = S3AInputPolicy.getPolicy(
+          options.get(s3a(INPUT_FADVISE),
+              inputPolicy.toString()));
+      unboundedThreadPool.submit(() ->
+          LambdaUtils.eval(result, () -> open(path, policy)));
+    } else {
+      // it is a select statement.
+      // fail fast if the method is not present
+      requireSelectSupport(path);
+      // submit the query
+      unboundedThreadPool.submit(() ->
+          LambdaUtils.eval(result, () -> select(path, sql, options)));
+    }
+    return result;
+  }
+
 }

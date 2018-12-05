@@ -82,6 +82,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static org.apache.hadoop.fs.s3a.Constants.*;
 
@@ -248,6 +249,12 @@ public final class S3AUtils {
       case 410:
         ioe = new FileNotFoundException(message);
         ioe.initCause(ase);
+        break;
+
+      // method not allowed; seen on S3 Select.
+      // treated as a bad request
+      case 405:
+        ioe = new AWSBadRequestException(message, s3Exception);
         break;
 
       // out of range. This may happen if an object is overwritten with
@@ -1660,6 +1667,35 @@ public final class S3AUtils {
     return conf.get(FS_S3A_BUCKET_PREFIX + bucket + '.' + baseKey);
   }
 
+  /**
+   * Add a "s3a:" prefix to any option so that it can be used
+   * in FileSystem builders.
+   * @param option a base filesystem settings.
+   * @return the same setting with a prefix.
+   */
+  public static String s3a(String option) {
+    return prefix("s3a:", option);
+  }
+
+  /**
+   * Add a prefix to a string if it is not already present.
+   * @param prefix prefix to add.
+   * @param option option to prefix
+   * @return the option with the prefix at the front.
+   */
+  private static String prefix(final String prefix, final String option) {
+    return option.startsWith(prefix)? option : (prefix + option);
+  }
+
+  /**
+   * Take a collection and return a set of the options, all with a
+   * prefix of "s3a:".
+   * @param src source collection
+   * @return a mutable set with the s3a prefix applied to all
+   */
+  public static Set<String> s3aset(Collection<String> src) {
+    return src.stream().map(S3AUtils::s3a).collect(Collectors.toSet());
+  }
 
   /**
    * Path filter which ignores any file which starts with . or _.

@@ -39,6 +39,8 @@ import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.hadoop.fs.Options.ChecksumOpt;
 import static org.apache.hadoop.fs.Options.CreateOpts;
@@ -225,6 +227,24 @@ public class TestHarFileSystem {
 
     public Collection<FileStatus> getTrashRoots(boolean allUsers) throws IOException;
     StorageStatistics getStorageStatistics();
+
+    FileSystem.FSDataInputStreamBuilder openFile(Path path)
+        throws IOException, UnsupportedOperationException;
+
+    FileSystem.FSDataInputStreamBuilder openFile(PathHandle pathHandle)
+        throws IOException, UnsupportedOperationException;
+
+    CompletableFuture<FSDataInputStream> openFileWithOptions(
+        PathHandle pathHandle,
+        Set<String> mandatoryKeys,
+        Configuration options,
+        int bufferSize) throws IOException;
+
+    CompletableFuture<FSDataInputStream> openFileWithOptions(
+        Path path,
+        Set<String> mandatoryKeys,
+        Configuration options,
+        int bufferSize) throws IOException;
   }
 
   @Test
