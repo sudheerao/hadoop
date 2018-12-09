@@ -111,6 +111,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     conf2.set(SESSION_TOKEN, sessionCreds.getSessionToken());
 
     conf2.set(AWS_CREDENTIALS_PROVIDER, PROVIDER_CLASS);
+    // HADOOP-15409: change this and the error code changes
+    // conf2.set(BUCKET_EXISTS_VERSION, "1");
 
     // with valid credentials, we can set properties.
     try(S3AFileSystem fs = S3ATestUtils.createTestFileSystem(conf2)) {

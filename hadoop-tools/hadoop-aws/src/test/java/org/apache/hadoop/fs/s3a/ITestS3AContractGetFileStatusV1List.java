@@ -30,7 +30,7 @@ import static org.apache.hadoop.fs.s3a.S3ATestUtils.maybeEnableS3Guard;
 
 /**
  * S3A contract tests for getFileStatus, using the v1 List Objects API.
- * For completeness, also switch down to the V1 list.
+ * For completeness, also switch down to the V1 bucket exists check.
  */
 public class ITestS3AContractGetFileStatusV1List
     extends AbstractContractGetFileStatusTest {
