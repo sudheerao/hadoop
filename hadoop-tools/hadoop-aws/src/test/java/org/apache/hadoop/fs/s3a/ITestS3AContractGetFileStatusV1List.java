@@ -23,12 +23,14 @@ import org.apache.hadoop.fs.contract.AbstractContractGetFileStatusTest;
 import org.apache.hadoop.fs.contract.AbstractFSContract;
 import org.apache.hadoop.fs.contract.s3a.S3AContract;
 
+import static org.apache.hadoop.fs.s3a.Constants.BUCKET_EXISTS_VERSION;
 import static org.apache.hadoop.fs.s3a.Constants.LIST_VERSION;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.disableFilesystemCaching;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.maybeEnableS3Guard;
 
 /**
  * S3A contract tests for getFileStatus, using the v1 List Objects API.
+ * For completeness, also switch down to the V1 list.
  */
 public class ITestS3AContractGetFileStatusV1List
     extends AbstractContractGetFileStatusTest {
@@ -54,6 +56,7 @@ public class ITestS3AContractGetFileStatusV1List
 
     // Use v1 List Objects API
     conf.setInt(LIST_VERSION, 1);
+    conf.setInt(BUCKET_EXISTS_VERSION, 1);
     return conf;
   }
 }

@@ -557,6 +557,23 @@ public final class Constants {
   @InterfaceStability.Unstable
   public static final int DEFAULT_LIST_VERSION = 2;
 
+  /**
+   * Flag to enable use of V1 vs V2 bucket exists checks.
+   * Value: {@value}.
+   * v1: {@code doesBucketExist()}.
+   * v2: {@code doesBucketExistV2()}.
+   */
+  @InterfaceStability.Unstable
+  public static final String BUCKET_EXISTS_VERSION = 
+      "fs.s3a.bucket.exists.version";
+
+  /**
+   * Default Bucket Existence check version.
+   * Value: {@value}.
+   */
+  @InterfaceStability.Unstable
+  public static final int DEFAULT_BUCKET_EXISTS_VERSION = 2;
+  
   @InterfaceStability.Unstable
   public static final String FAIL_INJECT_THROTTLE_PROBABILITY =
       "fs.s3a.failinject.throttle.probability";

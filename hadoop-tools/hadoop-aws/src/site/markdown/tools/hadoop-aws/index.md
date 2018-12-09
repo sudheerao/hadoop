@@ -925,8 +925,25 @@ options are covered in [Testing](./testing.md).
 <property>
   <name>fs.s3a.list.version</name>
   <value>2</value>
-  <description>Select which version of the S3 SDK's List Objects API to use.
-  Currently support 2 (default) and 1 (older API).</description>
+  <description>
+    Select which version of the S3 SDK's List Objects API to use.  Currently
+    supports 2 (default) and 1 (older API).
+    Third-party object stores may only support the V1 option;
+    set this to "1" to enable this.
+  </description>
+</property>
+<property>
+  <name>fs.s3a.bucket.exists.version</name>
+  <value>2</value>
+  <description>
+    Select the probe to use to check for a bucket existing.
+    supports 2 (default) and 1 (older API).
+    The V2 check verifies that the caller actually has read
+    access; the V1 check only verifies that a bucket of 
+    that name may exist.
+    Third-party object stores may only support the V1 option;
+    set this to "1" to enable this.
+  </description>
 </property>
 ```
 

@@ -368,17 +368,39 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities {
   }
 
   /**
-   * Verify that the bucket exists. This does not check permissions,
-   * not even read access.
+   * Verify that the bucket exists. 
+   * V1 checks do not check permissions, not even read access.
+   * V2 checks do.
    * Retry policy: retrying, translated.
    * @throws FileNotFoundException the bucket is absent
    * @throws IOException any other problem talking to S3
    */
+  @SuppressWarnings("deprecation")
   @Retries.RetryTranslated
   protected void verifyBucketExists()
       throws FileNotFoundException, IOException {
-    if (!invoker.retry("doesBucketExistV2", bucket, true,
-        () -> s3.doesBucketExistV2(bucket))) {
+    int version = getConf().getInt(BUCKET_EXISTS_VERSION,
+        DEFAULT_BUCKET_EXISTS_VERSION);
+    boolean useV1;
+    switch (version) {
+    case 1:
+      useV1 = true;
+      break;
+    case 2:
+      // move to v2
+      useV1 = false;
+      break;
+    default:
+      // currently unknown; move to v2
+      LOG.warn("Unknown {} version: {}",
+          BUCKET_EXISTS_VERSION, version);
+      useV1 = false;
+      break;
+    }
+    if (!invoker.retry("doesBucketExist", bucket, true,
+        () -> useV1
+            ? s3.doesBucketExist(bucket)
+            : s3.doesBucketExistV2(bucket))) {
       throw new FileNotFoundException("Bucket " + bucket + " does not exist");
     }
   }
