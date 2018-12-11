@@ -22,40 +22,23 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.Serializable;
-import java.net.URI;
 import java.util.Date;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSSessionCredentials;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.auth.BasicSessionCredentials;
-import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
-import com.amazonaws.services.securitytoken.model.Credentials;
 import com.google.common.annotations.VisibleForTesting;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.s3a.CredentialInitializationException;
-import org.apache.hadoop.fs.s3a.Invoker;
-import org.apache.hadoop.fs.s3a.Retries;
-import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.fs.s3a.S3AUtils;
 import org.apache.hadoop.fs.s3a.auth.delegation.DelegationTokenIOException;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.security.ProviderUtils;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 import static org.apache.hadoop.fs.s3a.Constants.ACCESS_KEY;
 import static org.apache.hadoop.fs.s3a.Constants.SECRET_KEY;
 import static org.apache.hadoop.fs.s3a.Constants.SESSION_TOKEN;
-import static org.apache.hadoop.fs.s3a.S3AUtils.lookupPassword;
 
 /**
  * Stores the credentials for a session or for a full login.
@@ -64,10 +47,13 @@ import static org.apache.hadoop.fs.s3a.S3AUtils.lookupPassword;
  * 
  * The class is designed so that keys inside are kept non-null; to be
  * unset just set them to the empty string. This is to simplify marshalling.
+ * 
+ * <i>Important: Add no references to any AWS SDK class, to 
+ * ensure it can be safely deserialized whenever the relevant token
+ * identifier of a token type declared in this JAR is examined.</i>
  */
 @InterfaceAudience.Private
-public final class MarshalledCredentials implements Writable,
-    AWSCredentialsProvider, Serializable {
+public final class MarshalledCredentials implements Writable, Serializable {
 
   /**
    * Error text on invalid non-empty credentials: {@value}.
@@ -77,23 +63,11 @@ public final class MarshalledCredentials implements Writable,
       = "Invalid AWS credentials";
 
   /**
-   * Error text on empty credentials: {@value}.
-   */
-  @VisibleForTesting
-  public static final String NO_AWS_CREDENTIALS
-      = "No AWS credentials";
-
-  /**
    * How long can any of the secrets be: {@value}.
    * This is much longer than the current tokens, but leaves space for
    * future enhancements.
    */
   private static final int MAX_SECRET_LENGTH = 8192;
-
-  /**
-   * Component name used in exception messages.
-   */
-  public static final String COMPONENT = "Marshalled Credentials";
 
   private static final long serialVersionUID = 8444610385533920692L;
 
@@ -132,20 +106,6 @@ public final class MarshalledCredentials implements Writable,
   }
 
   /**
-   * Instantiate from a set of credentials issued by an STS call.
-   * @param credentials AWS-provided session credentials
-   */
-  public MarshalledCredentials(final Credentials credentials) {
-    this();
-    accessKey = credentials.getAccessKeyId();
-    secretKey = credentials.getSecretAccessKey();
-    String st = credentials.getSessionToken();
-    this.sessionToken = st != null ? st : "";
-    Date date = credentials.getExpiration();
-    this.expiration = date != null ? date.getTime() : 0;
-  }
-
-  /**
    * Create from a set of properties.
    * No expiry time is expected/known here.
    * @param accessKey access key
@@ -159,18 +119,7 @@ public final class MarshalledCredentials implements Writable,
     this();
     this.accessKey = requireNonNull(accessKey);
     this.secretKey = requireNonNull(secretKey);
-    this.sessionToken = requireNonNull(sessionToken);
-  }
-
-  /**
-   * Create from a set of AWS session credentials.
-   * @param awsCredentials the AWS Session info.
-   */
-  public MarshalledCredentials(final AWSSessionCredentials awsCredentials) {
-    this();
-    this.accessKey = awsCredentials.getAWSAccessKeyId();
-    this.secretKey = awsCredentials.getAWSSecretKey();
-    this.sessionToken = awsCredentials.getSessionToken();
+    this.sessionToken = sessionToken == null ? "" : sessionToken;
   }
 
   public String getAccessKey() {
@@ -237,60 +186,6 @@ public final class MarshalledCredentials implements Writable,
   public int hashCode() {
     return Objects.hash(accessKey, secretKey, sessionToken, roleARN,
         expiration);
-  }
-
-  /**
-   * Loads the credentials from the owning FS.
-   * There is no validation.
-   * @param conf configuration to load from
-   * @return the component
-   * @throws IOException on any load failure
-   */
-  public static MarshalledCredentials load(
-      final URI uri,
-      final Configuration conf) throws IOException {
-    // determine the bucket
-    String bucket = uri != null ? uri.getHost() : "";
-    Configuration leanConf =
-        ProviderUtils.excludeIncompatibleCredentialProviders(
-            conf, S3AFileSystem.class);
-    String accessKey = lookupPassword(bucket, leanConf, ACCESS_KEY);
-    String secretKey = lookupPassword(bucket, leanConf, SECRET_KEY);
-    String sessionToken = lookupPassword(bucket, leanConf, SESSION_TOKEN);
-    MarshalledCredentials credentials = new MarshalledCredentials(
-        accessKey, secretKey, sessionToken);
-    return credentials;
-  }
-
-  /**
-   * Request a set of credentials from an STS endpoint.
-   * @param parentCredentials the parent credentials needed to talk to STS
-   * @param stsEndpoint an endpoint, use "" for none
-   * @param stsRegion region; use if the endpoint isn't the AWS default.
-   * @param duration duration of the credentials in seconds. Minimum value: 900.
-   * @param invoker invoker to use for retrying the call.
-   * @return the credentials
-   * @throws IOException on a failure of the request
-   */
-  @Retries.RetryTranslated
-  public static MarshalledCredentials requestSessionCredentials(
-      final AWSCredentialsProvider parentCredentials,
-      final ClientConfiguration awsConf,
-      final String stsEndpoint,
-      final String stsRegion,
-      final int duration,
-      final Invoker invoker) throws IOException {
-    AWSSecurityTokenService tokenService =
-        STSClientFactory.builder(parentCredentials,
-            awsConf,
-            stsEndpoint.isEmpty() ? null : stsEndpoint,
-            stsRegion)
-            .build();
-    STSClientFactory.STSClient clientConnection
-        = STSClientFactory.createClientConnection(tokenService, invoker);
-    Credentials credentials = clientConnection
-        .requestSessionCredentials(duration, TimeUnit.SECONDS);
-    return new MarshalledCredentials(credentials);
   }
 
   /**
@@ -425,72 +320,10 @@ public final class MarshalledCredentials implements Writable,
   public String buildInvalidCredentialsError(
       final CredentialTypeRequired typeRequired) {
     if (isEmpty()) {
-      return " " + NO_AWS_CREDENTIALS;
+      return " " + MarshalledCredentialBinding.NO_AWS_CREDENTIALS;
     } else {
       return " " + INVALID_CREDENTIALS
           + " in " + toString() + " required: " + typeRequired;
-    }
-  }
-
-  /**
-   * Create an AWS credential set from these values; type
-   * depends on what has come in.
-   * From {@code AWSCredentialProvider}.
-   * @return a new set of credentials
-   * @throws CredentialInitializationException init/validation problems
-   */
-  @Override
-  public AWSCredentials getCredentials() throws
-      CredentialInitializationException {
-    return toAWSCredentials(CredentialTypeRequired.AnyNonEmpty,  COMPONENT);
-  }
-
-  /**
-   * Get Session Credentials.
-   * @return a set of session credentials.
-   * @throws CredentialInitializationException init/validation problems
-   */
-  public BasicSessionCredentials getSessionCredentials()
-      throws CredentialInitializationException {
-    return (BasicSessionCredentials) toAWSCredentials(
-        CredentialTypeRequired.SessionOnly, COMPONENT);
-  }
-
-  /**
-   * From {@code AWSCredentialProvider}.
-   * No-op.
-   */
-  @Override
-  public void refresh() {
-    /* No-Op */
-  }
-
-  /**
-   * Create an AWS credential set from these values.
-   * @param typeRequired type of credentials required
-   * @param component component name for exception messages.
-   * @return a new set of credentials
-   * @throws NoAuthWithAWSException validation failure
-   * @throws NoAwsCredentialsException the credentials are actually empty.
-   */
-  public AWSCredentials toAWSCredentials(
-      final CredentialTypeRequired typeRequired,
-      final String component)
-      throws NoAuthWithAWSException {
-
-    if (isEmpty()) {
-      throw new NoAwsCredentialsException(component, NO_AWS_CREDENTIALS);
-    }
-    if (!isValid(typeRequired)) {
-      throw new NoAuthWithAWSException(component + ":" + 
-          buildInvalidCredentialsError(typeRequired));
-    }
-    if (hasSessionToken()) {
-      // a session token was supplied, so return session credentials
-      return new BasicSessionCredentials(accessKey, secretKey, sessionToken);
-    } else {
-      // these are full credentials
-      return new BasicAWSCredentials(accessKey, secretKey);
     }
   }
 
@@ -507,29 +340,6 @@ public final class MarshalledCredentials implements Writable,
         "session credentials");
   }
 
-
-  /**
-   * Build a set of credentials from the environment.
-   * @param env environment.
-   * @return a possibly incomplete/invalid set of credentials.
-   */
-  public static MarshalledCredentials fromEnvironment(
-      final Map<String, String> env) {
-    MarshalledCredentials creds = new MarshalledCredentials();
-    creds.setAccessKey(nullToEmptyString(env.get("AWS_ACCESS_KEY")));
-    creds.setSecretKey(nullToEmptyString(env.get("AWS_SECRET_KEY")));
-    creds.setSessionToken(nullToEmptyString(env.get("AWS_SESSION_TOKEN")));
-    return creds;
-  }
-
-  /**
-   * Take a string where a null value is remapped to an empty string.
-   * @param src source string.
-   * @return the value of the string or ""
-   */
-  private static String nullToEmptyString(final String src) {
-    return src == null ? "" : src;
-  }
 
   /**
    * Return a set of empty credentials.

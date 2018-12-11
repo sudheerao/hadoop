@@ -29,6 +29,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.auth.AbstractSessionCredentialsProvider;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.NoAuthWithAWSException;
 import org.apache.hadoop.fs.s3a.auth.NoAwsCredentialsException;
@@ -88,7 +89,7 @@ public class TemporaryAWSCredentialsProvider extends
   @Override
   protected AWSCredentials createCredentials(Configuration config)
       throws IOException {
-    MarshalledCredentials creds = MarshalledCredentials.load(
+    MarshalledCredentials creds = MarshalledCredentialBinding.fromFileSystem(
         getUri(), config);
     MarshalledCredentials.CredentialTypeRequired sessionOnly
         = MarshalledCredentials.CredentialTypeRequired.SessionOnly;
@@ -96,7 +97,8 @@ public class TemporaryAWSCredentialsProvider extends
     if (!creds.isValid(sessionOnly)) {
       throw new NoAwsCredentialsException(COMPONENT);
     }
-    return creds.toAWSCredentials(sessionOnly, COMPONENT);
+    return MarshalledCredentialBinding.toAWSCredentials(creds, 
+        sessionOnly, COMPONENT);
   }
 
 }

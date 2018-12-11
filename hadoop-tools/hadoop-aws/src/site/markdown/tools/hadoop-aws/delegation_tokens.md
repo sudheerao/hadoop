@@ -750,6 +750,12 @@ most of the work.
 Having a `toString()` method which is informative is ideal for the `hdfs creds`
 command as well as debugging: *but do not print secrets*
 
+*Important*: Add no references to any AWS SDK class, to 
+ensure it can be safely deserialized whenever the relevant token
+identifier is examined. Best practise is: avoid any references to
+classes which may not be on the classpath of core Hadoop services,
+especially the YARN Resource Manager and Node Managers.
+
 ### `AWSCredentialProviderList deployUnbonded()`
 
 1. Perform all initialization needed on an "unbonded" deployment to authenticate with the store.

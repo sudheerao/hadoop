@@ -43,6 +43,7 @@ import static java.util.Objects.requireNonNull;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.assumeSessionTestsEnabled;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.roundTrip;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.unsetHadoopCredentialProviders;
+import static org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding.fromAWSCredentials;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_CREDENTIALS_PROVIDER;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_SESSION_BINDING;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.SESSION_TOKEN_KIND;
@@ -183,7 +184,7 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
       final AWSSessionCredentials awsSessionCreds
           = verifySessionCredentials(
           dt2.getCredentialProviders().getCredentials());
-      final MarshalledCredentials origCreds = new MarshalledCredentials(
+      final MarshalledCredentials origCreds = fromAWSCredentials(
           awsSessionCreds);
 
       Token<AbstractS3ATokenIdentifier> boundDT =
@@ -239,7 +240,7 @@ public class ITestSessionDelegationTokens extends AbstractDelegationIT {
           = delegationTokens2.getDecodedIdentifier().get();
 
       LOG.info("Regenerated DT is {}", newDT);
-      final MarshalledCredentials creds2 = new MarshalledCredentials(
+      final MarshalledCredentials creds2 = fromAWSCredentials(
           verifySessionCredentials(
               delegationTokens2.getCredentialProviders().getCredentials()));
       assertEquals("Credentials", session, creds2);

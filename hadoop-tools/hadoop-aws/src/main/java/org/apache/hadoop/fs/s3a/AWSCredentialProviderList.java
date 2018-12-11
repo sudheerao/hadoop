@@ -82,6 +82,11 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
   private final AtomicBoolean closed = new AtomicBoolean(false);
 
   /**
+   * The name, with a ": " suffix.
+   */
+  private String name = "";
+  
+  /**
    * Empty instance. This is not ready to be used.
    */
   public AWSCredentialProviderList() {
@@ -98,10 +103,17 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
 
   /**
    * Create with an initial list of providers.
+   * @param name
    * @param providerArgs provider list.
    */
-  public AWSCredentialProviderList(AWSCredentialsProvider...providerArgs) {
+  public AWSCredentialProviderList(final String name,
+      final AWSCredentialsProvider... providerArgs) {
+    this.name = name;
     Collections.addAll(providers, providerArgs);
+  }
+
+  public void setName(final String name) {
+    this.name = name;
   }
 
   /**
@@ -142,7 +154,7 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
   public AWSCredentials getCredentials() {
     if (isClosed()) {
       LOG.warn(CREDENTIALS_REQUESTED_WHEN_CLOSED);
-      throw new NoAuthWithAWSException(
+      throw new NoAuthWithAWSException(name +
           CREDENTIALS_REQUESTED_WHEN_CLOSED);
     }
     checkNotEmpty();
@@ -184,7 +196,7 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
 
     // no providers had any credentials. Rethrow the last exception
     // or create a new one.
-    String message = "No AWS Credentials provided by "
+    String message =  name +  "No AWS Credentials provided by "
         + listProviderNames();
     if (lastException != null) {
       message += ": " + lastException;
@@ -212,7 +224,7 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
    */
   public void checkNotEmpty() {
     if (providers.isEmpty()) {
-      throw new NoAuthWithAWSException(NO_AWS_CREDENTIAL_PROVIDERS);
+      throw new NoAuthWithAWSException(name + NO_AWS_CREDENTIAL_PROVIDERS);
     }
   }
 
@@ -235,6 +247,7 @@ public class AWSCredentialProviderList implements AWSCredentialsProvider,
   @Override
   public String toString() {
     return "AWSCredentialProviderList[" +
+        name +
         "refcount= " + refCount.get() + ": [" +
         StringUtils.join(providers, ", ") + ']'
         + (lastProvider != null ? (" last provider: " + lastProvider) : "");

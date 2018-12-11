@@ -29,6 +29,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.commit.CommitConstants;
 
@@ -615,15 +616,16 @@ public final class S3ATestUtils {
       final int duration)
       throws IOException {
     assumeSessionTestsEnabled(conf);
-    MarshalledCredentials sc = MarshalledCredentials.requestSessionCredentials(
-        buildAwsCredentialsProvider(conf),
-        S3AUtils.createAwsConf(conf, bucket),
-        conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT,
-            DEFAULT_ASSUMED_ROLE_STS_ENDPOINT),
-        conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT_REGION,
-            ASSUMED_ROLE_STS_ENDPOINT_REGION_DEFAULT),
-        duration,
-        new Invoker(new S3ARetryPolicy(conf), Invoker.LOG_EVENT));
+    MarshalledCredentials sc = MarshalledCredentialBinding
+        .requestSessionCredentials(
+          buildAwsCredentialsProvider(conf),
+          S3AUtils.createAwsConf(conf, bucket),
+          conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT,
+              DEFAULT_ASSUMED_ROLE_STS_ENDPOINT),
+          conf.getTrimmed(ASSUMED_ROLE_STS_ENDPOINT_REGION,
+              ASSUMED_ROLE_STS_ENDPOINT_REGION_DEFAULT),
+          duration,
+          new Invoker(new S3ARetryPolicy(conf), Invoker.LOG_EVENT));
     sc.validate("requested session credentials: ",
         MarshalledCredentials.CredentialTypeRequired.SessionOnly);
     return sc;

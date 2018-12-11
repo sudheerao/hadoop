@@ -59,6 +59,10 @@ import static java.util.Objects.requireNonNull;
  * Subclasses are required to add whatever information is needed to authenticate
  * the user with the credential provider which their binding class will
  * provide.
+ *
+ * <i>Important: Add no references to any AWS SDK class, to 
+ * ensure it can be safely deserialized whenever the relevant token
+ * identifier of a token type declared in this JAR is examined.</i>
  */
 public abstract class AbstractS3ATokenIdentifier
     extends DelegationTokenIdentifier {

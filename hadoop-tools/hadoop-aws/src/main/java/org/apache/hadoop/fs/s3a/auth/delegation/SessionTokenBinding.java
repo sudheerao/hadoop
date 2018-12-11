@@ -50,6 +50,8 @@ import static org.apache.hadoop.fs.s3a.Constants.AWS_CREDENTIALS_PROVIDER;
 import static org.apache.hadoop.fs.s3a.Invoker.once;
 import static org.apache.hadoop.fs.s3a.S3AUtils.STANDARD_AWS_PROVIDERS;
 import static org.apache.hadoop.fs.s3a.S3AUtils.buildAWSProviderList;
+import static org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding.fromAWSCredentials;
+import static org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding.fromSTSCredentials;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.*;
 
 /**
@@ -195,6 +197,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
         convertTokenIdentifier(retrievedIdentifier,
             SessionTokenIdentifier.class);
     return new AWSCredentialProviderList(
+        "Session Token Binding",
         new MarshalledCredentialProvider(
             SESSION_TOKEN,
             getFileSystem().getUri(),
@@ -319,7 +322,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
 
     if (client.isPresent()) {
       // this is the normal route: ask for a new STS token
-      marshalledCredentials = new MarshalledCredentials(
+      marshalledCredentials = fromSTSCredentials(
           client.get()
               .requestSessionCredentials(duration, TimeUnit.SECONDS));
     } else {
@@ -333,7 +336,7 @@ public class SessionTokenBinding extends AbstractDelegationTokenBinding {
       final AWSCredentials awsCredentials
           = parentAuthChain.getCredentials();
       if (awsCredentials instanceof AWSSessionCredentials) {
-        marshalledCredentials = new MarshalledCredentials(
+        marshalledCredentials = fromAWSCredentials(
             (AWSSessionCredentials) awsCredentials);
       } else {
         throw new DelegationTokenIOException(

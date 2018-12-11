@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -47,6 +48,8 @@ import static org.apache.hadoop.fs.s3a.Constants.*;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.assumeSessionTestsEnabled;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.requestSessionCredentials;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.unsetHadoopCredentialProviders;
+import static org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding.fromSTSCredentials;
+import static org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding.toAWSCredentials;
 import static org.apache.hadoop.fs.s3a.auth.RoleTestUtils.assertCredentialsEqual;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.*;
 import static org.apache.hadoop.fs.s3a.auth.delegation.SessionTokenBinding.CREDENTIALS_CONVERTED_TO_DELEGATION_TOKEN;
@@ -136,8 +139,7 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     S3AUtils.clearBucketOption(conf2, bucket, SECRET_KEY);
     S3AUtils.clearBucketOption(conf2, bucket, SESSION_TOKEN);
 
-    MarshalledCredentials mc = new MarshalledCredentials(
-        sessionCreds);
+    MarshalledCredentials mc = fromSTSCredentials(sessionCreds);
     updateConfigWithSessionCreds(conf2, mc);
 
     conf2.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
@@ -245,7 +247,8 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
 
     MarshalledCredentials sc = requestSessionCredentials(conf,
         getFileSystem().getBucket());
-    sc.getCredentials();
+    toAWSCredentials(sc, 
+        MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty, "");
     updateConfigWithSessionCreds(conf, sc);
 
     conf.set(AWS_CREDENTIALS_PROVIDER, TEMPORARY_AWS_CREDENTIALS);
@@ -392,7 +395,7 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     conf.set(ACCESS_KEY, "aaa");
     conf.set(SECRET_KEY, "bbb");
     conf.set(SESSION_TOKEN, "");
-    final MarshalledCredentials sc = MarshalledCredentials.load(
+    final MarshalledCredentials sc = MarshalledCredentialBinding.fromFileSystem(
         null, conf);
     intercept(IOException.class,
         MarshalledCredentials.INVALID_CREDENTIALS,
@@ -409,10 +412,10 @@ public class ITestS3ATemporaryCredentials extends AbstractS3ATestBase {
     conf.set(ACCESS_KEY, "");
     conf.set(SECRET_KEY, "");
     conf.set(SESSION_TOKEN, "");
-    final MarshalledCredentials sc = MarshalledCredentials.load(
+    final MarshalledCredentials sc = MarshalledCredentialBinding.fromFileSystem(
         null, conf);
     intercept(IOException.class,
-        MarshalledCredentials.NO_AWS_CREDENTIALS,
+        MarshalledCredentialBinding.NO_AWS_CREDENTIALS,
         () -> {
           sc.validate("",
               MarshalledCredentials.CredentialTypeRequired.SessionOnly);

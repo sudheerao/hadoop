@@ -29,6 +29,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.CredentialInitializationException;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding.toAWSCredentials;
 
 /**
  * AWS credential provider driven from marshalled session/full credentials
@@ -85,7 +86,7 @@ public class MarshalledCredentialProvider extends
   @Override
   protected AWSCredentials createCredentials(final Configuration config)
       throws IOException {
-    return credentials.toAWSCredentials(typeRequired, component);
+    return toAWSCredentials(credentials, typeRequired, component);
   }
 
 }

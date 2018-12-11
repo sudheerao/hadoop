@@ -26,6 +26,7 @@ import org.junit.Test;
 import org.apache.hadoop.fs.s3a.S3AEncryptionMethods;
 import org.apache.hadoop.fs.s3a.S3ATestConstants;
 import org.apache.hadoop.fs.s3a.S3ATestUtils;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -73,7 +74,8 @@ public class TestS3ADelegationTokenSupport {
     decoded.validate();
     MarshalledCredentials creds
         = ((SessionTokenIdentifier) decoded).getMarshalledCredentials();
-    assertNotNull("credentials", creds.toAWSCredentials(
+    assertNotNull("credentials",
+        MarshalledCredentialBinding.toAWSCredentials(creds,
         MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty, ""));
     assertEquals(alice, decoded.getOwner());
     UserGroupInformation decodedUser = decoded.getUser();

@@ -37,6 +37,7 @@ import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.RoleModel;
 import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
 
+import static org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding.fromSTSCredentials;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_CREDENTIALS_PROVIDER;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_ROLE_ARN;
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.E_NO_SESSION_TOKENS_FOR_ROLE_BINDING;
@@ -102,6 +103,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
         convertTokenIdentifier(retrievedIdentifier,
             RoleTokenIdentifier.class);
     return new AWSCredentialProviderList(
+        "Role Token Binding",
         new MarshalledCredentialProvider(
             COMPONENT, getFileSystem().getUri(),
             getConfig(),
@@ -146,7 +148,7 @@ public class RoleTokenBinding extends SessionTokenBinding {
     return new RoleTokenIdentifier(
         getCanonicalUri(),
         getOwnerText(),
-        new MarshalledCredentials(credentials),
+        fromSTSCredentials(credentials),
         encryptionSecrets,
         AbstractS3ATokenIdentifier.createDefaultOriginMessage()
             + " Role ARN=" + roleArn);

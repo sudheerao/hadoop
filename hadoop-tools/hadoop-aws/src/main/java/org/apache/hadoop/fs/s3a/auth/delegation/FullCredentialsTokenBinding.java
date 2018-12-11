@@ -25,6 +25,7 @@ import java.util.Optional;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
 import org.apache.hadoop.fs.s3a.S3AUtils;
+import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialBinding;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentialProvider;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
 import org.apache.hadoop.fs.s3a.auth.RoleModel;
@@ -90,7 +91,7 @@ public class FullCredentialsTokenBinding extends
       credentialOrigin += "; source = Hadoop configuration data";
     } else {
       // if there are none, look for the environment variables.
-      awsCredentials = MarshalledCredentials.fromEnvironment(
+      awsCredentials = MarshalledCredentialBinding.fromEnvironment(
           System.getenv());
       if (awsCredentials.isValid(
           MarshalledCredentials.CredentialTypeRequired.AnyNonEmpty)) {
@@ -115,6 +116,7 @@ public class FullCredentialsTokenBinding extends
   public AWSCredentialProviderList deployUnbonded() throws IOException {
     requireServiceStarted();
     return new AWSCredentialProviderList(
+        "Full Credentials Token Binding",
         new MarshalledCredentialProvider(
             FULL_TOKEN,
             getFileSystem().getUri(),
@@ -154,7 +156,7 @@ public class FullCredentialsTokenBinding extends
         convertTokenIdentifier(retrievedIdentifier,
             FullCredentialsTokenIdentifier.class);
     return new AWSCredentialProviderList(
-        new MarshalledCredentialProvider(
+        "", new MarshalledCredentialProvider(
             FULL_TOKEN,
             getFileSystem().getUri(),
             getConfig(),
