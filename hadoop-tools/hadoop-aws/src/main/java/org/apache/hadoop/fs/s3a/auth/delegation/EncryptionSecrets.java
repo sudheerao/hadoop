@@ -24,10 +24,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.util.Objects;
-import java.util.Optional;
-
-import com.amazonaws.services.s3.model.SSEAwsKeyManagementParams;
-import com.amazonaws.services.s3.model.SSECustomerKey;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -48,9 +44,15 @@ import static org.apache.hadoop.fs.s3a.S3AUtils.getServerSideEncryptionKey;
  * Note this design marshalls/unmarshalls its serialVersionUID
  * in its writable, which is used to compare versions.
  *
+ * <i>Important.</i>
  * If the wire format is ever changed incompatibly,
  * update the serial version UID to ensure that older clients get safely
  * rejected.
+ * 
+ * <i>Important</i>
+ * Do not import any AWS SDK classes, directly or indirectly. 
+ * This is to ensure that S3A Token identifiers can be unmarshalled even
+ * without that SDK.
  */
 public class EncryptionSecrets implements Writable, Serializable {
 
@@ -221,37 +223,6 @@ public class EncryptionSecrets implements Writable, Serializable {
    */
   public S3AEncryptionMethods getEncryptionMethod() {
     return encryptionMethod;
-  }
-
-  /**
-   * Create SSE-C client side key encryption options on demand.
-   * @return an optional key to attach to a request.
-   */
-  public Optional<SSECustomerKey> createSSECustomerKey() {
-    if (hasEncryptionKey() &&
-        getEncryptionMethod() == S3AEncryptionMethods.SSE_C) {
-      return Optional.of(new SSECustomerKey(getEncryptionKey()));
-    } else {
-      return Optional.empty();
-    }
-  }
-
-  /**
-   * Create SSE-KMS options for a request, iff the encryption is SSE-KMS.
-   * @return an optional SSE-KMS param to attach to a request.
-   */
-  public Optional<SSEAwsKeyManagementParams> createSSEAwsKeyManagementParams() {
-    
-    //Use specified key, otherwise default to default master aws/s3 key by AWS
-    if (getEncryptionMethod() == S3AEncryptionMethods.SSE_KMS) {
-      if (hasEncryptionKey()) {
-        return Optional.of(new SSEAwsKeyManagementParams(encryptionKey));
-      } else {
-        return Optional.of(new SSEAwsKeyManagementParams());
-      }
-    } else {
-      return Optional.empty();
-    }
   }
 
   /**

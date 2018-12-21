@@ -104,6 +104,7 @@ import org.apache.hadoop.fs.StreamCapabilities;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.s3a.auth.RoleModel;
 import org.apache.hadoop.fs.s3a.auth.delegation.AWSPolicyProvider;
+import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecretOperations;
 import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecrets;
 import org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens;
 import org.apache.hadoop.fs.s3a.auth.delegation.AbstractS3ATokenIdentifier;
@@ -132,6 +133,7 @@ import static org.apache.hadoop.fs.s3a.Statistic.*;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
 import static org.apache.hadoop.fs.s3a.auth.RolePolicies.STATEMENT_ALLOW_SSE_KMS_RW;
 import static org.apache.hadoop.fs.s3a.auth.RolePolicies.allowS3Operations;
+import static org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.TokenIssuingPolicy.NoTokensAvailable;
 import static org.apache.hadoop.fs.s3a.auth.delegation.S3ADelegationTokens.hasDelegationTokenBinding;
 import static org.apache.hadoop.io.IOUtils.cleanupWithLogger;
 
@@ -2681,13 +2683,24 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   }
 
   /**
-   * Return a service name iff delegation tokens are enabled.
+   * Return a service name iff delegation tokens are enabled and the
+   * token binding is issuing delegation tokens.
    * @return the canonical service name or null
    */
   @Override
   public String getCanonicalServiceName() {
-    return delegationTokens.map(S3ADelegationTokens::getCanonicalServiceName)
-        .orElse(null);
+    // this could all be done in map statements, but it'd be harder to
+    // understand and maintain.
+    // Essentially: no DTs, no canonical service name.
+    if (!delegationTokens.isPresent()) {
+      return null;
+    }
+    // DTs present: ask the binding if it is willing to
+    // serve tokens (or fail noisily).
+    S3ADelegationTokens dt = delegationTokens.get();
+    return dt.getTokenIssuingPolicy() != NoTokensAvailable
+        ? dt.getCanonicalServiceName()
+        : null;
   }
 
   /**
@@ -2726,8 +2739,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     if (access.isEmpty()) {
       return Collections.emptyList();
     }
-    List<RoleModel.Statement> statements = new ArrayList<>();
-    statements.addAll(
+    List<RoleModel.Statement> statements = new ArrayList<>(
         allowS3Operations(bucket,
             access.contains(AccessLevel.WRITE)
                 || access.contains(AccessLevel.ADMIN)));
@@ -2867,7 +2879,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * @return an optional set of KMS Key settings
    */
   private Optional<SSEAwsKeyManagementParams> generateSSEAwsKeyParams() {
-    return encryptionSecrets.createSSEAwsKeyManagementParams();
+    return EncryptionSecretOperations.createSSEAwsKeyManagementParams(
+        encryptionSecrets);
   }
 
   /**
@@ -2877,7 +2890,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * @return an optional customer key.
    */
   private Optional<SSECustomerKey> generateSSECustomerKey() {
-    return encryptionSecrets.createSSECustomerKey();
+    return EncryptionSecretOperations.createSSECustomerKey(
+        encryptionSecrets);
   }
 
   /**

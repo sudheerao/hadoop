@@ -18,11 +18,17 @@
 
 package org.apache.hadoop.fs.s3a.auth.delegation;
 
+import java.util.EnumSet;
+import java.util.List;
+
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.fs.s3a.auth.MarshalledCredentials;
+import org.apache.hadoop.fs.s3a.auth.RoleModel;
 import org.apache.hadoop.io.Text;
 
 import static org.apache.hadoop.fs.s3a.auth.delegation.DelegationConstants.DELEGATION_TOKEN_ROLE_BINDING;
@@ -37,6 +43,8 @@ import static org.apache.hadoop.test.LambdaTestUtils.intercept;
  */
 public class ITestRoleDelegationTokens extends ITestSessionDelegationTokens {
 
+  private static final Logger LOG =
+      LoggerFactory.getLogger(ITestRoleDelegationTokens.class);
   @Override
   protected String getDelegationBinding() {
     return DELEGATION_TOKEN_ROLE_BINDING;
@@ -88,5 +96,20 @@ public class ITestRoleDelegationTokens extends ITestSessionDelegationTokens {
           () -> delegationTokens2.createDelegationToken(
               new EncryptionSecrets()));
     }
+  }
+
+  @Test
+  public void testCreateRoleModel() throws Throwable {
+    describe("self contained role model retrieval");
+    EnumSet<AWSPolicyProvider.AccessLevel> access
+        = EnumSet.of(
+        AWSPolicyProvider.AccessLevel.READ,
+        AWSPolicyProvider.AccessLevel.WRITE);
+    S3AFileSystem fs = getFileSystem();
+    List<RoleModel.Statement> rules = fs.listAWSPolicyRules(
+        access);
+    assertTrue("No AWS policy rules from FS", !rules.isEmpty());
+    String ruleset = new RoleModel().toJson(new RoleModel.Policy(rules));
+    LOG.info("Access policy for {}\n{}", fs.getUri(), ruleset);
   }
 }

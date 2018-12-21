@@ -32,6 +32,7 @@ See also:
 * [S3A Committers Architecture](./committer_architecture.html)
 * [Working with IAM Assumed Roles](./assumed_roles.html)
 * [S3A Delegation Token Support](./delegation_tokens.html)
+* [S3A Delegation Token Architecture](delegation_token_architecture.html).
 * [Testing](./testing.html)
 
 ## <a name="overview"></a> Overview

@@ -12,14 +12,14 @@
   limitations under the License. See accompanying LICENSE file.
 -->
 
-# S3A Delegation Token Support
+# Working with Delegation Tokens
 
 <!-- MACRO{toc|fromDepth=0|toDepth=2} -->
 
 ## <a name="introduction"></a> Introducing S3A Delegation Tokens.
 
 The S3A filesystem client supports `Hadoop Delegation Tokens`.
-This allows YARN application like Apache Spark or services such as Apache Oozie to
+This allows YARN application like MapReduce, Distcp, Apache Flink and Apache Spark to
 obtain credentials to access S3 buckets and pass them pass these credentials to
 jobs/queries, so granting them access to the service with the same access
 permissions as the user.
@@ -50,6 +50,9 @@ and that restricted by the rights of the requested role ARN.
 All three tokens also marshall the encryption settings: The encryption mechanism
 to use and the KMS key ID or SSE-C client secret. This allows encryption
 policy and secrets to be uploaded from the client to the services.
+
+This document covers how to use these tokens. For details on the implementation
+see [S3A Delegation Token Architecture](delegation_token_architecture.html).
 
 ## <a name="background"></a> Background: Hadoop Delegation Tokens.
 

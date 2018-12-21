@@ -20,9 +20,6 @@ package org.apache.hadoop.fs.s3a.auth.delegation;
 
 import java.net.URI;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.s3a.Constants;
@@ -36,11 +33,10 @@ import org.apache.hadoop.security.token.Token;
  * A DT fetcher for S3A.
  * This is a copy-and-paste of
  * {@code org.apache.hadoop.hdfs.HdfsDtFetcher}.
+ * 
+ * It is only needed for the `hadoop dtutil` command.
  */
 public class S3ADtFetcher implements DtFetcher {
-
-  private static final Logger LOG =
-      LoggerFactory.getLogger(S3ADtFetcher.class);
 
   private static final String SERVICE_NAME = Constants.FS_S3A;
 

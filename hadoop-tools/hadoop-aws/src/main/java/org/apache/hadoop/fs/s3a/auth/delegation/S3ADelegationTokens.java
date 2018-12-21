@@ -350,11 +350,23 @@ public class S3ADelegationTokens extends AbstractDTService {
   }
 
   /**
+   * Predicate: will this binding issue a DT if requested
+   * in a call to {@link #getBoundOrNewDT(EncryptionSecrets)}?
+   * That is: should the filesystem declare that it is issuing 
+   * delegation tokens? 
+   * @return a declaration of what will happen when asked for a token.
+   */
+  public TokenIssuingPolicy getTokenIssuingPolicy() {
+    return isBoundToDT()
+        ? TokenIssuingPolicy.ReturnExistingToken
+        : tokenBinding.getTokenIssuingPolicy();
+  }
+  
+  /**
    * Get any bound DT or create a new one.
    * @return a delegation token.
    * @throws IOException if one cannot be created
    * @param encryptionSecrets encryption secrets for any new token.
-
    */
   @SuppressWarnings("OptionalGetWithoutIsPresent")
   public Token<AbstractS3ATokenIdentifier> getBoundOrNewDT(
@@ -408,8 +420,10 @@ public class S3ADelegationTokens extends AbstractDTService {
         "Creating New Delegation Token", tokenBinding.getKind())) {
       Token<AbstractS3ATokenIdentifier> token
           = tokenBinding.createDelegationToken(rolePolicy, encryptionSecrets);
-      token.setService(service);
-      noteTokenCreated(token);
+      if (token != null) {
+        token.setService(service);
+        noteTokenCreated(token);
+      }
       return token;
     }
   }
@@ -637,5 +651,24 @@ public class S3ADelegationTokens extends AbstractDTService {
     return StringUtils.isNotEmpty(
         conf.getTrimmed(DELEGATION_TOKEN_BINDING,
             DEFAULT_DELEGATION_TOKEN_BINDING));
+  }
+
+  /**
+   * How will tokens be issued on request?
+   * 
+   * The {@link #RequestNewToken} policy does not guarantee that a tokens
+   * can be created, only that an attempt will be made to request one.
+   * It may fail (wrong credential types, wrong role, etc).
+   */
+  public enum TokenIssuingPolicy {
+    
+    /** The existing token will be returned. */
+    ReturnExistingToken,
+    
+    /** No tokens will be issued. */
+    NoTokensAvailable,
+    
+    /** An attempt will be made to request a new DT. */
+    RequestNewToken
   }
 }

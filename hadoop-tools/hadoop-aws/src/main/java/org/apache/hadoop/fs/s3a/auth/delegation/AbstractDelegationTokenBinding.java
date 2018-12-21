@@ -114,29 +114,40 @@ public abstract class AbstractDelegationTokenBinding extends AbstractDTService {
   }
 
   /**
+   * Predicate: will this binding issue a DT?
+   * That is: should the filesystem declare that it is issuing 
+   * delegation tokens? If true
+   * @return a declaration of what will happen when asked for a token.
+   */
+  public S3ADelegationTokens.TokenIssuingPolicy getTokenIssuingPolicy() {
+    return S3ADelegationTokens.TokenIssuingPolicy.RequestNewToken;
+  }
+  
+  /**
    * Create a delegation token for the user.
    * This will only be called if a new DT is needed, that is: the
    * filesystem has been deployed unbonded. 
    * @param policy minimum policy to use, if known.
    * @param encryptionSecrets encryption secrets for the token.
-   * @return the token
+   * @return the token or null if the back end does not want to issue one.
    * @throws IOException if one cannot be created
    */
   public Token<AbstractS3ATokenIdentifier> createDelegationToken(
       final Optional<RoleModel.Policy> policy,
       final EncryptionSecrets encryptionSecrets) throws IOException {
     requireServiceStarted();
-    AbstractS3ATokenIdentifier tokenIdentifier =
-        requireNonNull(
-            createTokenIdentifier(policy, encryptionSecrets),
-            "Token identifier");
-
-    Token<AbstractS3ATokenIdentifier> token =
-        new Token<>(tokenIdentifier, secretManager);
-    token.setKind(getKind());
-    LOG.debug("Created token {} with token identifier {}",
-        token, tokenIdentifier);
-    return token;
+    final AbstractS3ATokenIdentifier tokenIdentifier =
+            createTokenIdentifier(policy, encryptionSecrets);
+    if (tokenIdentifier != null) {
+      Token<AbstractS3ATokenIdentifier> token =
+          new Token<>(tokenIdentifier, secretManager);
+      token.setKind(getKind());
+      LOG.debug("Created token {} with token identifier {}",
+          token, tokenIdentifier);
+      return token;
+    } else {
+      return null;
+    }
   }
 
   /**

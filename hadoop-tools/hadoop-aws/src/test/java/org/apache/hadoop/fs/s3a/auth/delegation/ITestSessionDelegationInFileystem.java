@@ -202,6 +202,8 @@ public class ITestSessionDelegationInFileystem extends AbstractDelegationIT {
     describe("Enable delegation tokens and request one");
     delegationTokens.start();
     S3AFileSystem fs = getFileSystem();
+    assertNotNull("No tokens from " + fs,
+        fs.getCanonicalServiceName());
     S3ATestUtils.MetricDiff invocationDiff = new S3ATestUtils.MetricDiff(fs,
         Statistic.INVOCATION_GET_DELEGATION_TOKEN);
     S3ATestUtils.MetricDiff issueDiff = new S3ATestUtils.MetricDiff(fs,
