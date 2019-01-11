@@ -155,6 +155,14 @@ public abstract class AbstractS3SelectTest extends AbstractS3ATestBase {
    */
   private S3AFileSystem landsatFS;
 
+
+  // A random task attempt id for testing.
+  private String attempt0;
+
+  private TaskAttemptID taskAttempt0;
+
+  private String jobId;
+
   /**
    * Base CSV file is headers.
    * <pre>
@@ -286,6 +294,10 @@ public abstract class AbstractS3SelectTest extends AbstractS3ATestBase {
     landsatFS = (S3AFileSystem) landsatGZ.getFileSystem(conf);
     Assume.assumeTrue("S3 Select is not enabled on " + landsatFS.getUri(),
         isSelectAvailable(landsatFS));
+    // create some job info
+    jobId = AbstractCommitITest.randomJobId();
+    attempt0 = "attempt_" + jobId + "_m_000000_0";
+    taskAttempt0 = TaskAttemptID.forName(attempt0);
   }
 
   /**
@@ -709,6 +721,18 @@ public abstract class AbstractS3SelectTest extends AbstractS3ATestBase {
           // return this for the test failure reports.
           return "Stream after seek to " + newpos + ": " + seekStream;
         });
+  }
+
+  public String getAttempt0() {
+    return attempt0;
+  }
+
+  public TaskAttemptID getTaskAttempt0() {
+    return taskAttempt0;
+  }
+
+  public String getJobId() {
+    return jobId;
   }
 
   /**

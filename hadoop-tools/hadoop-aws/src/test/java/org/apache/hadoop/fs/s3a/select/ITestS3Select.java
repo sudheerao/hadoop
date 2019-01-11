@@ -54,7 +54,14 @@ import org.apache.hadoop.fs.s3a.commit.DurationInfo;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.LineRecordReader;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.task.JobContextImpl;
 
 import static org.apache.hadoop.fs.s3a.Constants.INPUT_FADVISE;
 import static org.apache.hadoop.fs.s3a.Constants.INPUT_FADV_NORMAL;
@@ -66,6 +73,7 @@ import static org.apache.hadoop.test.LambdaTestUtils.intercept;
 import static org.apache.hadoop.test.LambdaTestUtils.interceptFuture;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.collection.IsCollectionWithSize.hasSize;
 
 /**
  * Test the S3 Select feature with some basic SQL Commands.
@@ -927,6 +935,32 @@ public class ITestS3Select extends AbstractS3SelectTest {
                     parseToLines(
                         select(getFileSystem(), brokenCSV, selectConf, sql)
                     ))));
+
+  }
+
+
+  @Test
+  public void testInputSplit()
+      throws Throwable {
+    describe("Verify that only a single file is used for splits");
+    JobConf conf = new JobConf(getConfiguration());
+
+    
+    inputMust(conf, CSV_INPUT_HEADER, CSV_HEADER_OPT_USE);
+    final Path input = csvPath;
+    S3AFileSystem fs = getFileSystem();
+    final Path output = path("testLandsatSelect")
+        .makeQualified(fs.getUri(), fs.getWorkingDirectory());
+    conf.set(FileInputFormat.INPUT_DIR, input.toString());
+    conf.set(FileOutputFormat.OUTDIR, output.toString());
+
+    final Job job = Job.getInstance(conf, "testInputSplit");
+    JobContext jobCtx = new JobContextImpl(job.getConfiguration(),
+        getTaskAttempt0().getJobID());
+
+    TextInputFormat tif = new TextInputFormat();
+    List<InputSplit> splits = tif.getSplits(jobCtx);
+    assertThat("split count wrong", splits, hasSize(1));
 
   }
 
