@@ -786,20 +786,20 @@ public final class LambdaTestUtils {
       final long timeout,
       final TimeUnit tu,
       final Future<T> future) throws Exception {
-      return intercept(clazz,
-          contained,
-          () -> {
-            try {
-              return future.get(timeout, tu);
-            } catch (ExecutionException e) {
-              Throwable cause = e.getCause();
-              if (cause instanceof Exception) {
-                throw (Exception) cause;
-              } else {
-                throw e;
-              }
+    return intercept(clazz,
+        contained,
+        () -> {
+          try {
+            return future.get(timeout, tu);
+          } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof Exception) {
+              throw (Exception) cause;
+            } else {
+              throw e;
             }
-          });
+          }
+        });
    }
 
   /**
