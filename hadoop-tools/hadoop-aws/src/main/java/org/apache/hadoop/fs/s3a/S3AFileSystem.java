@@ -3727,7 +3727,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       rejectUnknownMandatoryKeys(
           mandatoryKeys,
           InternalConstants.STANDARD_OPENFILE_KEYS,
-          "for " + path + " in non-select file IO");
+          "for " + path + " in non-select file I/O");
     }
     CompletableFuture<FSDataInputStream> result = new CompletableFuture<>();
     if (!isSelect) {

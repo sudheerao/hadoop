@@ -21,6 +21,7 @@
 S3 Select is a feature for Amazon S3 introduced in April 2018. It allows for
 SQL-like SELECT expressions to be applied to files in some structured
 formats, including CSV and JSON.
+
 By performing the SELECT operation in the S3 storage infrastructure, the
 bandwidth requirements between S3 and the hosts making the request can be reduced.
 Along with latency, this bandwidth is often the limiting factor in processing
@@ -31,26 +32,33 @@ following warnings:
 
 * The filtering is being done in S3 itself. If the source files cannot be parsed,
 that's not something which can be fixed in Hadoop or layers above.
-* It is unlikely to be supported by third party S3 implementations.
+* It is not currently supported by third party S3 implementations, and unlikely
+to be supported in future (the bandwidth constraints are less, so the value
+less compelling).
 * Performance *appears* best when the selection restricts the number of fields,
 and projected columns: the less data returned, the faster the response.
 * High-level support in tools such as Apache Hive and Spark will also be
 evolving. Nobody has ever written CSV connectors with predicate pushdown before.
-
+* The standard `FileInputFormat` readers of text (`LineRecordReader` etc) fail when the
+amount of data returned is less than they expect. For this reason, S3 Select
+*MUST NOT BE USED IN PRODUCTION MAPREDUCE JOBS*.
 
 ## Currently Implemented Features
 
+* Ability to issue select queries on the command line.
+* Proof of concept support in MapReduce queries.
 * CSV input with/without compression.
 * CSV output.
 
 ## Currently Unsupported
 
+* Production-ready integration with the standard FileInputFormat and
+Record Readers.
 * Non-CSV output.
-* JSON source files files.
+* JSON source files.
 * Structured source file formats like Apache Parquet.
 It's better here to directly use the Apache Spark, Hive, Impala, Flink or
-similar. These all use the latest ASF-supported artifacts.
-
+similar, which all use the latest ASF-supported libraries.
 
 ## Enabling/Disabling S3 Select
 
@@ -64,17 +72,18 @@ S3 Select is enabled by default:
 </property>
 ```
 
-To disable it: clear the option `fs.s3a.select.enabled`.
+To disable it, set the option `fs.s3a.select.enabled` to `false`.
 
 To probe to see if a FileSystem instance implements it,
-`StreamCapabilities.hasCapability("s3a:select.sql")` will be true if
+`StreamCapabilities.hasCapability("s3a:fs.s3a.select.sql")` will be true 
+on an instance of the S3AFileSystem class if
 the version of Hadoop supports S3 Select, *and* it is enabled for that
 specific instance.
 
 If this call returns false, then S3 Select calls will fail.
 
-Rather than cast a filesystem to the S3AFileSystem class, cast it to
-`org.apache.hadoop.fs.StreamCapabilities`, a class which was added in Hadoop 2.9.
+Rather than cast a filesystem to the `S3AFileSystem` class, cast it to
+`org.apache.hadoop.fs.StreamCapabilities`; a class which was added in Hadoop 2.9.
 This should result in less brittle code -and there is no need to have the
 `hadoop-aws` JAR on the classpath at compile time.
 
@@ -86,21 +95,18 @@ This should result in less brittle code -and there is no need to have the
  */
 public static boolean hasS3SelectCapability(final FileSystem fs) {
   return (fs instanceof StreamCapabilities)
-    && ((StreamCapabilities)fs).hasCapability("s3a:select.sql");
+    && ((StreamCapabilities)fs).hasCapability("s3a:fs.s3a.select.sql");
 }
 ```
 
-## API Access to S3 Select
+## Making S3 Select calls through the Hadoop APIs
 
-
-Applications can issue select queries through the usual Hadoop Filesystem APIs.
-
+Applications can issue select queries through the Hadoop FileSystem/FileContext
+ APIs via the asynchronous `openFile()` call added in Hadoop 3.3.
 
 Use the `FileSystem.openFile(path)` or `FileContext.openFile(path)` methods
-command to get a builder, and
-set the mandatory s3 select options though `must()` operations. This is to
-guarantee that the target filesystem does understand the calls.
-
+command to get a builder class for the open operations, then
+set the mandatory s3 select options though multiple `must()` parameters.
 
 ```java
 FileSystem.FSDataInputStreamBuilder builder =
@@ -113,8 +119,7 @@ FileSystem.FSDataInputStreamBuilder builder =
         .must("fs.s3a.select.output.format", "CSV")
         .must("fs.s3a.select.output.csv.field.delimiter", "\t")
         .must("fs.s3a.select.output.csv.quote.character", "\"")
-        .must("fs.s3a.select.output.csv.quote.fields", "asneeded")
-        ;
+        .must("fs.s3a.select.output.csv.quote.fields", "asneeded") ;
 CompletableFuture<FSDataInputStream> future = builder.build();
 try (FSDataInputStream select = future.get()) {
     // process the output
@@ -123,11 +128,12 @@ try (FSDataInputStream select = future.get()) {
 }
 ```
 
-When the Builder's `build()` call is made, if the filesystem
-does not recognize these options it will fail. The S3A connector
-does recognize them, and will generate a select request.
+When the Builder's `build()` call is made, if the FileSystem/FileContext
+instance does not recognize any of the mandatory options it will fail.
+The S3A connector does recognize them, and, if S3 Select has not been
+disabled, will issue the Select query against the object store.
 
-If the specific S3A connector has S3 Select disabled, it will fail with
+If the S3A connector has S3 Select disabled, it will fail with
 an `UnsupportedOperationException`.
 
 The `build()` call returns a `CompletableFuture<FSDataInputStream>`.
@@ -137,7 +143,7 @@ asynchronously in the S3A FileSystem instance's executor pool.
 Errors in the SQL, missing file, permission failures and suchlike
 will surface when the future is evaluated, *not the build call*.
 
-In the returned stream, seek and positioned reads do not work as usual,
+In the returned stream, seeking and positioned reads do not work as usual,
 because there are no absolute positions in the file to seek to.
 
 1. backwards `seek()` calls will raise a `PathIOException`.
@@ -154,10 +160,10 @@ often uses `seek()` to move forward in a split file after opening,
 or does a series of positioned read calls.
 
 
-#### seek() behavior on `SelectInputStreams`
+### seek() behavior on `SelectInputStream`
 
 The returned stream, of type `org.apache.hadoop.fs.s3a.select.SelectInputStream`,
-only supports forward seek() operations, along with seek to the current position.
+only supports forward `seek()` operations.
 
 A zero-byte seek operation is always valid:
 
@@ -165,13 +171,11 @@ A zero-byte seek operation is always valid:
 stream.seek(stream.getPos());
 ```
 
-
 A negative seek operation will always fail:
 
 ```java
-stream.seek(stream.getPos() - offset );
+stream.seek(stream.getPos() - offset);
 ```
-
 
 A forward seek operation will work, provided the final position is less
 than the total length of the stream:
@@ -193,15 +197,107 @@ The feature has been implemented for splittable queries across Selected data,
 where the initial read starts with a `seek()` to the offset. However, for
 reasons covered below, a codec should be used to declare the input unsplittable.
 
+## Use with third-party S3-compatible object stores.
+
+Third party object stores do not, at the time of writing, support S3 Select.
+S3 Select operations against such stores will fail, presumably with a store-specific
+error code. 
+
+To avoid problems, disable S3 Select entirely:
+ 
+```xml
+<property>
+  <name>fs.s3a.select.enabled</name>
+  <value>false</value>
+</property>
+```
+
+This guarantees that the `hasCapability()` check will fail immediately,
+rather than delaying the failure until an SQL query is attempted.
+
+## Selecting data from the command line: `hadoop s3guard select`
+
+The `s3guard select` command allows direct select statements to be made
+of a path.
+
+Usage:
+
+```bash
+hadoop s3guard select [OPTIONS] \
+ [-limit rows] \
+ [-header (use|none|ignore)] \
+ [-out file] \
+ [-compression (gzip|none)] \
+ [-expected rows]
+ [-inputformat csv]
+ [-outputformat csv]
+  <PATH> <SELECT QUERY>
+```
+
+The output is printed, followed by some summary statistics, unless the `-out`
+option is used to declare a destination file. In this mode
+status will be logged to the console, but the output of the query will be
+saved directly to the output file.
+
+### Example 1 
+
+Read the first 100 rows of the landsat dataset where cloud cover is zero:
+
+```bash
+hadoop s3guard select -header use -compression gzip -limit 100  \
+  s3a://landsat-pds/scene_list.gz \
+  "SELECT * FROM S3OBJECT s WHERE s.cloudCover = '0.0'"
+```
+
+### Example 2
+
+Return the `entityId` column for all rows in the dataset where the cloud
+cover was "0.0", and save it to the file `output.csv`:
+
+```bash
+hadoop s3guard select -header use -out s3a://mybucket/output.csv \
+  -compression gzip \
+  s3a://landsat-pds/scene_list.gz \
+  "SELECT s.entityId from S3OBJECT s WHERE s.cloudCover = '0.0'"
+```
+
+This file will:
+
+1. Be UTF-8 encoded.
+1. Have quotes on all columns returned.
+1. Use commas as a separator.
+1. Not have any header.
+
+The output can be saved to a file with the `-out` option. Note also that
+`-D key=value` settings can be used to control the operation, if placed after
+the `s3guard` command and before `select`
 
 
+```bash
+hadoop s3guard \
+  -D  s.s3a.select.output.csv.quote.fields=asneeded \
+  select \
+  -header use \
+  -compression gzip \
+  -limit 500 \
+  -inputformat csv \
+  -outputformat csv \
+  -out s3a://hwdev-steve-new/output.csv \
+  s3a://landsat-pds/scene_list.gz \
+  "SELECT s.entityId from S3OBJECT s WHERE s.cloudCover = '0.0'"
+```
 
-## Use in MR/Analytics queries
 
-S3 Select queries can be made through MR jobs which use any Hadoop RecordReader
+## Use in MR/Analytics queries: Work in Progress
+
+S3 Select support in analytics queries is a work in progress. It does
+not work reliably with large source files where the work is split up.
+
+As a proof of concept *only*, S3 Select queries can be made through
+MapReduce jobs which use any Hadoop `RecordReader`
 class which uses the new `openFile()` API.
 
-Currently this consists of the following readers.
+Currently this consists of the following MRv2 readers.
 
 ```
 org.apache.hadoop.mapreduce.lib.input.LineRecordReader
@@ -230,7 +326,6 @@ org.apache.hadoop.mapred.TextInputFormat
 org.apache.hadoop.mapred.lib.NLineInputFormat
 ```
 
-
 All `JobConf` options which begin with the prefix `mapreduce.job.input.file.option.`
 will have that prefix stripped and the remainder used as the name for an option
 when opening the file.
@@ -252,7 +347,6 @@ Further options may be set to tune the behaviour, for example:
 jobConf.set("mapreduce.job.input.file.must.fs.s3a.select.input.csv.header", "use");
 ```
 
-
 *Note* How to tell if a reader has migrated to the new `openFile()` builder
 API:
 
@@ -263,11 +357,24 @@ an old reader is being used.
 jobConf.set("mapreduce.job.input.file.must.unknown.option", "anything");
 ```
 
-### How to disable the GZip decompressor when querying Gzipped source files.
 
-Most of the Hadoop RecordReaders automatically choose a decompressor
+### Querying Compressed objects
+
+S3 Select queries can be made against gzipped source files; the S3A input
+stream receives the output in text format, rather than as a (re)compressed
+stream.
+
+To read a gzip file, set `fs.s3a.select.input.compression` to `gzip`.
+
+```java
+jobConf.set("mapreduce.job.input.file.must.fs.s3a.select.input.compression",
+  "gzip");
+```
+
+
+Most of the Hadoop RecordReader classes automatically choose a decompressor
 based on the extension of the source file. This causes problems when
-reading .gz files, because S3 Select is automatically decompressing and
+reading `.gz` files, because S3 Select is automatically decompressing and
 returning csv-formatted text.
 
 By default, a query across gzipped files will fail with the error
@@ -285,62 +392,11 @@ jobConf.set("io.compress.passthrough.extension", ".gz");
 Obviously, this breaks normal `.gz` decompression: only set it on S3 Select
 jobs.
 
-### How to Disable Text File Splitting
-
-`TextInputFormat` automatically splits up text files unless there is a code
-which declares itself as "Unsplitable".
-
-This is bad for for a number of reasons
-
-1. The second and later splits are repeating the query across the entire stream,
-and (wastefully) discarding the input. This slows the entire job down.
-1. The format assumes that the length of the file is the length of the output.
-When this is not true, things can get confused.
-
-To avoid these problems, use the same committer
-
-
-Most of the Hadoop RecordReaders automatically choose a decompressor
-based on the extension of the source file. This causes problems when
-reading .gz files, because S3 Select is automatically decompressing and
-returning csv-formatted text.
-
-By default, a query across gzipped files will fail with the error
-"IOException: not a gzip file"
-
-To avoid this problem, declare that the job should switch to the
-"Passthrough Codec" for all files with a ".gz" extension:
-
-```java
-jobConf.set("io.compression.codecs",
-    "org.apache.hadoop.io.compress.PassthroughCodec");
-jobConf.set("io.compress.passthrough.extension", ".csv");
-```
-
-If set on non-S3-select queries this simply stops the file processing
-from being parallelized.
-
-### How to disable splitting by tuning-block size -and why not to do this.
-
-Input splitting can be implicitly avoided by setting a larger block size
-than the file size in the filesystem configuration `fs.s3a.block.size`.
-Because this is the size the file will be split up on,
-setting it to a larger size than input file lengths will suppress the split,
-so split-related problems surfacing.
-
-However, as soon as a file becomes longer than this, splitting will start.
-And, as this controls the size of blocks to upload when files are written,
-this may impact the process of writing files.
-
-Setting the Passthrough Codec for the input file in a job guarantees that
-all will work.
-
-
 ## S3 Select configuration options.
 
 Consult the javadocs for `org.apache.hadoop.fs.s3a.select.SelectConstants`.
 
-The listed options can be set in `core-site.xml`, supported by s3a per-bucket
+The listed options can be set in `core-site.xml`, supported by S3A per-bucket
 configuration, and can be set programmatically on the `Configuration` object
 use to configure a new filesystem instance.
 
@@ -348,7 +404,6 @@ Any of these options can be set in the builder returned by the `openFile()` call
 —simply set them through a chain of `builder.must()` operations.
 
 ```xml
-
 <property>
   <name>fs.s3a.select.input.format</name>
   <value>csv</value>
@@ -411,13 +466,6 @@ Any of these options can be set in the builder returned by the `openFile()` call
 
 <property>
   <name>fs.s3a.select.input.compression</name>
-  <value></value>
-  <description>In S3 Select queries, the source compression
-    algorithm. One of: "none" and "gzip"</description>
-</property>
-
-<property>
-  <name>fs.s3a.select.input.compression</name>
   <value>none</value>
   <description>In S3 Select queries, the source compression
     algorithm. One of: "none" and "gzip"</description>
@@ -464,7 +512,6 @@ Any of these options can be set in the builder returned by the `openFile()` call
   </description>
 </property>
 
-
 <property>
   <name>fs.s3a.select.errors.include.sql</name>
   <value>false</value>
@@ -474,13 +521,12 @@ Any of these options can be set in the builder returned by the `openFile()` call
     so must be disabled there.
   </description>
 </property>
-
 ```
 
 ## Security and Privacy
 
 SQL Injection attacks are the classic attack on data.
-Because this is a read-only API, the classic ["Bobby Tables"](https://xkcd.com/327/)
+Because S3 Select is a read-only API, the classic ["Bobby Tables"](https://xkcd.com/327/)
 attack to gain write access isn't going to work. Even so: sanitize your inputs.
 
 CSV does have security issues of its own, specifically:
@@ -521,11 +567,9 @@ SELECT * FROM S3OBJECT s;
 select (project (list (project_all))) (from (as str0 (id str1 case_insensitive)))
 ```
 
- 
-
 Note also that:
 
-1. debug-level Hadoop logs for the module `org.apache.hadoop.fs.s3a` and other
+1. Debug-level Hadoop logs for the module `org.apache.hadoop.fs.s3a` and other
 components's debug logs may also log the SQL statements (e.g. aws-sdk HTTP logs).
 
 The best practise here is: only enable SQL in exceptions while developing
@@ -533,19 +577,18 @@ SQL queries, especially in an application/notebook where the exception
 text is a lot easier to see than the application logs.
 
 In production: don't log or report. If you do, all logs and output must be
-considered sensitive.
+considered sensitive from security and privacy perspectives.
 
 The `hadoop s3guard select` command does enable the logging, so
 can be used as an initial place to experiment with the SQL syntax.
-Rationale: if you are constructing SQL queries with PII, your shell history is
-already tainted.
+Rationale: if you are constructing SQL queries on the command line, 
+your shell history is already tainted with the query.
 
 ### Links
 
 * [CVE-2014-3524](https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2014-3524).
 * [The Absurdly Underestimated Dangers of CSV Injection](http://georgemauer.net/2017/10/07/csv-injection.html).
 * [Comma Separated Vulnerabilities](https://www.contextis.com/blog/comma-separated-vulnerabilities).
-
 
 ### SQL Syntax
 
@@ -554,7 +597,7 @@ Amazon](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-re
 
 * Use single quotes for all constants, not double quotes.
 * All CSV column values are strings unless cast to a type
-* Simple SELECT calls, no JOIN.
+* Simple `SELECT` calls, no `JOIN`.
 
 ### CSV formats
 
@@ -568,35 +611,11 @@ large a single line may be.
 The specific quotation character, field and record delimiters, comments and escape
 characters can be configured in the Hadoop configuration.
 
-### Probing for support of S3 Select.
-
-
-S3AFileSystem implements `org.apache.hadoop.fs.StreamCapabilities.StreamCapability`;
-the `hasCapability()` call can be used to probe for it being supported on
-the specific Hadoop version and S3 filesystem instance.
-
-1. If the FileSystem cannot be cast to `StreamCapability`, the API is not supported.
-1. The call `hasCapability("s3a:select.sql")` on the cast object must returns
-true.
-
-If either of these conditions is not met, the filesystem does not support
-the feature: the `build()` call will raise an exception.
-
-In Java, this can be tested as follows:
-
-```java
-boolean isSelectAvailable(final FileSystem filesystem) {
-  return filesystem instanceof StreamCapabilities
-      && ((StreamCapabilities) filesystem).hasCapability("s3a:select.sql");
-}
-```
-
 ### Consistency, Concurrency and Error handling
 
 **Consistency**
 
-* Assume the usual S3 create consistency model applies: a recently updated
-file may not be visible
+* Assume the usual S3 consistency model applies.
 
 * When enabled, S3Guard's DynamoDB table will declare whether or not
 a newly deleted file is visible: if it is marked as deleted, the
@@ -609,7 +628,7 @@ or new version.
 * We don't know whether you can get partially consistent reads, or whether
 an extended read ever picks up a later value.
 
-* The AWS S3 load balancers are known to (briefly) cache 404/Not-Found entries
+* The AWS S3 load balancers can briefly cache 404/Not-Found entries
 from a failed HEAD/GET request against a nonexistent file; this cached
 entry can briefly create create inconsistency, despite the
 AWS "Create is consistent" model. There is no attempt to detect or recover from
@@ -632,83 +651,9 @@ which can be retried (500, 503).
 
 If an attempt to read data from an S3 select stream (`org.apache.hadoop.fs.s3a.select.SelectInputStream)` fails partway through the read, *no attempt is made to retry the operation*
 
-In contrast, normal S3 stream reads try to recover from (possibly transient)
-failures.
+In contrast, the normal S3A input stream tries to recover from (possibly transient)
+failures by attempting to reopen the file.
 
-
-### CLI: `hadoop s3guard select`
-
-The `s3guard select` command allows direct select statements to be made
-of a path. This is for experimentation and for testing.
-
-Usage:
-
-```
-hadoop s3guard select [OPTIONS] \
- [-limit rows] \
- [-header (use|none|ignore)] \
- [-out file] \
- [-compression (gzip|none)] \
- [-expected rows]
- [-inputformat csv]
- [-outputformat csv]
-  <PATH> <SELECT QUERY>
-```
-
-The output is printed, followed by some summary statistics, unless the `-out`
-option is used to declare a destination file. In this mode
-status will be logged to the console, but the output of the query will be
-saved directly to the output file.
-
-Example: read the first 100 rows of the landsat dataset where cloud cover is zero:
-
-```bash
-hadoop s3guard select -header use -compression gzip -limit 100  \
-  s3a://landsat-pds/scene_list.gz \
-  "SELECT * FROM S3OBJECT s WHERE s.cloudCover = '0.0'"
-```
-
-Return the `entityId` column for all rows in the dataset where the cloud
-cover was 0.0., and save it to the file `output.csv`:
-
-```bash
-hadoop s3guard select -header use -out s3a://mybucket/output.csv \
-  -compression gzip \
-  s3a://landsat-pds/scene_list.gz \
-  "SELECT s.entityId from S3OBJECT s WHERE s.cloudCover = '0.0'"
-```
-
-This file will:
-
-1. Be UTF-8 encoded.
-1. Have quotes on all columns returned.
-1. Use commas as a separator.
-1. Not have any header.
-
-The output can be saved to a file with the `-out` option. Note also that
-`-D key=value` settings can be used to control the operation, if placed after
-the `s3guard` command and before `select`
-
-  -inputformat csv \
-  -outputformat csv \
-
-```bash
-hadoop s3guard \
-  -D  s.s3a.select.output.csv.quote.fields=asneeded \
-  select \
-  -header use \
-  -compression gzip \
-  -limit 500 \
-  -out s3a://hwdev-steve-new/output.csv \
-  s3a://landsat-pds/scene_list.gz \
-  "SELECT s.entityId from S3OBJECT s WHERE s.cloudCover = '0.0'"
-```
-
-
-
-### Compression Formats
-
-Set `fs.s3a.select.input.compression` to `gzip`, rather than `none`.
 
 ## Performance
 
@@ -732,17 +677,17 @@ to the `get()` call: do it.
 
 ## Troubleshooting
 
-
 Getting S3 Select code to work is hard, though those knowledgeable in SQL
 will find it easier.
 
-Problems can be split into
+Problems can be split into:
 
 1. Basic configuration of the client to issue the query.
 1. Bad SQL select syntax and grammar.
 1. Datatype casting issues
 1. Bad records/data in source files.
 1. Failure to configure MR jobs to work correctly.
+1. Failure of MR jobs due to 
 
 The exceptions here are all based on the experience during writing tests;
 more may surface with broader use.
@@ -771,22 +716,24 @@ to reduce the risk of logging security or privacy information.
 
 ### "mid-query" failures on large datasets
 
-SQL select returns paged results; the source file is _not_ filtered in
+S3 Select returns paged results; the source file is _not_ filtered in
 one go in the initial request.
 
 This means that errors related to the content of the data (type casting, etc)
-may only surface partway through the read. This does not result in
-
+may only surface partway through the read. The errors reported in such a
+case may be different than those raised on reading the first page of data,
+where it will happen earlier on in the read process.
 
 ### External Resources on for troubleshooting
 
-See
+See:
+
 * [SELECT Command Reference](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-select.html)
 * [SELECT Object Content](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectSELECTContent.html)
 
 ### IOException: "not a gzip file"
 
-This surfaces when trying to read in data from a .gz source file through an MR
+This surfaces when trying to read in data from a `.gz` source file through an MR
 or other analytics query, and the gzip codec has tried to parse it.
 
 ```
@@ -831,7 +778,6 @@ org.apache.hadoop.fs.s3a.AWSBadRequestException:
   Please check the service documentation and try again.
   (Service: Amazon S3; Status Code: 400; Error Code: InvalidColumnIndex;
 ```
-
 
 Here it's the first line of the query, column 30. Paste the query
 into an editor and position yourself on the line and column at fault.
@@ -925,10 +871,7 @@ at java.util.concurrent.CompletableFuture.reportGet(CompletableFuture.java:357)
 at java.util.concurrent.CompletableFuture.get(CompletableFuture.java:1895)
 ```
 
-
-
 ### `MissingHeaders`
-
 
 ```
 org.apache.hadoop.fs.s3a.AWSBadRequestException:
@@ -955,16 +898,13 @@ SELECT * FROM S3OBJECT s WHERE s."odd" = "true" on test/testSelectOddLines.csv:
 Double quotes (") may only be used when naming columns; for constants
 single quotes are required.
 
-
 ### Method not allowed
-
 
 ```
 org.apache.hadoop.fs.s3a.AWSS3IOException: Select on test/testSelectWholeFile:
 com.amazonaws.services.s3.model.AmazonS3Exception: The specified method is not
 allowed against this resource. (Service: Amazon S3; Status Code: 405;
-rror Code: MethodNotAllowed;
-
+Error Code: MethodNotAllowed;
 ```
 
 You are trying to use S3 Select to read data which for some reason
@@ -1008,8 +948,7 @@ Caused by: com.amazonaws.services.s3.model.AmazonS3Exception: GZIP is not applic
   ...
 ```
 
-
-### PathIOException: seek() not supported
+### `PathIOException`: "seek() not supported"
 
 The input stream returned by the select call does not support seeking
 backwards in the stream.
@@ -1048,14 +987,14 @@ at org.apache.hadoop.fs.FileSystem$FSDataInputStreamBuilder.build(FileSystem.jav
 * If it does, there may be a non-standard S3A implementation, or some
 a filtering/relaying class has been placed in front of the S3AFilesystem.
 
-### `IllegalArgumentException`: "Unknown mandatory key in non-select file IO"
+### `IllegalArgumentException`: "Unknown mandatory key in non-select file I/O"
 
 The file options to tune an S3 select call are only valid when a SQL expression
 is set in the `fs.s3a.select.sql` option. If not, any such option added as a `must()` value
 will fail.
 
 ```
-java.lang.IllegalArgumentException: Unknown mandatory key for s3a://example/test/testSelectOptionsOnlyOnSelectCalls.csv in non-select file IO "fs.s3a.select.input.csv.header"
+java.lang.IllegalArgumentException: Unknown mandatory key for s3a://example/test/testSelectOptionsOnlyOnSelectCalls.csv in non-select file I/O "fs.s3a.select.input.csv.header"
 
   at com.google.common.base.Preconditions.checkArgument(Preconditions.java:115)
   at org.apache.hadoop.fs.impl.AbstractFSBuilderImpl.lambda$rejectUnknownMandatoryKeys$0(AbstractFSBuilderImpl.java:352)
@@ -1069,7 +1008,6 @@ java.lang.IllegalArgumentException: Unknown mandatory key for s3a://example/test
 Requiring these options without providing a SQL query is invariably an error.
 Fix: add the SQL statement, or use `opt()` calls to set the option.
 
-
 If the `fs.s3a.select.sql` option is set, and still a key is rejected, then
 either the spelling of the key is wrong, it has leading or trailing spaces,
 or it is an option not supported in that specific release of Hadoop.
@@ -1077,8 +1015,7 @@ or it is an option not supported in that specific release of Hadoop.
 
 ### PathIOException : "seek() backwards from  not supported"
 
-
-Backwards seeks in an S3 Select Input stream are not supported.
+Backwards seeks in an S3 Select `SelectInputStream` are not supported.
 
 ```
 org.apache.hadoop.fs.PathIOException: `s3a://landsat-pds/scene_list.gz':
@@ -1160,4 +1097,4 @@ Caused by: com.amazonaws.services.s3.model.AmazonS3Exception:
 There's no way to recover from a bad record here; no option to skip invalid
 rows.
 
-*Note:* This is an example stack trace *without* the SQL Being printed.
+*Note:* This is an example stack trace *without* the SQL being printed.
