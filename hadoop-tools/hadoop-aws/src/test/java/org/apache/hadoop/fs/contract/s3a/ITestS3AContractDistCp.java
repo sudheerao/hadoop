@@ -18,11 +18,14 @@
 
 package org.apache.hadoop.fs.contract.s3a;
 
+import java.io.FileNotFoundException;
+
 import static org.apache.hadoop.fs.s3a.Constants.*;
 import static org.apache.hadoop.fs.s3a.S3ATestConstants.SCALE_TEST_TIMEOUT_MILLIS;
 import static org.apache.hadoop.fs.s3a.S3ATestUtils.maybeEnableS3Guard;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.StorageStatistics;
 import org.apache.hadoop.tools.contract.AbstractContractDistCpTest;
 
 /**
@@ -57,5 +60,36 @@ public class ITestS3AContractDistCp extends AbstractContractDistCpTest {
   @Override
   protected S3AContract createContract(Configuration conf) {
     return new S3AContract(conf);
+  }
+
+  @Override
+  public void testDirectWrite() throws Exception {
+    resetStorageStatistics();
+    super.testDirectWrite();
+    assertEquals("Expected no renames for a direct write distcp", 0L,
+        getRenameOperationCount());
+  }
+
+  @Override
+  public void testNonDirectWrite() throws Exception {
+    resetStorageStatistics();
+    try {
+      super.testNonDirectWrite();
+    } catch (FileNotFoundException e) {
+      // We may get this exception when data is written to a DELAY_LISTING_ME
+      // directory causing verification of the distcp success to fail if
+      // S3Guard is not enabled
+    }
+    assertEquals("Expected 2 renames for a non-direct write distcp", 2L,
+        getRenameOperationCount());
+  }
+
+  private void resetStorageStatistics() {
+    getFileSystem().getStorageStatistics().reset();
+  }
+
+  private long getRenameOperationCount() {
+    return getFileSystem().getStorageStatistics()
+        .getLong(StorageStatistics.CommonStatisticNames.OP_RENAME);
   }
 }

@@ -107,6 +107,9 @@ public class DistCpOptions {
   // to copy in parallel. Default is 0 and file are not splitted.
   private int blocksPerChunk = 0;
 
+  /** Whether data should be written directly to the target paths. */
+  private boolean directWrite;
+
   /**
    * The copyBufferSize to use in RetriableFileCopyCommand
    */
@@ -737,6 +740,14 @@ public class DistCpOptions {
     }
   }
 
+  public boolean shouldDirectWrite() {
+    return directWrite;
+  }
+
+  public void setDirectWrite(final boolean directWrite) {
+    this.directWrite = directWrite;
+  }
+
   /**
    * Add options to configuration. These will be used in the Mapper/committer
    *
@@ -775,6 +786,8 @@ public class DistCpOptions {
         String.valueOf(copyBufferSize));
     DistCpOptionSwitch.addToConf(conf, DistCpOptionSwitch.VERBOSE_LOG,
         String.valueOf(verboseLog));
+    DistCpOptionSwitch.addToConf(conf, DistCpOptionSwitch.DIRECT_WRITE,
+            String.valueOf(directWrite));
   }
 
   /**
@@ -814,6 +827,7 @@ public class DistCpOptions {
         ", blocksPerChunk=" + blocksPerChunk +
         ", copyBufferSize=" + copyBufferSize +
         ", verboseLog=" + verboseLog +
+        ", directWrite=" + directWrite +
         '}';
   }
 

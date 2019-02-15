@@ -161,6 +161,9 @@ public class OptionsParser {
     }
 
     parsePreserveStatus(command, option);
+    if (command.hasOption(DistCpOptionSwitch.DIRECT_WRITE.getSwitch())) {
+      option.setDirectWrite(false);
+    }
 
     if (command.hasOption(DistCpOptionSwitch.DIFF.getSwitch())) {
       String[] snapshots = getVals(command,
