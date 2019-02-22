@@ -1149,15 +1149,37 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     return new FSDataOutputStream(
         new S3ABlockOutputStream(this,
             destKey,
-            new SemaphoredDelegatingExecutor(boundedThreadPool,
-                blockOutputActiveBlocks, true),
-            progress,
+            createWriteOpContext(status, progress,
+                S3AWriteOpContext.DeleteParentPolicy.bulk),
             partSize,
             blockFactory,
-            instrumentation.newOutputStreamStatistics(statistics),
-            getWriteOperationHelper(),
             putTracker),
         null);
+  }
+
+  /**
+   * Create the write operation context.
+   * @param status optional filesystem.
+   * @param progress optional progress callback.
+   * @param deleteParentPolicy
+   * @return the instance.
+   */
+  public S3AWriteOpContext createWriteOpContext(
+      final FileStatus status,
+      final Progressable progress,
+      S3AWriteOpContext.DeleteParentPolicy deleteParentPolicy) {
+    return new S3AWriteOpContext(
+        hasMetadataStore(),
+        invoker,
+        statistics,
+        instrumentation,
+        status,
+        deleteParentPolicy,
+        new SemaphoredDelegatingExecutor(boundedThreadPool,
+            blockOutputActiveBlocks, true),
+        progress,
+        instrumentation.newOutputStreamStatistics(statistics),
+        getWriteOperationHelper());
   }
 
   /**
@@ -2051,8 +2073,10 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * fs.s3a.metadatastore.fail.on.write.error=true
    */
   @Retries.OnceRaw("For PUT; post-PUT actions are RetryTranslated")
-  PutObjectResult putObjectDirect(PutObjectRequest putObjectRequest)
-      throws AmazonClientException, MetadataPersistenceException {
+  PutObjectResult putObjectDirect(
+      final PutObjectRequest putObjectRequest,
+      final S3AWriteOpContext writeContext)
+      throws AmazonClientException {
     long len = getPutRequestLength(putObjectRequest);
     LOG.debug("PUT {} bytes to {}", len, putObjectRequest.getKey());
     incrementPutStartStatistics(len);
@@ -2061,7 +2085,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       incrementPutCompletedStatistics(true, len);
       // update metadata
       finishedWrite(putObjectRequest.getKey(), len,
-          result.getETag(), result.getVersionId(), null);
+          result.getETag(), result.getVersionId(), null, writeContext);
       return result;
     } catch (AmazonClientException e) {
       incrementPutCompletedStatistics(false, len);
@@ -3053,8 +3077,9 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       throw new FileNotFoundException("Not a file: " + src);
     }
 
+    FileStatus status;
     try {
-      FileStatus status = getFileStatus(dst);
+      status = getFileStatus(dst);
       if (!status.isFile()) {
         throw new FileAlreadyExistsException(dst + " exists and is not a file");
       }
@@ -3063,13 +3088,17 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       }
     } catch (FileNotFoundException e) {
       // no destination, all is well
+      status = null;
     }
+    
     final String key = pathToKey(dst);
     final ObjectMetadata om = newObjectMetadata(srcfile.length());
     Progressable progress = null;
     PutObjectRequest putObjectRequest = newPutObjectRequest(key, om, srcfile);
+    final S3AWriteOpContext context = createWriteOpContext(status, null,
+        S3AWriteOpContext.DeleteParentPolicy.bulk);
     invoker.retry("copyFromLocalFile(" + src + ")", dst.toString(), true,
-        () -> executePut(putObjectRequest, progress));
+        () -> executePut(putObjectRequest, progress, context));
     if (delSrc) {
       local.delete(src, false);
     }
@@ -3089,9 +3118,11 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * fs.s3a.metadatastore.fail.on.write.error=true
    */
   @Retries.OnceRaw("For PUT; post-PUT actions are RetryTranslated")
-  UploadResult executePut(PutObjectRequest putObjectRequest,
-      Progressable progress)
-      throws InterruptedIOException, MetadataPersistenceException {
+  UploadResult executePut(
+      final PutObjectRequest putObjectRequest,
+      final Progressable progress,
+      final S3AWriteOpContext writeContext)
+      throws InterruptedIOException {
     String key = putObjectRequest.getKey();
     UploadInfo info = putObject(putObjectRequest);
     Upload upload = info.getUpload();
@@ -3102,7 +3133,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     listener.uploadCompleted();
     // post-write actions
     finishedWrite(key, info.getLength(),
-        result.getETag(), result.getVersionId(), null);
+        result.getETag(), result.getVersionId(), null, writeContext);
     return result;
   }
 
@@ -3501,10 +3532,12 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * fs.s3a.metadatastore.fail.on.write.error=true
    */
   @InterfaceAudience.Private
+<<<<<<< HEAD
   @Retries.RetryTranslated("Except if failOnMetadataWriteError=false, in which"
       + " case RetryExceptionsSwallowed")
   void finishedWrite(String key, long length, String eTag, String versionId,
-      @Nullable final BulkOperationState operationState)
+      @Nullable final BulkOperationState operationState,
+      final S3AWriteOpContext writeContext))
       throws MetadataPersistenceException {
     LOG.debug("Finished write to {}, len {}. etag {}, version {}",
         key, length, eTag, versionId);
@@ -3623,9 +3656,11 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     PutObjectRequest putObjectRequest = newPutObjectRequest(objectName,
         newObjectMetadata(0L),
         im);
+    final S3AWriteOpContext writeContext = createWriteOpContext(null, null,
+        S3AWriteOpContext.DeleteParentPolicy.bulk);
     invoker.retry("PUT 0-byte object ", objectName,
          true,
-        () -> putObjectDirect(putObjectRequest));
+        () -> putObjectDirect(putObjectRequest, writeContext));
     incrementPutProgressStatistics(objectName, 0);
     instrumentation.directoryCreated();
   }

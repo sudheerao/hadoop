@@ -183,14 +183,14 @@ public class WriteOperationHelper {
    * Callback on a successful write.
    * @param length length of the write
    */
-  public void writeSuccessful(long length) {
+  public void writeSuccessful(S3AWriteOpContext context, long length) {
   }
 
   /**
    * Callback on a write failure.
    * @param ex Any exception raised which triggered the failure.
    */
-  public void writeFailed(Exception ex) {
+  public void writeFailed(S3AWriteOpContext context, Exception ex) {
     LOG.debug("Write to {} failed", this, ex);
   }
 
@@ -248,7 +248,8 @@ public class WriteOperationHelper {
       List<PartETag> partETags,
       long length,
       Retried retrying,
-      @Nullable BulkOperationState operationState) throws IOException {
+      @Nullable BulkOperationState operationState,
+      final S3AWriteOpContext writeContext) throws IOException {
     if (partETags.isEmpty()) {
       throw new IOException(
           "No upload parts in multipart upload to " + destKey);
@@ -268,7 +269,7 @@ public class WriteOperationHelper {
             }
     );
     owner.finishedWrite(destKey, length, uploadResult.getETag(),
-        uploadResult.getVersionId(), operationState);
+        uploadResult.getVersionId(), operationState, writeContext);
     return uploadResult;
   }
 
@@ -283,17 +284,19 @@ public class WriteOperationHelper {
    * @param length length of the upload
    * @param errorCount a counter incremented by 1 on every error; for
    * use in statistics
+   * @param writeContext
    * @return the result of the operation.
    * @throws IOException if problems arose which could not be retried, or
    * the retry count was exceeded
    */
   @Retries.RetryTranslated
   public CompleteMultipartUploadResult completeMPUwithRetries(
-      String destKey,
-      String uploadId,
-      List<PartETag> partETags,
-      long length,
-      AtomicInteger errorCount)
+      final String destKey,
+      final String uploadId,
+      final List<PartETag> partETags,
+      final long length,
+      final AtomicInteger errorCount,
+      final S3AWriteOpContext writeContext)
       throws IOException {
     checkNotNull(uploadId);
     checkNotNull(partETags);
@@ -304,7 +307,8 @@ public class WriteOperationHelper {
         partETags,
         length,
         (text, e, r, i) -> errorCount.incrementAndGet(),
-        null);
+        null,
+        writeContext);
   }
 
   /**
@@ -459,7 +463,7 @@ public class WriteOperationHelper {
       throws IOException {
     return retry("Writing Object",
         putObjectRequest.getKey(), true,
-        () -> owner.putObjectDirect(putObjectRequest));
+        () -> owner.putObjectDirect(putObjectRequest, null));
   }
 
   /**
@@ -474,7 +478,7 @@ public class WriteOperationHelper {
     // no retry; rely on xfer manager logic
     return retry("Writing Object",
         putObjectRequest.getKey(), true,
-        () -> owner.executePut(putObjectRequest, null));
+        () -> owner.executePut(putObjectRequest, null, null));
   }
 
   /**
@@ -507,6 +511,7 @@ public class WriteOperationHelper {
    * @param partETags list of partial uploads
    * @param length length of the upload
    * @param operationState operational state for a bulk update
+   * @param writeContext
    * @return the result of the operation.
    * @throws IOException if problems arose which could not be retried, or
    * the retry count was exceeded
@@ -517,7 +522,8 @@ public class WriteOperationHelper {
       String uploadId,
       List<PartETag> partETags,
       long length,
-      @Nullable BulkOperationState operationState)
+      @Nullable BulkOperationState operationState,
+      final S3AWriteOpContext writeContext)
       throws IOException {
     checkNotNull(uploadId);
     checkNotNull(partETags);
@@ -528,7 +534,8 @@ public class WriteOperationHelper {
         partETags,
         length,
         Invoker.NO_OP,
-        operationState);
+        operationState,
+        writeContext);
   }
 
   /**

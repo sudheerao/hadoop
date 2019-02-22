@@ -46,6 +46,7 @@ import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.fs.s3a.S3AInstrumentation;
 import org.apache.hadoop.fs.s3a.S3AUtils;
+import org.apache.hadoop.fs.s3a.S3AWriteOpContext;
 import org.apache.hadoop.fs.s3a.WriteOperationHelper;
 import org.apache.hadoop.fs.s3a.commit.files.PendingSet;
 import org.apache.hadoop.fs.s3a.commit.files.SinglePendingCommit;
@@ -97,11 +98,24 @@ public class CommitOperations {
   public static final PathFilter PENDING_FILTER =
       path -> path.toString().endsWith(CommitConstants.PENDING_SUFFIX);
 
+  private final S3AWriteOpContext writeContext;
+
   /**
    * Instantiate.
    * @param fs FS to bind to
    */
-  public CommitOperations(S3AFileSystem fs) {
+  public CommitOperations(final S3AFileSystem fs) {
+    this(fs, fs.createWriteOpContext(null, null, S3AWriteOpContext.DeleteParentPolicy.bulk));
+  }
+
+  /**
+   * Instantiate.
+   * @param fs FS to bind to
+   * @param writeContext write context
+   */
+  public CommitOperations(final S3AFileSystem fs,
+      final S3AWriteOpContext writeContext) {
+    this.writeContext = writeContext;
     Preconditions.checkArgument(fs != null, "null fs");
     this.fs = fs;
     statistics = fs.newCommitterStatistics();
@@ -192,10 +206,11 @@ public class CommitOperations {
     // finalize the commit
     writeOperations.commitUpload(
         commit.getDestinationKey(),
-              commit.getUploadId(),
-              toPartEtags(commit.getEtags()),
-              commit.getLength(),
-              operationState);
+            commit.getUploadId(),
+            toPartEtags(commit.getEtags()),
+            commit.getLength(),
+            operationState,
+            writeContext);
     return commit.getLength();
   }
 
