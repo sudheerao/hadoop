@@ -33,6 +33,7 @@ import org.apache.hadoop.fs.CanSetReadahead;
 import org.apache.hadoop.fs.FSExceptionMessages;
 import org.apache.hadoop.fs.FSInputStream;
 
+import org.apache.hadoop.fs.s3a.S3AChangeDetectionPolicy.Mode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,7 +92,10 @@ public class S3AInputStream extends FSInputStream implements CanSetReadahead {
   private S3AEncryptionMethods serverSideEncryptionAlgorithm;
   private String serverSideEncryptionKey;
   private S3AInputPolicy inputPolicy;
+  private S3AChangeDetectionPolicy changeDetectionPolicy;
   private long readahead = Constants.DEFAULT_READAHEAD_RANGE;
+  // abstract revision identifier (e.g. eTag or versionId, depending on change detection policy)
+  private String revisionId;
 
   /**
    * This is the actual position within the object, used by
@@ -138,6 +142,7 @@ public class S3AInputStream extends FSInputStream implements CanSetReadahead {
     this.serverSideEncryptionAlgorithm =
         s3Attributes.getServerSideEncryptionAlgorithm();
     this.serverSideEncryptionKey = s3Attributes.getServerSideEncryptionKey();
+    this.changeDetectionPolicy = ctx.getChangeDetectionPolicy();
     setInputPolicy(ctx.getInputPolicy());
     setReadahead(ctx.getReadahead());
   }
@@ -182,10 +187,28 @@ public class S3AInputStream extends FSInputStream implements CanSetReadahead {
         StringUtils.isNotBlank(serverSideEncryptionKey)){
       request.setSSECustomerKey(new SSECustomerKey(serverSideEncryptionKey));
     }
-    String text = String.format("Failed to %s %s at %d",
-        (opencount == 0 ? "open" : "re-open"), uri, targetPos);
+    String operation = opencount == 0 ? "open" : "re-open";
+    String text = String.format("Failed to %s %s at %d with %s %s",
+        operation, uri, targetPos, changeDetectionPolicy.getSource(), revisionId);
+    if (changeDetectionPolicy.getMode() == Mode.Server && revisionId != null) {
+      changeDetectionPolicy.applyRevisionConstraint(request, revisionId);
+    }
     S3Object object = Invoker.once(text, uri,
         () -> client.getObject(request));
+    if (object == null) {
+      throw new RemoteFileChangedException(uri, operation,
+          String.format("%s change detected while reading at position %s. %s was unavailable",
+              changeDetectionPolicy.getSource(), pos, revisionId));
+    }
+
+    String newRevisionId = changeDetectionPolicy.getRevisionId(object.getObjectMetadata(), uri);
+    if (revisionId == null) {
+      // revisionId is null on first (re)open. Pin it so change can be detected if
+      // object has been updated
+      revisionId = newRevisionId;
+    } else if (!revisionId.equals(newRevisionId)){
+      changeDetectionPolicy.onChangeDetected(revisionId, newRevisionId, uri, pos, operation);
+    }
     wrappedStream = object.getObjectContent();
     contentRangeStart = targetPos;
     if (wrappedStream == null) {

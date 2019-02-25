@@ -44,6 +44,11 @@ public class S3AReadOpContext extends S3AOpContext {
   private final S3AInputPolicy inputPolicy;
 
   /**
+   * How to detect and deal with the object being updated during read
+   */
+  private final S3AChangeDetectionPolicy changeDetectionPolicy;
+
+  /**
    * Readahead for GET operations/skip, etc.
    */
   private final long readahead;
@@ -69,6 +74,7 @@ public class S3AReadOpContext extends S3AOpContext {
       S3AInstrumentation instrumentation,
       FileStatus dstFileStatus,
       S3AInputPolicy inputPolicy,
+      S3AChangeDetectionPolicy changeDetectionPolicy,
       final long readahead) {
     super(isS3GuardEnabled, invoker, s3guardInvoker, stats, instrumentation,
         dstFileStatus);
@@ -76,6 +82,7 @@ public class S3AReadOpContext extends S3AOpContext {
     Preconditions.checkArgument(readahead >= 0,
         "invalid readahead %d", readahead);
     this.inputPolicy = checkNotNull(inputPolicy);
+    this.changeDetectionPolicy = checkNotNull(changeDetectionPolicy);
     this.readahead = readahead;
   }
 
@@ -108,6 +115,10 @@ public class S3AReadOpContext extends S3AOpContext {
    */
   public S3AInputPolicy getInputPolicy() {
     return inputPolicy;
+  }
+
+  public S3AChangeDetectionPolicy getChangeDetectionPolicy() {
+    return changeDetectionPolicy;
   }
 
   /**

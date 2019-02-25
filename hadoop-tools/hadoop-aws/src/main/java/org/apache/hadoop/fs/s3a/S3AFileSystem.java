@@ -214,6 +214,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       createStorageStatistics();
   private long readAhead;
   private S3AInputPolicy inputPolicy;
+  private S3AChangeDetectionPolicy changeDetectionPolicy;
   private final AtomicBoolean closed = new AtomicBoolean(false);
   private volatile boolean isClosed = false;
   private MetadataStore metadataStore;
@@ -361,6 +362,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       inputPolicy = S3AInputPolicy.getPolicy(
           conf.getTrimmed(INPUT_FADVISE, INPUT_FADV_NORMAL));
       LOG.debug("Input fadvise policy = {}", inputPolicy);
+      changeDetectionPolicy = S3AChangeDetectionPolicy.getPolicy(conf);
+      LOG.debug("Change detection policy = {}", changeDetectionPolicy);
       boolean magicCommitterEnabled = conf.getBoolean(
           CommitConstants.MAGIC_COMMITTER_ENABLED,
           CommitConstants.DEFAULT_MAGIC_COMMITTER_ENABLED);
@@ -688,6 +691,14 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   }
 
   /**
+   * Get the change detection policy for this FS instance.
+   * @return the change detection policy
+   */
+  S3AChangeDetectionPolicy getChangeDetectionPolicy() {
+    return changeDetectionPolicy;
+  }
+
+  /**
    * Get the encryption algorithm of this endpoint.
    * @return the encryption algorithm.
    */
@@ -875,9 +886,10 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       S3AInputPolicy policy = S3AInputPolicy.getPolicy(
           o.get(INPUT_FADVISE, inputPolicy.toString()));
       long readAheadRange2 = o.getLong(READAHEAD_RANGE, readAhead);
-      readContext = createReadContext(fileStatus, policy, readAheadRange2);
+      // TODO support change detection policy from options?
+      readContext = createReadContext(fileStatus, policy, changeDetectionPolicy, readAheadRange2);
     } else {
-      readContext = createReadContext(fileStatus, inputPolicy, readAhead);
+      readContext = createReadContext(fileStatus, inputPolicy, changeDetectionPolicy, readAhead);
     }
     LOG.debug("Opening '{}'", readContext);
 
@@ -900,6 +912,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   private S3AReadOpContext createReadContext(
       final FileStatus fileStatus,
       final S3AInputPolicy seekPolicy,
+      final S3AChangeDetectionPolicy changeDetectionPolicy,
       final long readAheadRange) {
     return new S3AReadOpContext(fileStatus.getPath(),
         hasMetadataStore(),
@@ -909,6 +922,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
         instrumentation,
         fileStatus,
         seekPolicy,
+        changeDetectionPolicy,
         readAheadRange);
   }
 
@@ -3676,7 +3690,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     long ra = options.getLong(READAHEAD_RANGE, readAhead);
     // build and execute the request
     return selectBinding.select(
-        createReadContext(fileStatus, inputPolicy, ra),
+        createReadContext(fileStatus, inputPolicy, changeDetectionPolicy, ra),
         expression,
         options,
         generateSSECustomerKey(),

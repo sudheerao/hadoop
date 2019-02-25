@@ -966,6 +966,28 @@ if it is required that the data is persisted durably after every
 This includes resilient logging, HBase-style journaling
 and the like. The standard strategy here is to save to HDFS and then copy to S3.
 
+### `RemoteFileChangedException`
+
+If an S3 object is updated while an S3A filesystem reader has an open InputStream on it,
+the reader may encounter `RemoteFileChangedException`.  This occurs if the S3A InputStream
+needs to re-open the object (e.g. during a seek()) and detects the change.  By default,
+change detection works by tracking the S3 object's eTag attribute.  If the object is updated,
+it gets a new eTag, which is detected during the re-open.
+
+Change detection is configured via `fs.s3.change.detection.source` and
+`fs.s3.change.detection.mode`, with defaults of `etag` and `server`.  `mode` may be
+changed to `warn` to log a warning message instead of throwing the `RemoteFileChangedException`.
+It may also be changed to `none` to disable change detection entirely.  `client` is another
+possible option that behaves similarly to the default but may be more compatible with
+third-party S3 API implementations.
+
+`versionId` is another option for `fs.s3.change.detection.source` that uses the versionId
+attribute on the S3 object instead of eTag to detect changes.  It will only work if the
+S3 bucket has object versioning enabled.  Setting `source` to `versionId` and `mode` to
+`server` may be more robust as the InputStream can re-open an old version after a newer
+version is written so long as the old version is still retained in the S3 object version
+history.
+
 ## <a name="encryption"></a> S3 Server Side Encryption
 
 ### `AWSS3IOException` `KMS.NotFoundException` "Invalid arn" when using SSE-KMS
