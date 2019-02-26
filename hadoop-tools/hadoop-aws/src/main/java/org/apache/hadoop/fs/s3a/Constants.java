@@ -652,7 +652,7 @@ public final class Constants {
   public static final String CHANGE_DETECT_SOURCE_ETAG = "etag";
 
   /**
-   * Object versionId as the change detection mechamism
+   * Object versionId as the change detection mechanism.
    */
   public static final String CHANGE_DETECT_SOURCE_VERSION_ID = "versionid";
 

@@ -18,32 +18,27 @@
 
 package org.apache.hadoop.fs.s3a;
 
-import static org.apache.hadoop.fs.contract.ContractTestUtils.dataset;
-import static org.apache.hadoop.fs.contract.ContractTestUtils.writeDataset;
-import static org.apache.hadoop.fs.s3a.Constants.CHANGE_DETECT_MODE;
-import static org.apache.hadoop.fs.s3a.Constants.CHANGE_DETECT_MODE_CLIENT;
-import static org.apache.hadoop.fs.s3a.Constants.CHANGE_DETECT_MODE_NONE;
-import static org.apache.hadoop.fs.s3a.Constants.CHANGE_DETECT_MODE_SERVER;
-import static org.apache.hadoop.fs.s3a.Constants.CHANGE_DETECT_MODE_WARN;
-import static org.apache.hadoop.fs.s3a.Constants.CHANGE_DETECT_SOURCE;
-import static org.apache.hadoop.fs.s3a.Constants.CHANGE_DETECT_SOURCE_ETAG;
-import static org.apache.hadoop.fs.s3a.Constants.CHANGE_DETECT_SOURCE_VERSION_ID;
-import static org.apache.hadoop.test.LambdaTestUtils.eventually;
-import static org.apache.hadoop.test.LambdaTestUtils.intercept;
-
 import java.io.FileNotFoundException;
 import java.util.Arrays;
 import java.util.Collection;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.s3a.S3AChangeDetectionPolicy.Source;
+
 import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.s3a.impl.ChangeDetectionPolicy.Source;
+
+import static org.apache.hadoop.fs.contract.ContractTestUtils.dataset;
+import static org.apache.hadoop.fs.contract.ContractTestUtils.writeDataset;
+import static org.apache.hadoop.fs.s3a.Constants.*;
+import static org.apache.hadoop.test.LambdaTestUtils.eventually;
+import static org.apache.hadoop.test.LambdaTestUtils.intercept;
 
 /**
  * Test S3A remote file change detection.
@@ -82,7 +77,9 @@ public class ITestS3ARemoteFileChanged extends AbstractS3ATestBase {
     });
   }
 
-  public ITestS3ARemoteFileChanged(String changeDetectionSource, String changeDetectionMode, boolean expectException,
+  public ITestS3ARemoteFileChanged(String changeDetectionSource,
+      String changeDetectionMode,
+      boolean expectException,
       boolean expectFileNotFoundException) {
     this.changeDetectionSource = changeDetectionSource;
     this.changeDetectionMode = changeDetectionMode;
@@ -110,10 +107,11 @@ public class ITestS3ARemoteFileChanged extends AbstractS3ATestBase {
     // initial write
     writeDataset(fs, testpath, originalDataset, originalDataset.length, 1024, false);
 
-    if (fs.getChangeDetectionPolicy().getSource() == Source.versionId)
-    {
+    if (fs.getChangeDetectionPolicy().getSource() == Source.VersionId) {
       // skip versionId tests if the bucket doesn't have object versioning enabled
-      Assume.assumeTrue(fs.getObjectMetadata(fs.pathToKey(testpath)).getVersionId() != null);
+      Assume.assumeTrue(
+          "Target filesystem does not support versioning",
+          fs.getObjectMetadata(fs.pathToKey(testpath)).getVersionId() != null);
     }
 
     try(FSDataInputStream instream = fs.open(testpath)) {
