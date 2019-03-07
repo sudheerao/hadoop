@@ -48,6 +48,7 @@ import org.apache.hadoop.fs.FsStatus;
 import org.apache.hadoop.fs.GlobalStorageStatistics;
 import org.apache.hadoop.fs.GlobalStorageStatistics.StorageStatisticsProvider;
 import org.apache.hadoop.fs.InvalidPathHandleException;
+import org.apache.hadoop.fs.PathCapabilities;
 import org.apache.hadoop.fs.PathHandle;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Options;
@@ -62,6 +63,7 @@ import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.fs.UnresolvedLinkException;
 import org.apache.hadoop.fs.UnsupportedFileSystemException;
 import org.apache.hadoop.fs.XAttrSetFlag;
+import org.apache.hadoop.fs.impl.PathCapabilitiesSupport;
 import org.apache.hadoop.fs.permission.AclEntry;
 import org.apache.hadoop.fs.permission.AclStatus;
 import org.apache.hadoop.fs.permission.FsAction;
@@ -117,6 +119,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -3401,5 +3404,36 @@ public class DistributedFileSystem extends FileSystem
   @Override
   public HdfsDataOutputStreamBuilder appendFile(Path path) {
     return new HdfsDataOutputStreamBuilder(this, path).append();
+  }
+
+  /**
+   * HDFS client capabilities.
+   * Keep {@code WebHdfsFileSystem} in sync.
+   * {@inheritDoc}
+   */
+  @Override
+  public boolean hasPathCapability(final Path path, final String capability)
+      throws IOException {
+    PathCapabilitiesSupport.validatehasPathCapabilityArgs(path, capability);
+    // qualify the path to make sure that it refers to the current FS.
+    makeQualified(path);
+
+    switch (capability.toLowerCase(Locale.ENGLISH)) {
+    case PathCapabilities.FS_ACLS:
+    case PathCapabilities.FS_APPEND:
+    case PathCapabilities.FS_CHECKSUMS:
+    case PathCapabilities.FS_CONCAT:
+    case PathCapabilities.FS_LIST_CORRUPT_FILE_BLOCKS:
+    case PathCapabilities.FS_PATHHANDLES:
+    case PathCapabilities.FS_PERMISSIONS:
+    case PathCapabilities.FS_SNAPSHOTS:
+    case PathCapabilities.FS_STORAGEPOLICY:
+    case PathCapabilities.FS_XATTRS:
+      return true;
+    case PathCapabilities.FS_SYMLINKS:
+      return FileSystem.areSymlinksEnabled();
+    default:
+      return super.hasPathCapability(path, capability);
+    }
   }
 }

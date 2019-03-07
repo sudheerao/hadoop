@@ -48,6 +48,7 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
@@ -75,6 +76,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FsServerDefaults;
 import org.apache.hadoop.fs.GlobalStorageStatistics;
 import org.apache.hadoop.fs.GlobalStorageStatistics.StorageStatisticsProvider;
+import org.apache.hadoop.fs.PathCapabilities;
 import org.apache.hadoop.fs.StorageStatistics;
 import org.apache.hadoop.fs.permission.FsCreateModes;
 import org.apache.hadoop.hdfs.DFSOpsCountStatistics;
@@ -1119,6 +1121,11 @@ public class WebHdfsFileSystem extends FileSystem
     ).run();
   }
 
+  @Override
+  public boolean supportsSymlinks() {
+    return true;
+  }
+
   /**
    * Create a symlink pointing to the destination path.
    */
@@ -2012,6 +2019,36 @@ public class WebHdfsFileSystem extends FileSystem
   @VisibleForTesting
   public void setTestProvider(KeyProvider kp) {
     testProvider = kp;
+  }
+
+  /**
+   * This filesystem's capabilities must be in sync with that of HDFS.
+   * @param path path to query the capability of.
+   * @param capability string to query the stream support for.
+   * @return true if a capability is supported.
+   */
+  @Override
+  public boolean hasPathCapability(final Path path, final String capability)
+      throws IOException {
+    // query the superclass, which triggers argument validation.
+    boolean superCapability = super.hasPathCapability(path, capability);
+    switch (capability.toLowerCase(Locale.ENGLISH)) {
+    case PathCapabilities.FS_ACLS:
+    case PathCapabilities.FS_APPEND:
+    case PathCapabilities.FS_CHECKSUMS:
+    case PathCapabilities.FS_CONCAT:
+    case PathCapabilities.FS_PERMISSIONS:
+    case PathCapabilities.FS_SNAPSHOTS:
+    case PathCapabilities.FS_STORAGEPOLICY:
+    case PathCapabilities.FS_XATTRS:
+      return true;
+    case PathCapabilities.FS_SYMLINKS:
+      // there's no checking of the {symlinksEnabled} flag in this class,\
+      // so always return true.
+      return true;
+    default:
+      return superCapability;
+    }
   }
 
   /**
