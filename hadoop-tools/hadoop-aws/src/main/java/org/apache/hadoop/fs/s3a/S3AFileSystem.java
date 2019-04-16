@@ -1100,27 +1100,6 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   }
 
   /**
-   * Directly invoke {@link #innerRename(Path, Path)} so that
-   * failures are passed up to the callers, rather than converted to
-   * a true/false return value.
-   * @param source source path
-   * @param dest destination path
-   * @param options options
-   * @throws IOException failure
-   */
-  @Override
-  @Retries.RetryTranslated
-  protected void executeInnerRename(final Path source,
-      final Path dest,
-      final Options.Rename... options) throws IOException {
-    try {
-      innerRename(source, dest);
-    } catch (AmazonClientException e) {
-      throw translateException("rename(" + source + ", " + dest + ")", source, e);
-    }
-  }
-
-  /**
    * The inner rename operation. See {@link #rename(Path, Path)} for
    * the description of the operation.
    * This operation throws an exception on any failure which needs to be
