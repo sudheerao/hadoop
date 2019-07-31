@@ -484,9 +484,11 @@ public abstract class S3GuardTool extends Configured implements Tool {
       if (!paths.isEmpty()) {
         String s3path = paths.get(0);
         URI fsURI = new URI(s3path);
-        Configuration bucketConf = propagateBucketOptions(getConf(),
-            fsURI.getHost());
-        setConf(bucketConf);
+        if (!fsURI.getHost().isEmpty()) {
+          Configuration bucketConf = propagateBucketOptions(getConf(),
+              fsURI.getHost());
+          setConf(bucketConf);
+        }
       }
 
       String tags = getCommandFormat().getOptValue(TAG_FLAG);
