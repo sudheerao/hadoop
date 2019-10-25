@@ -123,4 +123,11 @@ public final class CommonPathCapabilities {
    */
   public static final String FS_XATTRS = "fs.capability.paths.xattrs";
 
+  /**
+   * Does the store support multipart uploading?
+   * Value: {@value}.
+   */
+  public static final String FS_MULTIPART_UPLOADER =
+      "fs.capability.multipart.uploader";
+
 }
