@@ -246,7 +246,7 @@ public class RenameOperation extends ExecutingStoreOperation<Long> {
     // Tell the metastore this fact and let it complete its changes
     renameTracker.completeRename();
 
-    callbacks.finishRename(sourcePath, destPath);
+    callbacks.finishRename(sourcePath, destPath, null);
     return bytesCopied.get();
   }
 

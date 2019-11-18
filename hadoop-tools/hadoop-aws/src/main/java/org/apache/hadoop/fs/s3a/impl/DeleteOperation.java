@@ -378,6 +378,7 @@ public class DeleteOperation extends ExecutingStoreOperation<Boolean> {
       }
     } finally {
       IOUtils.cleanupWithLogger(LOG, operationState);
+      operationState = null;
     }
     LOG.debug("Delete \"{}\" completed; deleted {} objects", path,
         filesDeleted);

@@ -1473,12 +1473,14 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     }
 
     @Override
-    public void finishRename(final Path sourceRenamed, final Path destCreated)
+    public void finishRename(final Path sourceRenamed,
+        final Path destCreated,
+        final BulkOperationState operationState)
         throws IOException {
       Path destParent = destCreated.getParent();
       if (!sourceRenamed.getParent().equals(destParent)) {
         LOG.debug("source & dest parents are different; fix up dir markers");
-        deleteUnnecessaryFakeDirectories(destParent);
+        deleteUnnecessaryFakeDirectories(destParent, operationState);
         maybeCreateFakeParentDirectory(sourceRenamed);
       }
     }
@@ -3510,7 +3512,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
         key, length, eTag, versionId);
     Path p = keyToQualifiedPath(key);
     Preconditions.checkArgument(length >= 0, "content length is negative");
-    deleteUnnecessaryFakeDirectories(p.getParent());
+    deleteUnnecessaryFakeDirectories(p.getParent(), operationState);
     // this is only set if there is a metastore to update and the
     // operationState parameter passed in was null.
     BulkOperationState stateToClose = null;
@@ -3563,9 +3565,11 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * Delete mock parent directories which are no longer needed.
    * Retry policy: retrying; exceptions swallowed.
    * @param path path
+   * @param operationState (nullable) operational state for a bulk update
    */
   @Retries.RetryExceptionsSwallowed
-  private void deleteUnnecessaryFakeDirectories(Path path) {
+  private void deleteUnnecessaryFakeDirectories(Path path,
+      final BulkOperationState operationState) {
     List<DeleteObjectsRequest.KeyVersion> keysToRemove = new ArrayList<>();
     while (!path.isRoot()) {
       String key = pathToKey(path);
@@ -3575,7 +3579,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       path = path.getParent();
     }
     try {
-      removeKeys(keysToRemove, true, null);
+      removeKeys(keysToRemove, true, operationState);
     } catch(AmazonClientException | IOException e) {
       instrumentation.errorIgnored();
       if (LOG.isDebugEnabled()) {
