@@ -91,6 +91,7 @@ import com.google.common.annotations.VisibleForTesting;
 
 import javax.annotation.Nonnull;
 
+import static org.apache.hadoop.fs.FSExceptionMessages.NEGATIVE_POSITION_READ;
 import static org.apache.hadoop.hdfs.util.IOUtilsClient.updateReadStatistics;
 
 /****************************************************************
@@ -1618,6 +1619,9 @@ public class DFSInputStream extends FSInputStream
   @Override
   public void readFully(long position, final ByteBuffer buf)
       throws IOException {
+    if (position < 0) {
+      throw new EOFException(NEGATIVE_POSITION_READ);
+    }
     int nread = 0;
     while (buf.hasRemaining()) {
       int nbytes = read(position + nread, buf);
