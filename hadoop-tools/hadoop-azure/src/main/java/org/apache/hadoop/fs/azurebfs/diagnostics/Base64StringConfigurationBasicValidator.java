@@ -43,7 +43,8 @@ public class Base64StringConfigurationBasicValidator extends ConfigurationBasicV
     }
 
     if (!Base64.validateIsBase64String(configValue)) {
-      throw new InvalidConfigurationValueException(getConfigKey());
+      throw new InvalidConfigurationValueException(getConfigKey()
+      + " '" + configValue + "'");
     }
     return configValue;
   }

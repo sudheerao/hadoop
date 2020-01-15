@@ -20,10 +20,12 @@ package org.apache.hadoop.fs.s3a;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.EnumSet;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.UploadPartRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +41,7 @@ import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecrets;
 import org.apache.hadoop.fs.s3a.commit.staging.StagingTestBase;
+import org.apache.hadoop.fs.s3a.impl.PutObjectFlags;
 import org.apache.hadoop.fs.s3a.s3guard.BulkOperationState;
 import org.apache.hadoop.util.Progressable;
 
@@ -186,8 +189,13 @@ public class MockS3AFileSystem extends S3AFileSystem {
   }
 
   @Override
-  void finishedWrite(String key, long length, String eTag, String versionId,
-          BulkOperationState operationState) {
+  void finishedWrite(String key,
+      long length,
+      String eTag,
+      String versionId,
+      BulkOperationState operationState,
+      final EnumSet<PutObjectFlags> flags,
+      final ObjectMetadata metadata) {
 
   }
 
@@ -331,7 +339,8 @@ public class MockS3AFileSystem extends S3AFileSystem {
   }
 
   @Override
-  void maybeCreateFakeParentDirectory(Path path)
+  void maybeCreateFakeParentDirectory(Path path,
+      final BulkOperationState operationState)
       throws IOException, AmazonClientException {
     // no-op
   }

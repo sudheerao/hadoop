@@ -24,6 +24,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -49,6 +50,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.s3a.impl.PutObjectFlags;
 import org.apache.hadoop.fs.s3a.s3guard.BulkOperationState;
 import org.apache.hadoop.fs.s3a.s3guard.S3Guard;
 import org.apache.hadoop.fs.s3a.select.SelectBinding;
@@ -229,7 +231,7 @@ public class WriteOperationHelper {
   /**
    * Finalize a multipart PUT operation.
    * This completes the upload, and, if that works, calls
-   * {@link S3AFileSystem#finishedWrite(String, long, String, String, BulkOperationState)}
+   * {@link S3AFileSystem#finishedWrite(String, long, String, String, BulkOperationState, java.util.EnumSet, ObjectMetadata)}
    * to update the filesystem.
    * Retry policy: retrying, translated.
    * @param destKey destination of the commit
@@ -268,7 +270,9 @@ public class WriteOperationHelper {
             }
     );
     owner.finishedWrite(destKey, length, uploadResult.getETag(),
-        uploadResult.getVersionId(), operationState);
+        uploadResult.getVersionId(), operationState,
+        PutObjectFlags.DEFAULTS,
+        null);
     return uploadResult;
   }
 
@@ -451,15 +455,18 @@ public class WriteOperationHelper {
    * Byte length is calculated from the file length, or, if there is no
    * file, from the content length of the header.
    * @param putObjectRequest the request
+   * @param flags
    * @return the upload initiated
    * @throws IOException on problems
    */
   @Retries.RetryTranslated
-  public PutObjectResult putObject(PutObjectRequest putObjectRequest)
+  public PutObjectResult putObject(PutObjectRequest putObjectRequest,
+      EnumSet<PutObjectFlags> flags)
       throws IOException {
     return retry("Writing Object",
         putObjectRequest.getKey(), true,
-        () -> owner.putObjectDirect(putObjectRequest));
+        () -> owner.putObjectDirect(putObjectRequest, flags,
+            null));
   }
 
   /**
@@ -492,7 +499,7 @@ public class WriteOperationHelper {
           Path destPath = owner.keyToQualifiedPath(destKey);
           owner.deleteObjectAtPath(destPath,
               destKey, true, operationState);
-          owner.maybeCreateFakeParentDirectory(destPath);
+          owner.maybeCreateFakeParentDirectory(destPath, operationState);
         }
     );
   }

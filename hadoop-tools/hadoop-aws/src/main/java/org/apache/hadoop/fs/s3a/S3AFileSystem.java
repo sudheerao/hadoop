@@ -105,6 +105,7 @@ import org.apache.hadoop.fs.s3a.impl.DeleteOperation;
 import org.apache.hadoop.fs.s3a.impl.InternalConstants;
 import org.apache.hadoop.fs.s3a.impl.MultiObjectDeleteSupport;
 import org.apache.hadoop.fs.s3a.impl.OperationCallbacks;
+import org.apache.hadoop.fs.s3a.impl.PutObjectFlags;
 import org.apache.hadoop.fs.s3a.impl.RenameOperation;
 import org.apache.hadoop.fs.s3a.impl.StatusProbeEnum;
 import org.apache.hadoop.fs.s3a.impl.StoreContext;
@@ -1473,13 +1474,15 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     }
 
     @Override
-    public void finishRename(final Path sourceRenamed, final Path destCreated)
+    public void finishRename(final Path sourceRenamed,
+        final Path destCreated,
+        final BulkOperationState operationState)
         throws IOException {
       Path destParent = destCreated.getParent();
       if (!sourceRenamed.getParent().equals(destParent)) {
         LOG.debug("source & dest parents are different; fix up dir markers");
-        deleteUnnecessaryFakeDirectories(destParent);
-        maybeCreateFakeParentDirectory(sourceRenamed);
+        deleteUnnecessaryFakeDirectories(destParent, operationState);
+        maybeCreateFakeParentDirectory(sourceRenamed, operationState);
       }
     }
 
@@ -2044,6 +2047,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * Retry Policy: none.
    * <i>Important: this call will close any input stream in the request.</i>
    * @param putObjectRequest the request
+   * @param putFlags
+   * @param operationState
    * @return the upload initiated
    * @throws AmazonClientException on problems
    * @throws MetadataPersistenceException if metadata about the write could
@@ -2051,7 +2056,9 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * fs.s3a.metadatastore.fail.on.write.error=true
    */
   @Retries.OnceRaw("For PUT; post-PUT actions are RetryTranslated")
-  PutObjectResult putObjectDirect(PutObjectRequest putObjectRequest)
+  PutObjectResult putObjectDirect(PutObjectRequest putObjectRequest,
+      final EnumSet<PutObjectFlags> putFlags,
+      final BulkOperationState operationState)
       throws AmazonClientException, MetadataPersistenceException {
     long len = getPutRequestLength(putObjectRequest);
     LOG.debug("PUT {} bytes to {}", len, putObjectRequest.getKey());
@@ -2061,7 +2068,9 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       incrementPutCompletedStatistics(true, len);
       // update metadata
       finishedWrite(putObjectRequest.getKey(), len,
-          result.getETag(), result.getVersionId(), null);
+          result.getETag(), result.getVersionId(), operationState,
+          putFlags,
+          result.getMetadata());
       return result;
     } catch (AmazonClientException e) {
       incrementPutCompletedStatistics(false, len);
@@ -2348,7 +2357,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       boolean outcome = deleteOperation.execute();
       if (outcome) {
         try {
-          maybeCreateFakeParentDirectory(f);
+          maybeCreateFakeParentDirectory(f, null);
         } catch (AccessDeniedException e) {
           LOG.warn("Cannot create directory marker at {}: {}",
               f.getParent(), e.toString());
@@ -2370,10 +2379,12 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * That is: it is not the root path and the path does not exist.
    * Retry policy: retrying; untranslated.
    * @param f path to create
+   * @param operationState
    * @throws IOException IO problem
    */
   @Retries.RetryTranslated
-  private void createFakeDirectoryIfNecessary(Path f)
+  private void createFakeDirectoryIfNecessary(Path f,
+      final BulkOperationState operationState)
       throws IOException, AmazonClientException {
     String key = pathToKey(f);
     // we only make the LIST call; the codepaths to get here should not
@@ -2381,7 +2392,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     // is mostly harmless to create a new one.
     if (!key.isEmpty() && !s3Exists(f, EnumSet.of(StatusProbeEnum.List))) {
       LOG.debug("Creating new fake directory at {}", f);
-      createFakeDirectory(key);
+      createFakeDirectory(key, operationState);
     }
   }
 
@@ -2389,14 +2400,16 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * Create a fake parent directory if required.
    * That is: it parent is not the root path and does not yet exist.
    * @param path whose parent is created if needed.
+   * @param operationState
    * @throws IOException IO problem
    */
   @Retries.RetryTranslated
-  void maybeCreateFakeParentDirectory(Path path)
+  void maybeCreateFakeParentDirectory(Path path,
+      final BulkOperationState operationState)
       throws IOException, AmazonClientException {
     Path parent = path.getParent();
     if (parent != null) {
-      createFakeDirectoryIfNecessary(parent);
+      createFakeDirectoryIfNecessary(parent, operationState);
     }
   }
 
@@ -2630,7 +2643,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       String key = pathToKey(f);
       // this will create the marker file, delete the parent entries
       // and update S3Guard
-      createFakeDirectory(key);
+      createFakeDirectory(key, null);
       return true;
     }
   }
@@ -3102,7 +3115,9 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
     listener.uploadCompleted();
     // post-write actions
     finishedWrite(key, info.getLength(),
-        result.getETag(), result.getVersionId(), null);
+        result.getETag(), result.getVersionId(), null,
+        PutObjectFlags.DEFAULTS,
+        null);
     return result;
   }
 
@@ -3496,6 +3511,8 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * @param eTag eTag of the written object
    * @param versionId S3 object versionId of the written object
    * @param operationState state of any ongoing bulk operation.
+   * @param flags
+   * @param metadata
    * @throws MetadataPersistenceException if metadata about the write could
    * not be saved to the metadata store and
    * fs.s3a.metadatastore.fail.on.write.error=true
@@ -3503,17 +3520,26 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
   @InterfaceAudience.Private
   @Retries.RetryTranslated("Except if failOnMetadataWriteError=false, in which"
       + " case RetryExceptionsSwallowed")
-  void finishedWrite(String key, long length, String eTag, String versionId,
-      @Nullable final BulkOperationState operationState)
+  void finishedWrite(String key,
+      long length,
+      String eTag,
+      String versionId,
+      @Nullable final BulkOperationState operationState,
+      final EnumSet<PutObjectFlags> flags,
+      final ObjectMetadata metadata)
       throws MetadataPersistenceException {
     LOG.debug("Finished write to {}, len {}. etag {}, version {}",
         key, length, eTag, versionId);
     Path p = keyToQualifiedPath(key);
     Preconditions.checkArgument(length >= 0, "content length is negative");
-    deleteUnnecessaryFakeDirectories(p.getParent());
+    if (flags.contains(PutObjectFlags.DeleteParents)) {
+      // parents are to be deleted.
+      deleteUnnecessaryFakeDirectories(p.getParent(), operationState);
+    }
     // this is only set if there is a metastore to update and the
     // operationState parameter passed in was null.
     BulkOperationState stateToClose = null;
+    final boolean isDir = flags.contains(PutObjectFlags.DirectoryMarker);
 
     // See note about failure semantics in S3Guard documentation
     try {
@@ -3524,12 +3550,12 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
           // information gleaned from addAncestors is preserved into the
           // subsequent put.
           stateToClose = S3Guard.initiateBulkWrite(metadataStore,
-              BulkOperationState.OperationType.Put,
+              isDir ? BulkOperationState.OperationType.Mkdir
+                  : BulkOperationState.OperationType.Put,
               keyToPath(key));
           activeState = stateToClose;
         }
         S3Guard.addAncestors(metadataStore, p, ttlTimeProvider, activeState);
-        final boolean isDir = objectRepresentsDirectory(key, length);
         S3AFileStatus status = createUploadFileStatus(p,
             isDir, length,
             getDefaultBlockSize(p), username, eTag, versionId);
@@ -3563,9 +3589,11 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * Delete mock parent directories which are no longer needed.
    * Retry policy: retrying; exceptions swallowed.
    * @param path path
+   * @param operationState (nullable) operational state for a bulk update
    */
   @Retries.RetryExceptionsSwallowed
-  private void deleteUnnecessaryFakeDirectories(Path path) {
+  private void deleteUnnecessaryFakeDirectories(Path path,
+      final BulkOperationState operationState) {
     List<DeleteObjectsRequest.KeyVersion> keysToRemove = new ArrayList<>();
     while (!path.isRoot()) {
       String key = pathToKey(path);
@@ -3575,7 +3603,7 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
       path = path.getParent();
     }
     try {
-      removeKeys(keysToRemove, true, null);
+      removeKeys(keysToRemove, true, operationState);
     } catch(AmazonClientException | IOException e) {
       instrumentation.errorIgnored();
       if (LOG.isDebugEnabled()) {
@@ -3592,15 +3620,17 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * Create a fake directory, always ending in "/".
    * Retry policy: retrying; translated.
    * @param objectName name of directory object.
+   * @param operationState
    * @throws IOException IO failure
    */
   @Retries.RetryTranslated
-  private void createFakeDirectory(final String objectName)
+  private void createFakeDirectory(final String objectName,
+      final BulkOperationState operationState)
       throws IOException {
     if (!objectName.endsWith("/")) {
-      createEmptyObject(objectName + "/");
+      createEmptyObject(objectName + "/", operationState);
     } else {
-      createEmptyObject(objectName);
+      createEmptyObject(objectName, operationState);
     }
   }
 
@@ -3608,10 +3638,12 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
    * Used to create an empty file that represents an empty directory.
    * Retry policy: retrying; translated.
    * @param objectName object to create
+   * @param operationState
    * @throws IOException IO failure
    */
   @Retries.RetryTranslated
-  private void createEmptyObject(final String objectName)
+  private void createEmptyObject(final String objectName,
+      final BulkOperationState operationState)
       throws IOException {
     final InputStream im = new InputStream() {
       @Override
@@ -3624,8 +3656,11 @@ public class S3AFileSystem extends FileSystem implements StreamCapabilities,
         newObjectMetadata(0L),
         im);
     invoker.retry("PUT 0-byte object ", objectName,
-         true,
-        () -> putObjectDirect(putObjectRequest));
+        true,
+        () -> putObjectDirect(putObjectRequest,
+            EnumSet.of(PutObjectFlags.DeleteParents,
+                PutObjectFlags.DirectoryMarker),
+            operationState));
     incrementPutProgressStatistics(objectName, 0);
     instrumentation.directoryCreated();
   }

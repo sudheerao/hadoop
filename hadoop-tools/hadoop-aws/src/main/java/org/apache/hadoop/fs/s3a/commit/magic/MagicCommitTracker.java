@@ -34,6 +34,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.WriteOperationHelper;
 import org.apache.hadoop.fs.s3a.commit.PutTracker;
 import org.apache.hadoop.fs.s3a.commit.files.SinglePendingCommit;
+import org.apache.hadoop.fs.s3a.impl.PutObjectFlags;
 
 /**
  * Put tracker for Magic commits.
@@ -136,14 +137,15 @@ public class MagicCommitTracker extends PutTracker {
         pendingPartKey,
         new ByteArrayInputStream(bytes),
         bytes.length);
-    writer.uploadObject(put);
+    writer.putObject(put, PutObjectFlags.DEFAULTS);
 
     // now put a 0-byte file with the name of the original under-magic path
     PutObjectRequest originalDestPut = writer.createPutObjectRequest(
         originalDestKey,
         new ByteArrayInputStream(EMPTY),
         0);
-    writer.uploadObject(originalDestPut);
+    // no need to worry about dir markers here.
+    writer.putObject(originalDestPut, PutObjectFlags.NONE);
     return false;
   }
 

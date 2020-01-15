@@ -82,9 +82,12 @@ public interface OperationCallbacks {
    * such as creating/deleting directory markers.
    * @param sourceRenamed renamed source
    * @param destCreated destination file created.
+   * @param operationState (nullable) operational state for a bulk update
    * @throws IOException failure
    */
-  void finishRename(Path sourceRenamed, Path destCreated) throws IOException;
+  void finishRename(Path sourceRenamed,
+      Path destCreated,
+      BulkOperationState operationState) throws IOException;
 
   /**
    * Delete an object, also updating the metastore.
