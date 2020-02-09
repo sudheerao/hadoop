@@ -50,6 +50,7 @@ import org.apache.hadoop.fs.s3a.S3AFileStatus;
 import org.apache.hadoop.fs.s3a.S3AInputPolicy;
 import org.apache.hadoop.fs.s3a.S3AInstrumentation;
 import org.apache.hadoop.fs.s3a.S3AStorageStatistics;
+import org.apache.hadoop.fs.s3a.WriteOperationHelper;
 import org.apache.hadoop.fs.s3a.s3guard.BulkOperationState;
 import org.apache.hadoop.fs.s3a.s3guard.DirListingMetadata;
 import org.apache.hadoop.fs.s3a.s3guard.ITtlTimeProvider;
@@ -251,6 +252,10 @@ public class TestPartialDeleteFailures {
       return null;
     }
 
+    @Override
+    public WriteOperationHelper getWriteOperationHelper() {
+      return null;
+    }
   }
   /**
    * MetadataStore which tracks what is deleted and added.

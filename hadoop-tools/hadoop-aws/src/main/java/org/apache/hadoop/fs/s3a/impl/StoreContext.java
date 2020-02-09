@@ -34,6 +34,7 @@ import org.apache.hadoop.fs.s3a.S3AInputPolicy;
 import org.apache.hadoop.fs.s3a.S3AInstrumentation;
 import org.apache.hadoop.fs.s3a.S3AStorageStatistics;
 import org.apache.hadoop.fs.s3a.Statistic;
+import org.apache.hadoop.fs.s3a.WriteOperationHelper;
 import org.apache.hadoop.fs.s3a.s3guard.ITtlTimeProvider;
 import org.apache.hadoop.fs.s3a.s3guard.MetadataStore;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -350,5 +351,13 @@ public class StoreContext {
     return (stat.isDirectory() && !k.endsWith("/"))
         ? k + "/"
         : k;
+  }
+
+  /**
+   * Get a write operation helper.
+   * @return a write operation helper instance.
+   */
+  public WriteOperationHelper getWriteOperationHelper() {
+    return contextAccessors.getWriteOperationHelper();
   }
 }
