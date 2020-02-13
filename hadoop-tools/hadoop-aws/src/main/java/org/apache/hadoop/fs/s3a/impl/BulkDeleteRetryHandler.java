@@ -118,7 +118,7 @@ public class BulkDeleteRetryHandler extends AbstractStoreOperation {
     final int size = keys.size();
     incrementStatistic(STORE_IO_THROTTLED, size);
     instrumentation.addValueToQuantiles(STORE_IO_THROTTLE_RATE, size);
-    THROTTLE_LOG.warn(
+    THROTTLE_LOG.info(
         "Bulk delete {} keys throttled -first key = {}; last = {}",
         size,
         keys.get(0).getKey(),
