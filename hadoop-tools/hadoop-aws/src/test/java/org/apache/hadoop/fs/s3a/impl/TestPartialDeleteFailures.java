@@ -46,11 +46,13 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.s3a.Constants;
 import org.apache.hadoop.fs.s3a.Invoker;
+import org.apache.hadoop.fs.s3a.S3AEncryptionMethods;
 import org.apache.hadoop.fs.s3a.S3AFileStatus;
 import org.apache.hadoop.fs.s3a.S3AInputPolicy;
 import org.apache.hadoop.fs.s3a.S3AInstrumentation;
 import org.apache.hadoop.fs.s3a.S3AStorageStatistics;
 import org.apache.hadoop.fs.s3a.WriteOperationHelper;
+import org.apache.hadoop.fs.s3a.auth.delegation.EncryptionSecrets;
 import org.apache.hadoop.fs.s3a.s3guard.BulkOperationState;
 import org.apache.hadoop.fs.s3a.s3guard.DirListingMetadata;
 import org.apache.hadoop.fs.s3a.s3guard.ITtlTimeProvider;
@@ -204,9 +206,10 @@ public class TestPartialDeleteFailures {
       OperationTrackingStore store) throws URISyntaxException, IOException {
     URI name = new URI("s3a://bucket");
     Configuration conf = new Configuration();
+    String bucket = "bucket";
     return new StoreContext(
         name,
-        "bucket",
+        bucket,
         conf,
         "alice",
         UserGroupInformation.getCurrentUser(),
@@ -226,7 +229,10 @@ public class TestPartialDeleteFailures {
         store,
         false,
         CONTEXT_ACCESSORS,
-        new S3Guard.TtlTimeProvider(conf));
+        new S3Guard.TtlTimeProvider(conf),
+        RequestFactoryImpl.newInstance(conf,
+            bucket,
+            new EncryptionSecrets(S3AEncryptionMethods.NONE, "")));
   }
 
   private static class MinimalContextAccessor implements ContextAccessors {
