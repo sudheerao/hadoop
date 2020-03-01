@@ -49,6 +49,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.PathIOException;
 import org.apache.hadoop.fs.s3a.s3guard.BulkOperationState;
 import org.apache.hadoop.fs.s3a.s3guard.S3Guard;
 import org.apache.hadoop.fs.s3a.select.SelectBinding;
@@ -83,7 +84,7 @@ import static org.apache.hadoop.fs.s3a.Invoker.*;
  */
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
-public class WriteOperationHelper {
+public class WriteOperationHelper implements WriteOperations {
   private static final Logger LOG =
       LoggerFactory.getLogger(WriteOperationHelper.class);
 
@@ -250,8 +251,8 @@ public class WriteOperationHelper {
       Retried retrying,
       @Nullable BulkOperationState operationState) throws IOException {
     if (partETags.isEmpty()) {
-      throw new IOException(
-          "No upload parts in multipart upload to " + destKey);
+      throw new PathIOException(destKey,
+          "No upload parts in multipart upload");
     }
     CompleteMultipartUploadResult uploadResult =
         invoker.retry("Completing multipart upload", destKey,
