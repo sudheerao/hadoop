@@ -93,4 +93,11 @@ public final class InternalConstants {
   /** Directory marker attribute: see HADOOP-16613. Value: {@value}. */
   public static final String X_DIRECTORY =
       "application/x-directory";
+
+  /**
+   * Flag to enable AWS Statistics binding. As this is triggering
+   * problems related to region/endpoint setup, it is currently
+   * disabled.
+   */
+  public static final boolean AWS_SDK_METRICS_ENABLED = false;
 }
